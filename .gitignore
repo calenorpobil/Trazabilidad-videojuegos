@@ -1,0 +1,26 @@
+# Dependencias
+node_modules/
+
+# Compilacion
+dist/
+*.tsbuildinfo
+
+# Datos locales del backend: base de datos y semilla maestra.
+# La semilla maestra NUNCA entra en el repositorio.
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.seed
+.env
+.env.*
+!.env.example
+
+# Godot
+.godot/
+*.import
+export_presets.cfg
+
+# Sistema
+.DS_Store
+Thumbs.db

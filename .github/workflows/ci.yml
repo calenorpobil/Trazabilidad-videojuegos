@@ -1,0 +1,88 @@
+name: CI
+
+# Un solo runner Linux, sin matriz de compilacion: al no haber GDExtension no hay
+# codigo nativo que compilar por plataforma. Ese es precisamente el beneficio de
+# haber descartado Rust en el cliente.
+#
+# Los tests que tocan devnet NO entran aqui: dependen de una red externa y de un
+# faucet con limite. Van en `npm run test:devnet`, ejecutado a mano, y su resultado
+# se documenta en la memoria.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    name: Guardia de vocabulario
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Invariante de diseno convertido en test automatico: ningun concepto de cadena
+      # cruza al addon. Si esto falla, la costura entre el juego y la infraestructura
+      # esta rota, y es un fallo de diseno, no de estilo.
+      - name: Ningun concepto de cadena en addon/
+        run: |
+          if grep -rniE '(solana|pubkey|lamport|blockhash|base58|spl|mint)' addon/; then
+            echo "::error::Vocabulario de cadena filtrado en addon/. Ver CLAUDE.md, invariante 3."
+            exit 1
+          fi
+          echo "addon/ limpio."
+
+      # El addon es GDScript puro. Un manifiesto de dependencias o un binario ahi
+      # significa que alguien ha metido algo que no deberia.
+      - name: Ninguna dependencia ni binario en addon/
+        run: |
+          if find addon/ -type f \( -name 'package.json' -o -name '*.dll' -o -name '*.so' -o -name '*.dylib' -o -name '*.gdextension' \) | grep .; then
+            echo "::error::addon/ debe ser GDScript puro y sin dependencias."
+            exit 1
+          fi
+          echo "addon/ sin dependencias ni binarios."
+
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - run: npm ci
+
+      - name: Tipos
+        run: npm run typecheck
+
+      - name: Estilo
+        run: npm run lint
+
+      # Incluye, a partir del bloque 2, los vectores fijos de derivacion de claves y
+      # el test del invariante de firmante unico.
+      - name: Tests
+        run: npm test
+
+      - name: Vulnerabilidades
+        run: npm audit --audit-level=high
+
+      - name: Licencias
+        run: npm run licenses
+
+  # Pendiente: Godot en modo headless ejecutando la suite del addon en modo mock, sin
+  # red. Entra en el bloque 7, que es cuando existe esa suite. Anadir aqui un trabajo
+  # que no ejecuta nada solo sirve para tener una casilla verde que no comprueba nada.
