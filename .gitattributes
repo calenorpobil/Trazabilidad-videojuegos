@@ -1,0 +1,8 @@
+# Final de linea LF en todo el repositorio: la CI corre en Linux y hay scripts de
+# shell dentro del flujo de trabajo.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ogg binary
+*.wav binary
