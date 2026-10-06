@@ -1,0 +1,28 @@
+# Workspace de Rust de Nidada. Ver docs/implementacion-android.md y docs/plan-juego.md.
+# Versiones exactas (`=x.y.z`), igual que en package.json: gdext rompe la API a menudo.
+[workspace]
+resolver = "3"
+members = ["nidada-rules", "nidada-ext", "nidada-server"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94"
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+nidada-rules = { path = "nidada-rules" }
+godot = { version = "=0.5.5", features = ["api-4-7"] }
+axum = "=0.8.9"
+tokio = { version = "=1.53.2", features = ["macros", "rt-multi-thread", "net", "signal"] }
+rusqlite = { version = "=0.40.2", features = ["bundled"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+getrandom = "=0.4.3"
+
+[profile.release]
+opt-level = "s"     # tamaño antes que velocidad: el cuello de botella es la red, no la CPU
+lto = true
+codegen-units = 1
+strip = true
+panic = "unwind"    # gdext captura pánicos en la frontera; con "abort" el juego se cierra sin mensaje

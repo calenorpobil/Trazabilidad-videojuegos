@@ -1,0 +1,25 @@
+; Proyecto Godot de Nidada. Fase J1 de docs/plan-juego.md: bucle de cuidado.
+config_version=5
+
+[application]
+
+config/name="Nidada"
+config/description="Mascotas virtuales. Banco de pruebas de godot-chain."
+run/main_scene="res://main.tscn"
+config/features=PackedStringArray("4.7")
+
+[display]
+
+window/size/viewport_width=540
+window/size/viewport_height=960
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=1
+
+[nidada]
+
+server_url="http://127.0.0.1:8080"
+
+[rendering]
+
+renderer/rendering_method="mobile"

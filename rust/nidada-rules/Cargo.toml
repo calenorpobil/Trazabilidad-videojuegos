@@ -1,0 +1,9 @@
+[package]
+name = "nidada-rules"
+description = "Reglas de Nidada. Puras: sin Godot, sin red, sin reloj ni aleatoriedad propios"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]

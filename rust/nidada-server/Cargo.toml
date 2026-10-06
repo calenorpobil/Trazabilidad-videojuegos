@@ -1,0 +1,16 @@
+[package]
+name = "nidada-server"
+description = "Servidor de juego de Nidada. Autoridad sobre el estado de las mascotas"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+nidada-rules.workspace = true
+axum.workspace = true
+tokio.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+getrandom.workspace = true
