@@ -1,8 +1,9 @@
 name: CI
 
-# Un solo runner Linux, sin matriz de compilacion: al no haber GDExtension no hay
-# codigo nativo que compilar por plataforma. Ese es precisamente el beneficio de
-# haber descartado Rust en el cliente.
+# Un solo runner Linux, sin matriz de compilacion: al no haber GDExtension en la
+# libreria no hay codigo nativo que compilar por plataforma. Ese es precisamente el
+# beneficio de haber descartado Rust en el cliente. El juego de ejemplo, Nidada, si
+# compila Rust, pero solo para Linux y solo para probarlo (trabajos nidada-*).
 #
 # Los tests que tocan devnet NO entran aqui: dependen de una red externa y de un
 # faucet con limite. Van en `npm run test:devnet`, ejecutado a mano, y su resultado
@@ -86,3 +87,78 @@ jobs:
   # Pendiente: Godot en modo headless ejecutando la suite del addon en modo mock, sin
   # red. Entra en el bloque 7, que es cuando existe esa suite. Anadir aqui un trabajo
   # que no ejecuta nada solo sirve para tener una casilla verde que no comprueba nada.
+
+  # Nidada: el juego que sirve de banco de pruebas (docs/plan-juego.md). Su Rust vive
+  # en rust/ y su GDExtension en examples/godot-demo, nunca en addon/: las guardias de
+  # arriba siguen valiendo tal cual para la libreria.
+  nidada-rust:
+    name: Nidada (Rust)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@v4
+
+      # rust-toolchain.toml fija la version; rustup la instala al primer comando.
+      - name: Formato
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+      # Incluye las tablas del diseno como vectores fijos.
+      - name: Tests
+        run: cargo test --locked
+
+      # Invariantes 2-4 de docs/implementacion-android.md, convertidos en test.
+      - name: Reglas sin dependencias
+        run: |
+          deps=$(cargo tree -p nidada-rules -e normal --prefix none --depth 1 | tail -n +2)
+          if [ -n "$deps" ]; then
+            echo "::error::nidada-rules tiene que ser puro y no tener dependencias: $deps"
+            exit 1
+          fi
+
+      - name: Sin red, hilos ni cadena en el dispositivo
+        run: |
+          if cargo tree -p nidada-ext -e normal --prefix none | grep -iE '^(tokio|reqwest|solana|spl-)'; then
+            echo "::error::nidada-ext corre en el dispositivo: ni red propia, ni runtime async, ni crates de cadena."
+            exit 1
+          fi
+
+      # Limites de palabra: 'SplitMix64' o 'display' no son vocabulario de cadena.
+      - name: Ningun concepto de cadena en el cliente del juego
+        working-directory: .
+        run: |
+          if grep -rniE '(solana|pubkey|lamport|blockhash|base58|\bspl([-_]|\b)|\bmint)' \
+               rust/nidada-rules rust/nidada-ext examples/godot-demo \
+               --include='*.rs' --include='*.gd' --include='*.toml' --include='*.gdextension' --include='*.godot'; then
+            echo "::error::Vocabulario de cadena en el cliente de Nidada."
+            exit 1
+          fi
+
+  nidada-godot:
+    name: Nidada (Godot headless)
+    runs-on: ubuntu-latest
+    needs: nidada-rust
+    env:
+      GODOT_VERSION: 4.7.1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compilar nidada-ext para Linux
+        run: rust/build-ext.sh
+
+      - name: Descargar Godot
+        run: |
+          curl -fsSL -o godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip
+          mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" godot
+
+      # La importacion registra la GDExtension; sin ella el primer arranque no la carga.
+      - name: Importar el proyecto
+        run: ./godot --headless --path examples/godot-demo --import
+
+      - name: Test de la GDExtension
+        run: ./godot --headless --path examples/godot-demo --script res://tests/test_ext.gd
