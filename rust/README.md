@@ -21,7 +21,11 @@ TIME_SCALE=120 cargo run -p nidada-server    # http://127.0.0.1:8080, base de da
 Variables del servidor: `NIDADA_ADDR` (por defecto `127.0.0.1:8080`), `NIDADA_DB` (por defecto
 `nidada.db`) y `TIME_SCALE` (por defecto `1`; `120` convierte 72 h de juego en 36 min).
 
-## Windows: dos trampas comprobadas
+## Windows: tres trampas comprobadas
+
+0. **Git Bash o PowerShell, no WSL.** En WSL se compila para Linux y el Godot de Windows necesita la
+   `.dll`; además, una ruta `C:/...` en `CARGO_TARGET_DIR` es relativa para Linux. `build-ext.sh` se
+   niega a correr en WSL.
 
 1. **Usa la toolchain MSVC, no la GNU.** Con `x86_64-pc-windows-gnu` faltan `gcc` (para el SQLite
    que compila `rusqlite`) y las utilidades que necesita `windows-sys`. `rust-toolchain.toml` fija la
