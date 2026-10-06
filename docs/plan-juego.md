@@ -32,7 +32,7 @@ y en `examples/godot-demo/`, nunca en `addon/`, y no habla con ninguna cadena.
 | J2 | Android: compilar `nidada-ext` para `arm64-v8a` y `x86_64`, exportar APK, ejecutar en un teléfono | J1 | Pendiente. Resuelve los puntos 6–11 de la sección 14 del documento de implementación |
 | J3 | Corte vertical del PFM: colección «Coleccionables», Galleta de cortejo, regalo de A a B con `applied` / `settled` | J1, bloques 2–7 del PFM | Bloqueada por la librería |
 | J4 | Especies en cadena: mascotas iniciales por `grant`, reconciliación (diseño 3.1) | J3, `POST /grants` | Bloqueada |
-| J5 | Código de amigo y visitas | J1 | Pendiente |
+| J5 | Código de amigo y visitas | J1 | **Hecha** (sección 8) |
 | J6 | Cría: máquina de estados del diseño 6.4, con pago y nacimiento | J4, J5 | Bloqueada |
 
 ---
@@ -175,3 +175,59 @@ Desviaciones respecto a lo previsto:
 
 J1 queda cerrada. Siguiente fase sin bloqueo: **J5** (código de amigo y visitas). J2 necesita el NDK
 de Android, unos 2,5 GB, y el disco tiene poco margen.
+
+---
+
+## 8. Fase J5 — amigos y visitas
+
+### 8.1 Decisiones (del responsable, 6 de octubre de 2026)
+
+| Pregunta | Decisión | Consecuencia |
+|---|---|---|
+| ¿Amistad mutua o en un sentido? | **En un sentido** | Añadir a alguien es guardar su código. Sin solicitudes, sin aceptar, sin estado pendiente |
+| ¿Cómo se ve a un amigo? | **Alias que pone quien lo añade**, sólo visible para él | Opcional, mismas reglas que el nombre de una mascota (1..16 caracteres) |
+| ¿Se protege el código? | **Límite de intentos fallidos**: 20 por jugador y hora | Con el cupo agotado, ni un código correcto confirma que existe |
+
+Consecuencia de las tres juntas: **visitar exige tener el código en tu lista**. Si se pudiera visitar
+con cualquier código, la ruta de visita serviría para probar códigos saltándose el límite.
+
+### 8.2 Código de amigo
+
+`nidada-rules::friend_code`: 6 símbolos de un alfabeto de 31 sin `0/O` ni `1/I/L` (unos 887 millones
+de códigos). `normalize` acepta minúsculas, espacios y guiones. El cliente lo usa a través de
+`FriendCode.normalize` (nidada-ext) para avisar de un código mal escrito sin preguntar al servidor.
+Un código mal escrito no consulta la base de datos y por eso no gasta intentos.
+
+### 8.3 API añadida
+
+| Método | Ruta | Devuelve |
+|---|---|---|
+| `GET` | `/v1/corral` | Como en J1, más `friend_code` |
+| `POST` | `/v1/friends` | `{ code, alias? }` → la lista. `INVALID` si el formato es malo, `NOT_FOUND` si no existe (gasta intento), `NOT_ALLOWED` si es el tuyo, `RATE_LIMITED` (429) con el cupo agotado |
+| `GET` | `/v1/friends` | `{ friends: [ { code, alias, pets: [ { species, name } ] } ] }` |
+| `PUT` | `/v1/friends/{code}/alias` | `{ alias }`; vacío o `null` lo borra |
+| `DELETE` | `/v1/friends/{code}` | La lista |
+| `GET` | `/v1/visit/{code}` | `{ server_time, time_scale, code, alias, pets }`: mismo formato de mascota que el corral, **sin la comida** |
+
+Fuera de la lista, un código no existe: borrar, cambiar alias o visitar devuelven `NOT_FOUND`.
+
+### 8.4 Base de datos
+
+Migraciones numeradas con `PRAGMA user_version`. La 1 es el esquema de J1 (con `IF NOT EXISTS`,
+porque las bases de J1 lo tienen con `user_version` 0); la 2 añade `players.friend_code` con índice
+único, `friends` y `friend_lookup_failures`. Al abrir, los jugadores sin código reciben uno.
+
+### 8.5 Verificación
+
+- `nidada-rules`: 38 tests (4 nuevos de código de amigo).
+- `nidada-server`: 9 tests de integración nuevos, con el `Router` entero y SQLite en memoria: códigos
+  distintos y válidos, añadir con formato descuidado, amistad en un sentido, añadir dos veces, no
+  añadirse a uno mismo, alias (cambiar, borrar, validar), visitar sólo con el código en la lista,
+  no poder tocar las mascotas de una visita, límite de intentos (los mal escritos no cuentan, es por
+  jugador), y migración de una base de J1 conservando sus datos.
+- `test_ext.gd`: `FriendCode.normalize` con la misma regla.
+- En Godot, contra el servidor arrancado sobre la base de datos de J1 de las pruebas: el jugador
+  antiguo recibió código y conservó su comida; código mal escrito, código propio, añadir con alias,
+  visitar en solo lectura y volver. Revisado en capturas.
+
+Fuera de J5, sin cambios: chat, avisos de visita, búsqueda de jugadores, regenerar el código.

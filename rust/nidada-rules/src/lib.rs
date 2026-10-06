@@ -8,6 +8,7 @@
 //! horas *de juego*; `time_scale` convierte unas en otras (`docs/diseno-juego.md`, 3.4).
 
 pub mod breeding;
+pub mod friend_code;
 pub mod needs;
 pub mod rng;
 pub mod species;

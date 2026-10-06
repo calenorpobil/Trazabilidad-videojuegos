@@ -81,3 +81,24 @@ func request(method: HTTPClient.Method, path: String, body: Variant = null) -> D
 
 func _failure(code: String, message: String) -> Dictionary:
 	return {"ok": false, "code": code, "message": message}
+
+
+func friends() -> Dictionary:
+	return await request(HTTPClient.METHOD_GET, "/v1/friends")
+
+
+## `alias` vacío es «sin alias».
+func add_friend(code: String, alias: String) -> Dictionary:
+	return await request(HTTPClient.METHOD_POST, "/v1/friends", {"code": code, "alias": alias})
+
+
+func set_alias(code: String, alias: String) -> Dictionary:
+	return await request(HTTPClient.METHOD_PUT, "/v1/friends/%s/alias" % code.uri_encode(), {"alias": alias})
+
+
+func remove_friend(code: String) -> Dictionary:
+	return await request(HTTPClient.METHOD_DELETE, "/v1/friends/%s" % code.uri_encode())
+
+
+func visit(code: String) -> Dictionary:
+	return await request(HTTPClient.METHOD_GET, "/v1/visit/%s" % code.uri_encode())

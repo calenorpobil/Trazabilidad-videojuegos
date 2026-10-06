@@ -176,3 +176,19 @@ impl SpeciesCatalog {
         GString::from(joined.as_str())
     }
 }
+
+/// Código de amigo: el cliente valida el formato con la misma regla que el servidor
+/// antes de enviar nada.
+#[derive(GodotClass)]
+#[class(base = RefCounted, no_init)]
+pub struct FriendCode;
+
+#[godot_api]
+impl FriendCode {
+    /// Forma canónica (`k7m 2qx` → `K7M2QX`), o vacío si no es un código válido.
+    #[func]
+    fn normalize(input: GString) -> GString {
+        nidada_rules::friend_code::normalize(&input.to_string())
+            .map_or_else(GString::new, |code| GString::from(code.as_str()))
+    }
+}

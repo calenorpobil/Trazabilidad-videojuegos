@@ -35,3 +35,8 @@ func run(t: Object) -> void:
 	t.check(SpeciesCatalog.rarity("vaho") == "rare", "Vaho es rara")
 	t.check(SpeciesCatalog.element("vaho") == "fire+water", "elementos de Vaho")
 	t.check(SpeciesCatalog.display_name("dragon") == "", "especie desconocida, nombre vacío")
+
+	# Código de amigo: misma regla que el servidor.
+	t.check(FriendCode.normalize(" k7m-2qx ") == "K7M2QX", "código normalizado")
+	t.check(FriendCode.normalize("K7M2Q0") == "", "código con 0 rechazado")
+	t.check(FriendCode.normalize("K7M2Q") == "", "código corto rechazado")

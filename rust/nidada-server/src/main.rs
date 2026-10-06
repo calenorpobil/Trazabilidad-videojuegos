@@ -7,6 +7,9 @@
 
 mod api;
 mod db;
+mod friends;
+#[cfg(test)]
+mod tests;
 
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
@@ -56,7 +59,7 @@ async fn main() {
             std::process::exit(2);
         }
     };
-    let conn = match db::open(&config.db_path) {
+    let conn = match db::open(&config.db_path, api::random_seed()) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("No se pudo abrir la base de datos {}: {e}", config.db_path);

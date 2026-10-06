@@ -17,8 +17,9 @@ use serde_json::{Value, json};
 
 use crate::AppState;
 use crate::db::{self, Pet};
+use crate::friends;
 
-type Shared = Arc<AppState>;
+pub type Shared = Arc<AppState>;
 
 pub fn router(state: Shared) -> Router {
     Router::new()
@@ -28,6 +29,7 @@ pub fn router(state: Shared) -> Router {
         .route("/v1/pets/{pet_id}/play", post(play))
         .route("/v1/pets/{pet_id}/sleep", post(sleep))
         .route("/v1/pets/{pet_id}/name", put(rename))
+        .merge(friends::routes())
         .with_state(state)
 }
 
@@ -38,7 +40,7 @@ pub struct ApiError {
 }
 
 impl ApiError {
-    fn new(status: StatusCode, code: &'static str, message: impl Into<String>) -> ApiError {
+    pub fn new(status: StatusCode, code: &'static str, message: impl Into<String>) -> ApiError {
         ApiError {
             status,
             code,
@@ -62,7 +64,11 @@ impl ApiError {
         )
     }
 
-    fn not_allowed(message: impl Into<String>) -> ApiError {
+    pub fn invalid(message: impl Into<String>) -> ApiError {
+        ApiError::new(StatusCode::BAD_REQUEST, "INVALID", message)
+    }
+
+    pub fn not_allowed(message: impl Into<String>) -> ApiError {
         ApiError::new(StatusCode::CONFLICT, "NOT_ALLOWED", message)
     }
 }
@@ -85,9 +91,17 @@ impl IntoResponse for ApiError {
     }
 }
 
-type ApiResult = Result<Response, ApiError>;
+pub type ApiResult = Result<Response, ApiError>;
 
-fn now() -> i64 {
+/// La conexión es una sola y sin hilos propios: cada petición la toma entera.
+pub fn lock(state: &AppState) -> std::sync::MutexGuard<'_, rusqlite::Connection> {
+    state
+        .db
+        .lock()
+        .expect("mutex de la base de datos envenenado")
+}
+
+pub fn now() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
@@ -98,6 +112,11 @@ fn random_bytes<const N: usize>() -> [u8; N] {
     let mut buf = [0u8; N];
     getrandom::fill(&mut buf).expect("el sistema operativo no da aleatoriedad");
     buf
+}
+
+/// Semilla para las tiradas del servidor: especies iniciales, rasgos, códigos de amigo.
+pub fn random_seed() -> u64 {
+    u64::from_le_bytes(random_bytes::<8>())
 }
 
 fn random_hex<const N: usize>() -> String {
@@ -115,12 +134,12 @@ fn bearer(headers: &HeaderMap) -> Option<&str> {
         .strip_prefix("Bearer ")
 }
 
-fn authenticate(conn: &rusqlite::Connection, headers: &HeaderMap) -> Result<String, ApiError> {
+pub fn authenticate(conn: &rusqlite::Connection, headers: &HeaderMap) -> Result<String, ApiError> {
     let token = bearer(headers).ok_or_else(ApiError::unauthorized)?;
     db::player_by_token(conn, token)?.ok_or_else(ApiError::unauthorized)
 }
 
-fn pet_json(pet: &Pet) -> Value {
+pub fn pet_json(pet: &Pet) -> Value {
     let s = &pet.snapshot;
     json!({
         "pet_id": pet.pet_id,
@@ -149,6 +168,7 @@ fn corral_response(state: &AppState, conn: &rusqlite::Connection, player_id: &st
         "server_time": now(),
         "time_scale": state.time_scale,
         "food": db::food(conn, player_id)?,
+        "friend_code": db::friend_code_of(conn, player_id)?,
         "pets": pets,
     });
     Ok(Json(body).into_response())
@@ -158,14 +178,12 @@ async fn create_player(State(state): State<Shared>) -> ApiResult {
     let player_id = format!("plr_{}", random_hex::<8>());
     let token = random_hex::<32>();
     let now = now();
-    let mut rng = SplitMix64::new(u64::from_le_bytes(random_bytes::<8>()));
+    let mut rng = SplitMix64::new(random_seed());
 
-    let mut conn = state
-        .db
-        .lock()
-        .expect("mutex de la base de datos envenenado");
+    let mut conn = lock(&state);
     let tx = conn.transaction()?;
     db::insert_player(&tx, &player_id, &token, now)?;
+    db::assign_friend_code(&tx, &player_id, &mut rng)?;
     for species in Species::starters(&mut rng) {
         let pet = Pet {
             pet_id: format!("pet_{}", random_hex::<8>()),
@@ -185,10 +203,7 @@ async fn create_player(State(state): State<Shared>) -> ApiResult {
 }
 
 async fn corral(State(state): State<Shared>, headers: HeaderMap) -> ApiResult {
-    let conn = state
-        .db
-        .lock()
-        .expect("mutex de la base de datos envenenado");
+    let conn = lock(&state);
     let player_id = authenticate(&conn, &headers)?;
     corral_response(&state, &conn, &player_id)
 }
@@ -203,10 +218,7 @@ fn owned_pet(conn: &rusqlite::Connection, player_id: &str, pet_id: &str) -> Resu
 }
 
 fn act(state: &AppState, headers: &HeaderMap, pet_id: &str, action: Action) -> ApiResult {
-    let mut conn = state
-        .db
-        .lock()
-        .expect("mutex de la base de datos envenenado");
+    let mut conn = lock(state);
     let player_id = authenticate(&conn, headers)?;
     let tx = conn.transaction()?;
     let pet = owned_pet(&tx, &player_id, pet_id)?;
@@ -260,19 +272,11 @@ async fn rename(
     Path(pet_id): Path<String>,
     Json(body): Json<RenameBody>,
 ) -> ApiResult {
-    let conn = state
-        .db
-        .lock()
-        .expect("mutex de la base de datos envenenado");
+    let conn = lock(&state);
     let player_id = authenticate(&conn, &headers)?;
     let pet = owned_pet(&conn, &player_id, &pet_id)?;
-    let name = validate_name(&body.name).ok_or_else(|| {
-        ApiError::new(
-            StatusCode::BAD_REQUEST,
-            "INVALID",
-            "El nombre tiene que tener entre 1 y 16 letras.",
-        )
-    })?;
+    let name = validate_name(&body.name)
+        .ok_or_else(|| ApiError::invalid("El nombre tiene que tener entre 1 y 16 letras."))?;
     db::set_name(&conn, &pet.pet_id, &name)?;
     corral_response(&state, &conn, &player_id)
 }

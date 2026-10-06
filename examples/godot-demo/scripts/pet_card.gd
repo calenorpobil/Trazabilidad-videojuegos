@@ -16,6 +16,8 @@ const PATTERN_NAMES := {"plain": "liso", "spots": "manchas", "stripes": "rayas"}
 const STAGE_NAMES := {"baby": "Cría", "young": "Joven", "adult": "Adulta"}
 
 var pet_id := ""
+## En una visita: se mira, no se toca. Sin botones ni campo de nombre.
+var read_only := false
 var _view: PetView
 var _food := 0
 
@@ -96,7 +98,8 @@ func setup(pet: Dictionary, time_scale: float, food: int) -> void:
 	var species_name := SpeciesCatalog.display_name(pet.species)
 	var has_name: bool = pet.name != null
 	_title.text = pet.name if has_name else species_name
-	_name_row.visible = not has_name
+	_name_row.visible = not has_name and not read_only
+	_feed.get_parent().visible = not read_only
 	var rarity := "rara" if SpeciesCatalog.rarity(pet.species) == "rare" else "común"
 	_subtitle.set_meta("base", "%s · %s · %s" % [species_name, rarity, PATTERN_NAMES.get(pet.pattern, "")])
 
@@ -121,7 +124,7 @@ func tick(now: int) -> void:
 	if sleeping:
 		_status.text = "Durmiendo…"
 	elif not _view.is_growing():
-		_status.text = "Está triste y ha dejado de crecer. Cuídala."
+		_status.text = "Está triste y ha dejado de crecer." + ("" if read_only else " Cuídala.")
 	elif _view.stage() == "adult":
 		_status.text = "Adulta."
 	else:
