@@ -17,11 +17,16 @@ use nidada_rules::{friend_code, validate_name};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::api::{ApiError, ApiResult, Shared, authenticate, lock, now, pet_json};
+use crate::api::{
+    ApiError, ApiJson, ApiResult, ClientIp, Shared, authenticate, lock, now, pet_json,
+};
 use crate::db::{self, Friend};
 
 /// Códigos equivocados que se permiten por jugador dentro de la ventana.
 pub const LOOKUP_LIMIT: i64 = 20;
+/// Y por IP, que es lo que no se esquiva creando jugadores nuevos. Más holgado, porque
+/// varias personas pueden compartir una (casa, colegio, red móvil).
+pub const LOOKUP_LIMIT_PER_IP: i64 = 60;
 pub const LOOKUP_WINDOW_SECS: i64 = 3600;
 
 pub fn routes() -> Router<Shared> {
@@ -77,7 +82,8 @@ struct AddBody {
 async fn add(
     State(state): State<Shared>,
     headers: HeaderMap,
-    Json(body): Json<AddBody>,
+    ClientIp(ip): ClientIp,
+    ApiJson(body): ApiJson<AddBody>,
 ) -> ApiResult {
     let conn = lock(&state);
     let player_id = authenticate(&conn, &headers)?;
@@ -85,10 +91,12 @@ async fn add(
 
     // El límite se mira antes que nada: con el cupo agotado, ni siquiera un código
     // correcto confirma que existe.
-    if db::lookup_failures_since(&conn, &player_id, now - LOOKUP_WINDOW_SECS)? >= LOOKUP_LIMIT {
-        return Err(ApiError::new(
-            StatusCode::TOO_MANY_REQUESTS,
-            "RATE_LIMITED",
+    let since = now - LOOKUP_WINDOW_SECS;
+    if db::lookup_failures_since(&conn, &player_id, since)? >= LOOKUP_LIMIT
+        || db::ip_events_since(&conn, &ip, db::IpEvent::LookupFailure, since)?
+            >= LOOKUP_LIMIT_PER_IP
+    {
+        return Err(ApiError::rate_limited(
             "Demasiados códigos equivocados. Espera un rato antes de probar otro.",
         ));
     }
@@ -100,6 +108,13 @@ async fn add(
 
     let Some(friend_id) = db::player_by_friend_code(&conn, &code)? else {
         db::record_lookup_failure(&conn, &player_id, now, LOOKUP_WINDOW_SECS)?;
+        db::record_ip_event(
+            &conn,
+            &ip,
+            db::IpEvent::LookupFailure,
+            now,
+            LOOKUP_WINDOW_SECS,
+        )?;
         return Err(ApiError::new(
             StatusCode::NOT_FOUND,
             "NOT_FOUND",
@@ -150,7 +165,7 @@ async fn set_alias(
     State(state): State<Shared>,
     headers: HeaderMap,
     Path(code): Path<String>,
-    Json(body): Json<AliasBody>,
+    ApiJson(body): ApiJson<AliasBody>,
 ) -> ApiResult {
     let conn = lock(&state);
     let player_id = authenticate(&conn, &headers)?;

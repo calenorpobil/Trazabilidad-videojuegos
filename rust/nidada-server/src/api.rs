@@ -3,16 +3,20 @@
 //! Es interna del juego, no el contrato de `godot-chain`. Los mensajes de error van en
 //! español y sin tecnicismos: el cliente los enseña tal cual.
 
+use std::convert::Infallible;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use axum::extract::{Path, State};
+use axum::extract::{ConnectInfo, FromRequest, FromRequestParts, Path, Request, State};
+use axum::http::request::Parts;
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use nidada_rules::{Action, Snapshot, Species, SplitMix64, Traits, needs, validate_name};
 use serde::Deserialize;
+use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 use crate::AppState;
@@ -20,6 +24,11 @@ use crate::db::{self, Pet};
 use crate::friends;
 
 pub type Shared = Arc<AppState>;
+
+/// Jugadores nuevos permitidos por IP dentro de la ventana. Crear un jugador es gratis
+/// y anónimo; sin este tope, también vaciaría cualquier límite por jugador.
+pub const SIGNUP_LIMIT: i64 = 10;
+pub const SIGNUP_WINDOW_SECS: i64 = 3600;
 
 pub fn router(state: Shared) -> Router {
     Router::new()
@@ -68,6 +77,10 @@ impl ApiError {
         ApiError::new(StatusCode::BAD_REQUEST, "INVALID", message)
     }
 
+    pub fn rate_limited(message: impl Into<String>) -> ApiError {
+        ApiError::new(StatusCode::TOO_MANY_REQUESTS, "RATE_LIMITED", message)
+    }
+
     pub fn not_allowed(message: impl Into<String>) -> ApiError {
         ApiError::new(StatusCode::CONFLICT, "NOT_ALLOWED", message)
     }
@@ -76,6 +89,17 @@ impl ApiError {
 impl From<rusqlite::Error> for ApiError {
     fn from(e: rusqlite::Error) -> ApiError {
         eprintln!("error de base de datos: {e}");
+        ApiError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "INTERNAL",
+            "Algo ha fallado. Inténtalo de nuevo.",
+        )
+    }
+}
+
+impl From<getrandom::Error> for ApiError {
+    fn from(e: getrandom::Error) -> ApiError {
+        eprintln!("sin aleatoriedad del sistema: {e}");
         ApiError::new(
             StatusCode::INTERNAL_SERVER_ERROR,
             "INTERNAL",
@@ -94,11 +118,57 @@ impl IntoResponse for ApiError {
 pub type ApiResult = Result<Response, ApiError>;
 
 /// La conexión es una sola y sin hilos propios: cada petición la toma entera.
+///
+/// Si una petición anterior entró en pánico con el cerrojo tomado, éste queda marcado
+/// como envenenado. La conexión sigue siendo válida (una transacción a medias se deshace
+/// sola al soltarla), así que se recupera en vez de dejar el servidor inservible.
 pub fn lock(state: &AppState) -> std::sync::MutexGuard<'_, rusqlite::Connection> {
-    state
-        .db
-        .lock()
-        .expect("mutex de la base de datos envenenado")
+    state.db.lock().unwrap_or_else(|poisoned| {
+        eprintln!("una petición anterior entró en pánico; se recupera la base de datos");
+        state.db.clear_poison();
+        poisoned.into_inner()
+    })
+}
+
+/// Como `axum::Json`, pero un cuerpo mal formado responde con el formato de error de la
+/// API en vez del texto plano de axum.
+pub struct ApiJson<T>(pub T);
+
+impl<S, T> FromRequest<S> for ApiJson<T>
+where
+    S: Send + Sync,
+    T: DeserializeOwned,
+{
+    type Rejection = ApiError;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, ApiError> {
+        match Json::<T>::from_request(req, state).await {
+            Ok(Json(value)) => Ok(ApiJson(value)),
+            Err(rejection) => Err(ApiError::new(
+                rejection.status(),
+                "INVALID",
+                "La petición no tiene el formato esperado.",
+            )),
+        }
+    }
+}
+
+/// Dirección del cliente que abrió la conexión. Detrás de un proxy inverso sería la del
+/// proxy: si el servidor se despliega así, aquí es donde leer la cabecera del proxy.
+pub struct ClientIp(pub String);
+
+impl<S: Send + Sync> FromRequestParts<S> for ClientIp {
+    type Rejection = Infallible;
+
+    async fn from_request_parts(parts: &mut Parts, _: &S) -> Result<Self, Infallible> {
+        // Sin dirección, todos comparten un solo cupo: falla hacia el lado estricto.
+        let ip = parts
+            .extensions
+            .get::<ConnectInfo<SocketAddr>>()
+            .map(|c| c.0.ip().to_string())
+            .unwrap_or_else(|| "desconocida".into());
+        Ok(ClientIp(ip))
+    }
 }
 
 pub fn now() -> i64 {
@@ -108,22 +178,22 @@ pub fn now() -> i64 {
         .unwrap_or(0)
 }
 
-fn random_bytes<const N: usize>() -> [u8; N] {
+fn random_bytes<const N: usize>() -> Result<[u8; N], getrandom::Error> {
     let mut buf = [0u8; N];
-    getrandom::fill(&mut buf).expect("el sistema operativo no da aleatoriedad");
-    buf
+    getrandom::fill(&mut buf)?;
+    Ok(buf)
 }
 
 /// Semilla para las tiradas del servidor: especies iniciales, rasgos, códigos de amigo.
-pub fn random_seed() -> u64 {
-    u64::from_le_bytes(random_bytes::<8>())
+pub fn random_seed() -> Result<u64, getrandom::Error> {
+    Ok(u64::from_le_bytes(random_bytes::<8>()?))
 }
 
-fn random_hex<const N: usize>() -> String {
-    random_bytes::<N>()
+fn random_hex<const N: usize>() -> Result<String, getrandom::Error> {
+    Ok(random_bytes::<N>()?
         .iter()
         .map(|b| format!("{b:02x}"))
-        .collect()
+        .collect())
 }
 
 fn bearer(headers: &HeaderMap) -> Option<&str> {
@@ -174,19 +244,30 @@ fn corral_response(state: &AppState, conn: &rusqlite::Connection, player_id: &st
     Ok(Json(body).into_response())
 }
 
-async fn create_player(State(state): State<Shared>) -> ApiResult {
-    let player_id = format!("plr_{}", random_hex::<8>());
-    let token = random_hex::<32>();
+async fn create_player(State(state): State<Shared>, ClientIp(ip): ClientIp) -> ApiResult {
+    let player_id = format!("plr_{}", random_hex::<8>()?);
+    let token = random_hex::<32>()?;
     let now = now();
-    let mut rng = SplitMix64::new(random_seed());
+    let mut rng = SplitMix64::new(random_seed()?);
 
     let mut conn = lock(&state);
+    // Todo intento cuenta, salga bien o no. En J4 cada alta pedirá un `grant` que cuesta
+    // comisión y renta: ese `grant` tiene que esperar a la primera acción real del
+    // jugador, no hacerse aquí.
+    if db::ip_events_since(&conn, &ip, db::IpEvent::Signup, now - SIGNUP_WINDOW_SECS)?
+        >= SIGNUP_LIMIT
+    {
+        return Err(ApiError::rate_limited(
+            "Demasiadas cuentas nuevas desde este dispositivo. Inténtalo más tarde.",
+        ));
+    }
+    db::record_ip_event(&conn, &ip, db::IpEvent::Signup, now, SIGNUP_WINDOW_SECS)?;
     let tx = conn.transaction()?;
     db::insert_player(&tx, &player_id, &token, now)?;
     db::assign_friend_code(&tx, &player_id, &mut rng)?;
     for species in Species::starters(&mut rng) {
         let pet = Pet {
-            pet_id: format!("pet_{}", random_hex::<8>()),
+            pet_id: format!("pet_{}", random_hex::<8>()?),
             owner_id: player_id.clone(),
             species,
             name: None,
@@ -270,7 +351,7 @@ async fn rename(
     State(state): State<Shared>,
     headers: HeaderMap,
     Path(pet_id): Path<String>,
-    Json(body): Json<RenameBody>,
+    ApiJson(body): ApiJson<RenameBody>,
 ) -> ApiResult {
     let conn = lock(&state);
     let player_id = authenticate(&conn, &headers)?;

@@ -59,7 +59,14 @@ async fn main() {
             std::process::exit(2);
         }
     };
-    let conn = match db::open(&config.db_path, api::random_seed()) {
+    let seed = match api::random_seed() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("El sistema operativo no da aleatoriedad: {e}");
+            std::process::exit(1);
+        }
+    };
+    let conn = match db::open(&config.db_path, seed) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("No se pudo abrir la base de datos {}: {e}", config.db_path);
@@ -82,10 +89,15 @@ async fn main() {
         "nidada-server escuchando en http://{} (TIME_SCALE = {}, base de datos {})",
         config.addr, config.time_scale, config.db_path
     );
-    axum::serve(listener, api::router(state))
+    // Con la dirección de cada conexión, para los límites por IP.
+    let app = api::router(state).into_make_service_with_connect_info::<SocketAddr>();
+    let served = axum::serve(listener, app)
         .with_graceful_shutdown(async {
             let _ = tokio::signal::ctrl_c().await;
         })
-        .await
-        .expect("el servidor HTTP terminó con error");
+        .await;
+    if let Err(e) = served {
+        eprintln!("El servidor HTTP terminó con error: {e}");
+        std::process::exit(1);
+    }
 }

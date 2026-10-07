@@ -7,7 +7,8 @@
 //! datos de una fase anterior se pone al día al abrirla; nunca se borra.
 
 use nidada_rules::{Pattern, Snapshot, Species, SplitMix64, Traits, friend_code};
-use rusqlite::{Connection, ErrorCode, OptionalExtension, params};
+use rusqlite::{Connection, ErrorCode, OptionalExtension, Transaction, params};
+use sha2::{Digest, Sha256};
 
 /// Comida con la que empieza cada jugador. Sin reposición en J1 (plan, 2.3).
 pub const STARTING_FOOD: i64 = 10;
@@ -59,7 +60,28 @@ CREATE TABLE friend_lookup_failures (
 CREATE INDEX friend_lookup_failures_by_player ON friend_lookup_failures(player_id, at);
 ";
 
-const MIGRATIONS: &[&str] = &[V1_CARE, V2_FRIENDS];
+/// Migración 3: el token de sesión deja de guardarse en claro; la columna pasa a guardar
+/// su SHA-256 (los tokens ya existentes se convierten en `hash_existing_tokens`). Más la
+/// tabla de eventos por IP: sin ella, crear jugadores nuevos esquiva cualquier límite
+/// por jugador.
+const V3_HASHED_TOKENS_AND_IP_LIMITS: &str = "
+ALTER TABLE players RENAME COLUMN session_token TO token_hash;
+CREATE TABLE ip_events (
+    ip   TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    at   INTEGER NOT NULL
+);
+CREATE INDEX ip_events_by_ip ON ip_events(ip, kind, at);
+";
+
+type PostStep = fn(&Transaction) -> rusqlite::Result<()>;
+
+/// Cada migración, con un paso en Rust opcional para lo que SQL no puede hacer.
+const MIGRATIONS: &[(&str, Option<PostStep>)] = &[
+    (V1_CARE, None),
+    (V2_FRIENDS, None),
+    (V3_HASHED_TOKENS_AND_IP_LIMITS, Some(hash_existing_tokens)),
+];
 
 /// `seed` alimenta los códigos de amigo que haya que generar al migrar.
 pub fn open(path: &str, seed: u64) -> rusqlite::Result<Connection> {
@@ -72,13 +94,40 @@ pub fn open(path: &str, seed: u64) -> rusqlite::Result<Connection> {
 
 fn migrate(conn: &mut Connection) -> rusqlite::Result<()> {
     let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
-    for (i, sql) in MIGRATIONS.iter().enumerate().skip(version as usize) {
+    for (i, (sql, post)) in MIGRATIONS.iter().enumerate().skip(version as usize) {
         let tx = conn.transaction()?;
         tx.execute_batch(sql)?;
+        if let Some(post) = post {
+            post(&tx)?;
+        }
         tx.execute_batch(&format!("PRAGMA user_version = {}", i + 1))?;
         tx.commit()?;
     }
     Ok(())
+}
+
+/// Hasta la migración 3 la columna guardaba el token en claro: se sustituye por su hash.
+fn hash_existing_tokens(tx: &Transaction) -> rusqlite::Result<()> {
+    let mut stmt = tx.prepare("SELECT player_id, token_hash FROM players")?;
+    let rows: Vec<(String, String)> = stmt
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+        .collect::<Result<_, _>>()?;
+    for (player_id, token) in rows {
+        tx.execute(
+            "UPDATE players SET token_hash = ?2 WHERE player_id = ?1",
+            params![player_id, hash_token(&token)],
+        )?;
+    }
+    Ok(())
+}
+
+/// El servidor sólo guarda el SHA-256 del token. Basta un hash rápido: el token son 256
+/// bits aleatorios, no una contraseña que haya que proteger de un diccionario.
+fn hash_token(token: &str) -> String {
+    Sha256::digest(token.as_bytes())
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 /// Los jugadores creados antes de J5 no tienen código: se les da uno.
@@ -93,25 +142,34 @@ fn backfill_friend_codes(conn: &Connection, rng: &mut SplitMix64) -> rusqlite::R
     Ok(())
 }
 
+/// Intentos para encontrar un código libre antes de rendirse.
+const FRIEND_CODE_ATTEMPTS: usize = 16;
+
 /// Da un código libre al jugador. Con 887 millones de códigos una colisión es rara;
-/// si ocurre, se tira otra vez.
+/// si ocurre, se tira otra vez, con un máximo. Falla si el jugador no existe.
 pub fn assign_friend_code(
     conn: &Connection,
     player_id: &str,
     rng: &mut SplitMix64,
 ) -> rusqlite::Result<String> {
-    loop {
+    let mut collision = None;
+    for _ in 0..FRIEND_CODE_ATTEMPTS {
         let code = friend_code::generate(rng);
         match conn.execute(
             "UPDATE players SET friend_code = ?2 WHERE player_id = ?1",
             params![player_id, code],
         ) {
-            Ok(_) => return Ok(code),
-            Err(rusqlite::Error::SqliteFailure(e, _))
-                if e.code == ErrorCode::ConstraintViolation => {}
+            Ok(1) => return Ok(code),
+            Ok(n) => return Err(rusqlite::Error::StatementChangedRows(n)),
+            Err(rusqlite::Error::SqliteFailure(f, msg))
+                if f.code == ErrorCode::ConstraintViolation =>
+            {
+                collision = Some(rusqlite::Error::SqliteFailure(f, msg));
+            }
             Err(e) => return Err(e),
         }
     }
+    Err(collision.unwrap_or(rusqlite::Error::StatementChangedRows(0)))
 }
 
 #[derive(Debug, Clone)]
@@ -127,8 +185,8 @@ pub struct Pet {
 
 pub fn player_by_token(conn: &Connection, token: &str) -> rusqlite::Result<Option<String>> {
     conn.query_row(
-        "SELECT player_id FROM players WHERE session_token = ?1",
-        [token],
+        "SELECT player_id FROM players WHERE token_hash = ?1",
+        [hash_token(token)],
         |r| r.get(0),
     )
     .optional()
@@ -157,8 +215,8 @@ pub fn insert_player(
     now: i64,
 ) -> rusqlite::Result<()> {
     conn.execute(
-        "INSERT INTO players (player_id, session_token, food, created_at) VALUES (?1, ?2, ?3, ?4)",
-        params![player_id, token, STARTING_FOOD, now],
+        "INSERT INTO players (player_id, token_hash, food, created_at) VALUES (?1, ?2, ?3, ?4)",
+        params![player_id, hash_token(token), STARTING_FOOD, now],
     )?;
     Ok(())
 }
@@ -389,6 +447,56 @@ pub fn lookup_failures_since(
     conn.query_row(
         "SELECT COUNT(*) FROM friend_lookup_failures WHERE player_id = ?1 AND at > ?2",
         params![player_id, since],
+        |r| r.get(0),
+    )
+}
+
+/// Eventos que se limitan por dirección IP.
+#[derive(Clone, Copy)]
+pub enum IpEvent {
+    /// Un jugador nuevo.
+    Signup,
+    /// Un código de amigo bien escrito pero inexistente.
+    LookupFailure,
+}
+
+impl IpEvent {
+    fn key(self) -> &'static str {
+        match self {
+            IpEvent::Signup => "signup",
+            IpEvent::LookupFailure => "lookup_failure",
+        }
+    }
+}
+
+/// Apunta el evento y olvida los de esa IP que ya no cuentan para la ventana.
+pub fn record_ip_event(
+    conn: &Connection,
+    ip: &str,
+    kind: IpEvent,
+    now: i64,
+    window_secs: i64,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "DELETE FROM ip_events WHERE ip = ?1 AND kind = ?2 AND at <= ?3",
+        params![ip, kind.key(), now - window_secs],
+    )?;
+    conn.execute(
+        "INSERT INTO ip_events (ip, kind, at) VALUES (?1, ?2, ?3)",
+        params![ip, kind.key(), now],
+    )?;
+    Ok(())
+}
+
+pub fn ip_events_since(
+    conn: &Connection,
+    ip: &str,
+    kind: IpEvent,
+    since: i64,
+) -> rusqlite::Result<i64> {
+    conn.query_row(
+        "SELECT COUNT(*) FROM ip_events WHERE ip = ?1 AND kind = ?2 AND at > ?3",
+        params![ip, kind.key(), since],
         |r| r.get(0),
     )
 }

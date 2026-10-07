@@ -6,7 +6,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 # WSL compila para Linux: la .so resultante no la carga el Godot de Windows.
-if [[ "$(uname -s)" == Linux ]] && grep -qi microsoft /proc/version 2>/dev/null; then
+if [[ -n "${WSL_DISTRO_NAME:-}" ]]; then
     echo "Estás en WSL: esto compilaría para Linux, y el Godot de Windows necesita la .dll." >&2
     echo "Abre Git Bash (o PowerShell) y lanza el script desde ahí. Ver rust/README.md." >&2
     exit 1

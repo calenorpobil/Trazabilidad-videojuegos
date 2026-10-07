@@ -19,6 +19,7 @@ rusqlite = { version = "=0.40.2", features = ["bundled"] }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
 getrandom = "=0.4.3"
+sha2 = "=0.10.9"
 
 [profile.release]
 opt-level = "s"     # tamaño antes que velocidad: el cuello de botella es la red, no la CPU

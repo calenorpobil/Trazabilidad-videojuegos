@@ -1,22 +1,33 @@
 //! Tests de integración de la API: el `Router` entero contra SQLite en memoria, sin red.
 
+use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 
 use axum::Router;
 use axum::body::{Body, to_bytes};
+use axum::extract::ConnectInfo;
 use axum::http::{Method, Request, StatusCode};
 use serde_json::{Value, json};
 use tower::ServiceExt;
 
-use crate::friends::LOOKUP_LIMIT;
+use crate::api::SIGNUP_LIMIT;
+use crate::friends::{LOOKUP_LIMIT, LOOKUP_LIMIT_PER_IP};
 use crate::{AppState, api, db};
 
+/// IP desde la que llaman los tests salvo que digan otra.
+const HOME: &str = "10.0.0.1";
+
 fn app() -> Router {
+    app_with_state().0
+}
+
+fn app_with_state() -> (Router, Arc<AppState>) {
     let conn = db::open(":memory:", 1).unwrap();
-    api::router(Arc::new(AppState {
+    let state = Arc::new(AppState {
         db: Mutex::new(conn),
         time_scale: 1.0,
-    }))
+    });
+    (api::router(state.clone()), state)
 }
 
 async fn call(
@@ -26,17 +37,30 @@ async fn call(
     token: Option<&str>,
     body: Option<Value>,
 ) -> (StatusCode, Value) {
+    call_from(app, HOME, method, uri, token, body).await
+}
+
+async fn call_from(
+    app: &Router,
+    ip: &str,
+    method: Method,
+    uri: &str,
+    token: Option<&str>,
+    body: Option<Value>,
+) -> (StatusCode, Value) {
     let mut req = Request::builder().method(method).uri(uri);
     if let Some(t) = token {
         req = req.header("Authorization", format!("Bearer {t}"));
     }
-    let req = match body {
+    let mut req = match body {
         Some(b) => req
             .header("Content-Type", "application/json")
             .body(Body::from(b.to_string())),
         None => req.body(Body::empty()),
     }
     .unwrap();
+    let addr = SocketAddr::new(ip.parse().unwrap(), 50000);
+    req.extensions_mut().insert(ConnectInfo(addr));
     let res = app.clone().oneshot(req).await.unwrap();
     let status = res.status();
     let bytes = to_bytes(res.into_body(), 1 << 20).await.unwrap();
@@ -284,7 +308,10 @@ async fn wrong_codes_are_rate_limited() {
 /// Una base de datos de J1 (sin `user_version`, sin códigos) se pone al día al abrirla.
 #[test]
 fn j1_database_is_migrated_in_place() {
-    let path = std::env::temp_dir().join(format!("nidada-migration-{}.db", api::random_seed()));
+    let path = std::env::temp_dir().join(format!(
+        "nidada-migration-{}.db",
+        api::random_seed().unwrap()
+    ));
     let path_str = path.to_str().unwrap();
     {
         let conn = rusqlite::Connection::open(path_str).unwrap();
@@ -299,7 +326,16 @@ fn j1_database_is_migrated_in_place() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 2);
+    assert_eq!(version, 3);
+    assert_eq!(
+        db::player_by_token(&conn, "tok").unwrap().as_deref(),
+        Some("plr_old"),
+        "el token de J1 sigue valiendo tras guardarse como hash"
+    );
+    let stored: String = conn
+        .query_row("SELECT token_hash FROM players", [], |r| r.get(0))
+        .unwrap();
+    assert_ne!(stored, "tok", "ya no queda en claro");
     let code = db::friend_code_of(&conn, "plr_old").unwrap();
     assert_eq!(
         nidada_rules::friend_code::normalize(&code),
@@ -319,4 +355,126 @@ fn j1_database_is_migrated_in_place() {
     for suffix in ["", "-wal", "-shm"] {
         let _ = std::fs::remove_file(format!("{path_str}{suffix}"));
     }
+}
+
+#[tokio::test]
+async fn session_tokens_are_not_stored_in_plain_text() {
+    let (app, state) = app_with_state();
+    let (token, _) = player(&app).await;
+    let stored: String = api::lock(&state)
+        .query_row("SELECT token_hash FROM players", [], |r| r.get(0))
+        .unwrap();
+    assert_ne!(stored, token);
+    assert_eq!(stored.len(), 64);
+    let (status, _) = call(&app, Method::GET, "/v1/corral", Some(&token), None).await;
+    assert_eq!(status, StatusCode::OK);
+    // El hash no es una credencial: presentarlo tal cual no abre la sesión.
+    let (status, _) = call(&app, Method::GET, "/v1/corral", Some(&stored), None).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn signups_are_limited_per_ip() {
+    let app = app();
+    for _ in 0..SIGNUP_LIMIT {
+        let (status, _) = call(&app, Method::POST, "/v1/players", None, None).await;
+        assert_eq!(status, StatusCode::CREATED);
+    }
+    let (status, body) = call(&app, Method::POST, "/v1/players", None, None).await;
+    assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(body["error"]["code"], "RATE_LIMITED");
+
+    // Otra IP no se ve afectada.
+    let (status, _) = call_from(&app, "10.0.0.2", Method::POST, "/v1/players", None, None).await;
+    assert_eq!(status, StatusCode::CREATED);
+}
+
+/// El motivo del límite por IP: con un jugador nuevo cada 20 intentos, el límite por
+/// jugador no frena a quien pruebe códigos a lo bruto.
+#[tokio::test]
+async fn wrong_codes_are_limited_per_ip_even_across_new_players() {
+    let app = app();
+    let (_, victim_code) = player(&app).await;
+    let unknown = if victim_code == "222222" {
+        "333333"
+    } else {
+        "222222"
+    };
+    let mut attempts = 0;
+    // Jugadores distintos, misma IP, sin que ninguno llegue a su propio límite.
+    let per_player = LOOKUP_LIMIT - 1;
+    'outer: loop {
+        let (status, body) =
+            call_from(&app, "10.0.0.9", Method::POST, "/v1/players", None, None).await;
+        if status == StatusCode::TOO_MANY_REQUESTS {
+            // Las altas por IP también frenan: el atacante se queda sin jugadores.
+            break;
+        }
+        let token = body["session_token"].as_str().unwrap().to_owned();
+        for _ in 0..per_player {
+            let (status, _) = call_from(
+                &app,
+                "10.0.0.9",
+                Method::POST,
+                "/v1/friends",
+                Some(&token),
+                Some(json!({ "code": unknown })),
+            )
+            .await;
+            if status == StatusCode::TOO_MANY_REQUESTS {
+                break 'outer;
+            }
+            attempts += 1;
+        }
+    }
+    assert!(
+        attempts <= LOOKUP_LIMIT_PER_IP,
+        "se probaron {attempts} códigos desde una sola IP"
+    );
+}
+
+#[tokio::test]
+async fn malformed_json_gets_the_api_error_format() {
+    let app = app();
+    let (token, _) = player(&app).await;
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri("/v1/friends")
+        .header("Authorization", format!("Bearer {token}"))
+        .header("Content-Type", "application/json")
+        .body(Body::from("{esto no es json"))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert!(res.status().is_client_error());
+    let bytes = to_bytes(res.into_body(), 1 << 20).await.unwrap();
+    let body: Value = serde_json::from_slice(&bytes).expect("el cuerpo del error es JSON");
+    assert_eq!(body["error"]["code"], "INVALID");
+    assert!(body["error"]["message"].is_string());
+}
+
+/// Un pánico con la conexión tomada no deja el servidor inservible.
+#[tokio::test]
+async fn server_survives_a_panic_while_holding_the_connection() {
+    let (app, state) = app_with_state();
+    let (token, _) = player(&app).await;
+
+    let poisoner = state.clone();
+    let result = std::thread::spawn(move || {
+        let _conn = poisoner.db.lock().unwrap();
+        panic!("fallo simulado en una petición");
+    })
+    .join();
+    assert!(result.is_err());
+    assert!(state.db.is_poisoned());
+
+    let (status, _) = call(&app, Method::GET, "/v1/corral", Some(&token), None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(!state.db.is_poisoned());
+}
+
+#[test]
+fn assigning_a_code_to_a_missing_player_is_an_error() {
+    let conn = db::open(":memory:", 1).unwrap();
+    let mut rng = nidada_rules::SplitMix64::new(3);
+    assert!(db::assign_friend_code(&conn, "plr_no_existe", &mut rng).is_err());
 }
