@@ -21,6 +21,8 @@ var _visiting := ""
 var _food_label: Label
 var _code_label: Label
 var _message: Label
+## Sólo se ve cuando la sesión ya no vale: empezar de nuevo es decisión del jugador.
+var _restart: Button
 var _tabs: TabContainer
 var _cards: VBoxContainer
 var _friends: VBoxContainer
@@ -81,13 +83,7 @@ func _on_resync() -> void:
 ## Pinta un corral recibido del servidor, o el mensaje de error.
 func _apply(res: Dictionary) -> void:
 	if not res.ok:
-		if res.code == "UNAUTHORIZED":
-			# La sesión ya no vale (p. ej. se borró la base de datos del servidor).
-			var created := await _api.create_player()
-			if created.ok:
-				_refresh()
-				return
-		_show_message(res.message)
+		_show_error(res)
 		return
 	_show_message("")
 	var data: Dictionary = res.data
@@ -99,17 +95,32 @@ func _apply(res: Dictionary) -> void:
 	print("Nidada: corral con %d mascotas, comida %d" % [data.pets.size(), food])
 
 
+## Actualiza las tarjetas por `pet_id` en vez de rehacerlas: así no se pierde lo que el
+## jugador está escribiendo en el nombre de una mascota cuando llega una resincronización.
 func _fill_cards(container: Container, pets: Array, time_scale: float, food: int, read_only: bool) -> void:
+	var existing := {}
 	for card in container.get_children():
-		card.queue_free()
+		existing[card.pet_id] = card
+	var wanted := {}
 	for pet: Dictionary in pets:
-		var card: PanelContainer = _pet_card_script.new()
-		card.read_only = read_only
-		container.add_child(card)
+		wanted[pet.pet_id] = true
+	for pet_id: String in existing.keys():
+		if not wanted.has(pet_id):
+			existing[pet_id].queue_free()
+			existing.erase(pet_id)
+
+	for index in pets.size():
+		var pet: Dictionary = pets[index]
+		var card: PanelContainer = existing.get(pet.pet_id)
+		if card == null:
+			card = _pet_card_script.new()
+			card.read_only = read_only
+			container.add_child(card)
+			if not read_only:
+				card.action_requested.connect(_on_action)
+				card.rename_requested.connect(_on_rename)
+		container.move_child(card, index)
 		card.setup(pet, time_scale, food)
-		if not read_only:
-			card.action_requested.connect(_on_action)
-			card.rename_requested.connect(_on_rename)
 
 
 func _on_action(pet_id: String, action: String) -> void:
@@ -137,7 +148,7 @@ func _on_tab_changed(tab: int) -> void:
 func _open_visit(code: String, label: String) -> void:
 	var res := await _api.visit(code)
 	if not res.ok:
-		_show_message(res.message)
+		_show_error(res)
 		return
 	_show_message("")
 	_visiting = code
@@ -163,6 +174,30 @@ func _close_visit() -> void:
 func _show_message(text: String) -> void:
 	_message.text = text
 	_message.visible = text != ""
+	if text == "" and _restart != null:
+		_restart.visible = false
+
+
+## Un error del servidor. Con la sesión caducada no se crea otro jugador a escondidas:
+## eso dejaría al jugador sin sus mascotas sin saber por qué.
+func _show_error(res: Dictionary) -> void:
+	if res.code == "UNAUTHORIZED" and _restart != null:
+		_show_message("Tu sesión ya no es válida y no podemos recuperar tus mascotas. " +
+			"Si empiezas de nuevo, tendrás un corral nuevo y perderás el actual.")
+		_restart.visible = true
+	else:
+		_show_message(res.message)
+
+
+func _on_restart() -> void:
+	_restart.disabled = true
+	var created := await _api.create_player()
+	_restart.disabled = false
+	if not created.ok:
+		_show_message(created.message)
+		return
+	_show_message("")
+	_refresh()
 
 
 func _build_ui() -> void:
@@ -199,6 +234,12 @@ func _build_ui() -> void:
 	_message.add_theme_color_override("font_color", Color("#ffb4a2"))
 	_message.visible = false
 	column.add_child(_message)
+	_restart = Button.new()
+	_restart.text = "Empezar de nuevo"
+	_restart.custom_minimum_size = Vector2(0, 44)
+	_restart.visible = false
+	_restart.pressed.connect(_on_restart)
+	column.add_child(_restart)
 
 	_tabs = TabContainer.new()
 	_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
