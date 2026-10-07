@@ -55,7 +55,7 @@ y en `examples/godot-demo/`, nunca en `addon/`, y no habla con ninguna cadena.
 ### 2.2 No entra
 
 - Nada de `godot-chain`, ni real ni simulado. Las mascotas iniciales viven sólo en el servidor de
-  juego; en J4 pasarán a respaldarse con un `grant`.
+  juego; en J4 pasarán a respaldarse con un `grant`, que no se pide al dar de alta al jugador sino en su primera acción real: un alta anónima no debe costar comisión ni renta.
 - Galletas, coleccionables, regalos, cría jugable, código de amigo.
 - Android (J2). El `.gdextension` deja las rutas de Android escritas, pero no se compilan.
 
@@ -108,7 +108,7 @@ salvo en el alta.
 
 | Método | Ruta | Devuelve |
 |---|---|---|
-| `POST` | `/v1/players` | `{ player_id, session_token }` — crea cuenta y dos mascotas |
+| `POST` | `/v1/players` | `{ player_id, session_token }` — crea cuenta y dos mascotas. `RATE_LIMITED` (429) pasadas 10 altas por hora desde una IP |
 | `GET` | `/v1/corral` | `{ server_time, time_scale, food, pets: [ … ] }` |
 | `POST` | `/v1/pets/{pet_id}/feed` | El corral actualizado |
 | `POST` | `/v1/pets/{pet_id}/play` | Ídem |
@@ -203,7 +203,7 @@ Un código mal escrito no consulta la base de datos y por eso no gasta intentos.
 | Método | Ruta | Devuelve |
 |---|---|---|
 | `GET` | `/v1/corral` | Como en J1, más `friend_code` |
-| `POST` | `/v1/friends` | `{ code, alias? }` → la lista. `INVALID` si el formato es malo, `NOT_FOUND` si no existe (gasta intento), `NOT_ALLOWED` si es el tuyo, `RATE_LIMITED` (429) con el cupo agotado |
+| `POST` | `/v1/friends` | `{ code, alias? }` → la lista. `INVALID` si el formato es malo, `NOT_FOUND` si no existe (gasta intento), `NOT_ALLOWED` si es el tuyo, `RATE_LIMITED` (429) con el cupo agotado, por jugador (20/h) o por IP (60/h) |
 | `GET` | `/v1/friends` | `{ friends: [ { code, alias, pets: [ { species, name } ] } ] }` |
 | `PUT` | `/v1/friends/{code}/alias` | `{ alias }`; vacío o `null` lo borra |
 | `DELETE` | `/v1/friends/{code}` | La lista |
@@ -231,3 +231,45 @@ porque las bases de J1 lo tienen con `user_version` 0); la 2 añade `players.fri
   visitar en solo lectura y volver. Revisado en capturas.
 
 Fuera de J5, sin cambios: chat, avisos de visita, búsqueda de jugadores, regenerar el código.
+
+## 9. Decisiones previas a J3 y J4 — 7 de octubre de 2026
+
+Fijadas antes de escribir J3 (galleta y regalos) y J4 (especies en cadena). Ninguna se
+implementa todavía: aquí quedan decididas para que J3 y J4 no las reinventen.
+
+### 9.1 El cliente necesita su `holder_id`
+
+Las lecturas van directas del cliente al backend (`GET /v1/holders/{holder_id}/items`), pero
+el contrato (§4.1 y §9.1 de `docs/http-contract.md`) sólo devuelve el `holder_id` en las
+respuestas de escritura.
+
+- `players.holder_id`, nullable. El servidor de juego lo guarda en cuanto recibe la primera
+  respuesta de escritura del backend.
+- `GET /v1/corral` lo devuelve con el resto, y el cliente lo usa para leer el inventario.
+- Con `holder_id` nulo el inventario es **vacío**, no un error: aún no ha habido escrituras.
+- `external_id` = `player_id` (`plr_…`). Es inmutable, como exige la limitación 12.8.
+
+### 9.2 «Marcar primero, llamar después» en el servidor de juego
+
+Hoy ninguna acción es idempotente. Dar de comer da igual, pero un regalo repetido por la red
+o por un reintento se haría dos veces.
+
+- Tabla `operations` con el estado y la `Idempotency-Key` (p. ej. `gift:<id>`). La fila se
+  inserta **antes** de llamar al backend (diseño 6.4).
+- La clave es única por operación lógica y **no se reutiliza nunca**: el contrato (§9.5)
+  devuelve el resultado original si se repite una clave con otro cuerpo, así que reutilizarla
+  devolvería un resultado que no corresponde.
+
+### 9.3 La conexión de SQLite no se retiene durante una llamada al backend
+
+Hoy `lock()` se mantiene toda la petición, y no importa porque son cortas (el compilador
+además impide mantener el cerrojo a través de un `.await`). En J3 habrá llamadas al backend
+dentro de una petición: retener la conexión durante esa espera bloquearía a todos los
+jugadores. Patrón obligatorio:
+
+1. tomar la conexión y guardar la operación;
+2. soltarla;
+3. llamar al backend;
+4. volver a tomarla y actualizar la operación.
+
+J3 añadirá un test que falle si un manejador mantiene el cerrojo durante la llamada.
