@@ -127,6 +127,16 @@ jobs:
             exit 1
           fi
 
+      # cargo tree no ve los hilos de la biblioteca estandar: se buscan en el codigo.
+      # Cuando exista rust/godot-chain, anadirlo a esta lista y al cargo tree de arriba.
+      - name: Sin hilos propios en el dispositivo
+        working-directory: .
+        run: |
+          if grep -rnE 'std::thread|thread::spawn|tokio::' rust/nidada-ext/src rust/nidada-rules/src; then
+            echo "::error::Hilos o runtime async en el dispositivo: el HTTP pasa por HTTPRequest de Godot."
+            exit 1
+          fi
+
       # Limites de palabra: 'SplitMix64' o 'display' no son vocabulario de cadena.
       - name: Ningun concepto de cadena en el cliente del juego
         working-directory: .
