@@ -1,7 +1,7 @@
 # CLAUDE.md — `godot-chain`
 
 Activos de Solana en Godot 4 sin que el jugador vea la cadena.
-Proyecto de fin de máster. Presupuesto: **40 horas**.
+Proyecto de fin de máster. Presupuesto: **unas 44 horas**, sólo la librería (el juego *Nidada* no cuenta).
 
 ---
 
@@ -9,7 +9,8 @@ Proyecto de fin de máster. Presupuesto: **40 horas**.
 
 | Documento | Estatus | Cómo usarlo |
 |---|---|---|
-| `Propuesta_PFM_godot-chain_v1_reducida.md` | **ÚNICA FUENTE DE VERDAD** | Es la especificación. Todo lo que se construye sale de aquí |
+| `Propuesta_PFM_godot-chain_v1_reducida.md` | **ÚNICA FUENTE DE VERDAD** | Es la especificación. Todo lo que se construye sale de aquí, **salvo lo que cambia `docs/implementacion-android.md`** |
+| `docs/implementacion-android.md` | Decisión del responsable, 6-oct-2026 | Cambia la arquitectura del cliente: Rust + GDExtension en `godot-chain` y `nidada-ext`. Sustituye al invariante 4 y a lo que la propuesta dice del addon en GDScript (secciones 2, 4.6, 9 y 11). La propuesta **aún no está actualizada**: en esos puntos manda este documento |
 | `docs/http-contract.md` | Congelado en el bloque 1 | Contrato del que cuelga el resto. Cambiarlo exige decisión explícita |
 | `Documento de implementación.md` | Referencia | Aspiración, no guía de acción |
 | `Viejo Documento de implementación.md` | **Histórico, superado** | Describe una arquitectura descartada (Rust + GDExtension + Metaplex). Sólo contexto de a dónde aspira el proyecto |
@@ -32,7 +33,15 @@ múltiples backends): citarlo como justificación es un error.
 3. **Cero vocabulario de cadena en `addon/`.** Ni `solana`, ni `pubkey`, ni `lamport`,
    ni `blockhash`, ni `base58`, ni `spl`, ni la palabra que designa la cuenta de acuñación.
    La CI lo comprueba con `grep`. Si aparece, la costura está rota.
-4. **Cero dependencias en `addon/`.** GDScript puro. Ningún binario.
+4. **Rust en el cliente sólo para calcular, nunca para firmar ni para hablar con la cadena.**
+   Sustituye al antiguo «GDScript puro» (decisión del 6-oct-2026, `docs/implementacion-android.md`
+   §3). Cinco reglas, comprobadas en la CI:
+   - Cero vocabulario de cadena en `godot-chain` y `nidada-ext` (`src/` y API registrada en Godot).
+   - Cero crates `solana-*` ni `spl-*` en el dispositivo (`cargo tree`).
+   - Sin red propia ni hilos en las GDExtension: ni `tokio`, ni `reqwest`, ni `std::thread`. El
+     HTTP pasa por `HTTPRequest` de Godot. `nidada-server` sí usa `tokio`.
+   - `nidada-rules` es puro: sin Godot, sin red, sin reloj ni aleatoriedad propios.
+   - Rust calcula, GDScript muestra: ninguna escena en Rust, ninguna regla en GDScript.
 5. **El juego sólo escribe estado en `settled`.** `applied` es cosmético.
 6. **Nada fuera del hito de la sección 7** de la propuesta. Si surge «ya que estamos,
    añadimos…», la respuesta es no.
@@ -48,16 +57,16 @@ múltiples backends): citarlo como justificación es un error.
   dirección en crudo cruza la API pública.
 - Ante la duda entre genérico y simple, **simple**. Cero *hooks* especulativos: no hay
   un segundo cliente al que servir.
-- Versiones **exactas** en `package.json` (sin `^` ni `~`).
+- Versiones **exactas** en `package.json` (sin `^` ni `~`) y en `Cargo.toml` (`=x.y.z`).
 
 ## 3. Estructura
 
 | Directorio | Contenido |
 |---|---|
-| `addon/addons/godot_chain/` | El addon. GDScript puro, cero dependencias |
+| `addon/addons/godot_chain/` | Envoltorio de la GDExtension `godot-chain` (`.gdextension`, `bin/`, `plugin.cfg`). Aún no existe |
 | `backend/` | TypeScript, Node >= 22. El servicio y su suite de tests |
-| `examples/game-server/` | Servidor de juego mínimo. Ejemplo, no producto |
-| `examples/godot-demo/` | Proyecto Godot que ejecuta el hito |
+| `rust/` | Workspace de Cargo: `nidada-rules`, `nidada-ext`, `nidada-server` (hoy) y `godot-chain` (pendiente). Sustituye a `examples/game-server/` |
+| `examples/godot-demo/` | Proyecto Godot de *Nidada* que ejecuta el hito |
 | `docs/` | Contrato HTTP y notas de verificación |
 
 ## 4. Disciplina de sesión
@@ -74,6 +83,9 @@ múltiples backends): citarlo como justificación es un error.
 ## 5. Estado actual
 
 - Bloque 1 (esqueleto, contrato, CI): **hecho**.
+- Juego *Nidada* (`rust/`, `examples/godot-demo/`): J1 (cuidado) y J5 (amigos y visitas) hechos,
+  con límites por IP, tokens con hash y decisiones previas a J3/J4 en `docs/plan-juego.md` §9.
+  No habla aún con `godot-chain`.
 - Siguiente: bloque 2 — configuración, derivación de claves con vectores de test,
   SQLite, idempotencia, máquina de estados de operaciones.
 - Ver `docs/verificaciones.md` para lo que hay que comprobar contra devnet antes de
@@ -88,4 +100,9 @@ npm run typecheck     # tsc --noEmit
 npm run lint          # eslint
 npm test              # vitest run
 npm run test:devnet   # tests contra devnet, FUERA de la CI (aún no existe)
+
+cd ../rust            # Git Bash o PowerShell, no WSL; ver rust/README.md
+cargo test
+cargo clippy --all-targets -- -D warnings
+./build-ext.sh        # compila nidada-ext y la copia al proyecto Godot
 ```
