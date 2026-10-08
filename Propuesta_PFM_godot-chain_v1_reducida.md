@@ -1,9 +1,10 @@
 # Propuesta PFM — `godot-chain`
 
 **Activos de Solana en Godot 4 sin que el jugador vea la cadena.**
-Versión reducida, dimensionada para **un mes / ~40 horas reales** de desarrollo asistido con Claude Code.
+Versión reducida, dimensionada para **un mes / unas 44 horas reales** de desarrollo asistido con Claude Code
+(40 en la redacción original; ver la revisión del 8 de octubre, abajo).
 
-Fecha de redacción: 25 de agosto de 2026.
+Fecha de redacción: 25 de agosto de 2026. **Revisada el 8 de octubre de 2026** (cliente en Rust, sección 2).
 
 ---
 
@@ -15,6 +16,16 @@ tal cual a Claude Code como especificación de partida.
 Todas las decisiones técnicas están tomadas y justificadas. Quien implemente **no las reabre**. Si
 aparece una contradicción o un hueco, va a la sección 14 como pregunta, no se resuelve sobre la
 marcha.
+
+### Revisión del 8 de octubre de 2026
+
+El responsable del proyecto decidió el 6 de octubre **volver a escribir el cliente en Rust como
+GDExtension** (`godot-chain`), revirtiendo el recorte más grande de la sección 2. El desarrollo
+detallado de esa decisión —toolchain de Android, estructura, CI, presupuesto— está en
+`docs/implementacion-android.md`, que no la reabre. Esta revisión traslada a la propuesta lo que
+cambia: secciones 2, 3, 4.6, 6, 8, 9, 10, 11, 12, 13, 14 y 15. **No cambia:** el backend (TypeScript),
+el contrato HTTP (congelado), el hito de la sección 7, y los invariantes 1, 2, 3, 5, 6, 7 y 8 de
+`CLAUDE.md`. Lo que queda abierto es la **Q7** (sección 14): las horas extra.
 
 ### 0.1 Requisitos básicos que se asume que hay que cumplir
 
@@ -62,9 +73,9 @@ recortes son decisiones de ingeniería con motivo, no omisiones.
 
 | Elemento original | Aquí | Motivo del recorte |
 |---|---|---|
-| `godot-client` como GDExtension con `gdext` (Rust) | Addon **100% GDScript** | Elimina Rust en cliente, FFI, `gdext` fijado a versión exacta, MSRV, y toda la compilación cruzada. Es el recorte que más horas libera con menos pérdida conceptual |
-| CI con 5 targets de escritorio | CI sin matriz de compilación | Sin código nativo no hay nada que compilar por plataforma. Un addon GDScript funciona en escritorio, móvil y web sin trabajo adicional |
-| `core` en Rust sans-io | Backend único en TypeScript | El núcleo era Rust *porque* tenía que empotrarse en una GDExtension. Al desaparecer la GDExtension, desaparece el motivo |
+| `godot-client` como GDExtension con `gdext` (Rust) | **GDExtension en Rust (`godot-chain`)** — recorte revertido el 6 de octubre de 2026 | Se recortó para ahorrar FFI, `gdext` fijado, MSRV y compilación cruzada, y era el recorte que más horas liberaba. Vuelve por dos motivos que la redacción original no tenía: (1) las reglas del juego de ejemplo se ejecutan en dos sitios, servidor y dispositivo, y con un crate de reglas en Rust compartido la fórmula es una sola; (2) es un requisito del proyecto fijado por su responsable, no una necesidad técnica de la librería. Coste: unas 9 h más (sección 8). **Rust no vuelve para firmar:** las claves siguen sin estar en el binario (premisa 5) |
+| CI con 5 targets de escritorio | CI con una matriz pequeña: Linux para la suite *headless* y Android (`arm64-v8a`, `x86_64`) que sólo comprueba que enlaza | Hay código nativo, así que hay algo que compilar por plataforma; se compilan sólo los objetivos que alguien usa (sección 9). iOS, `armv7` y x86 de 32 bits no se compilan |
+| `core` en Rust sans-io | Backend único en TypeScript | Sin cambios. El núcleo era Rust *porque* tenía que empotrarse en una GDExtension que firmara transacciones en el dispositivo, y eso sigue sin ocurrir: la firma está en el backend. La GDExtension vuelve por otros motivos (fila 1) |
 | `core` + `dev-backend` + `mock-backend` + `node-adapter` | **Un** backend + modo mock dentro del addon | Tres implementaciones del mismo contrato exigen tests de conformidad. Con una implementación, el problema no existe |
 | `node-adapter` distribuible con `SeenStore` conectable | Idempotencia implementada en el backend sobre SQLite | El interfaz conectable existía para que el estudio enchufara su base de datos. Sin clientes reales, es abstracción sin usuario |
 | «Ninguna base de datos propia» | **SQLite**, un fichero | La ausencia de base de datos era una restricción comercial (multi-tenant, operar poco). Aquí una tabla resuelve idempotencia, estado de operaciones e identificadores opacos en una tarde |
@@ -73,7 +84,7 @@ recortes son decisiones de ingeniería con motivo, no omisiones.
 | Trait `Signer` async con MPC/hardware futuro | No existe | Nacía con su forma final porque tendría usuarios externos. No los tiene |
 | Backend comercial cerrado | No existe | Fuera del alcance de un PFM |
 | Señal `expired` | Se pliega en `failed` con `retryable: true` | Un estado menos que probar. La caducidad del blockhash es un fallo reintentable, y el jugador no distingue una cosa de la otra |
-| Pregunta abierta sobre Android/iOS en CI | **Disuelta** | Sin binarios nativos no hay toolchain móvil que validar |
+| Pregunta abierta sobre Android/iOS en CI | **Android, resuelta; iOS, fuera de alcance** | Con la GDExtension de vuelta, la toolchain de Android se valida en la fase A0 (sección 8) y se enlaza en la CI. iOS no se compila ni se promete |
 
 Lo que **no** se recorta, porque es la tesis del proyecto: Token-2022 en lugar de Metaplex,
 atributos sólo por tipo, escrituras a través de servidor autoritativo, vocabulario sin cadena en la
@@ -85,10 +96,10 @@ API pública, y la distinción `applied` / `settled`.
 
 ```
 Dispositivo del jugador
-    Proyecto Godot 4  +  addon godot-chain (GDScript)
+    Proyecto Godot 4  +  addon godot-chain (GDExtension en Rust)
         │ escrituras                          │ lecturas
         ▼                                     │
-    game-server de ejemplo (Node, ~150 líneas)│
+    game-server de ejemplo (Rust, nidada-server)│
         │  clave de escritura                 │
         ▼                                     ▼
     chain-backend  (TypeScript + SQLite)
@@ -276,14 +287,18 @@ por eso su endpoint no devuelve `operation_id`.
 
 ### 4.6 Repositorio, licencias y dependencias
 
-Monorepo, licencia **MIT OR Apache-2.0**, cuatro directorios:
+Monorepo, licencia **MIT OR Apache-2.0**, estos directorios:
 
 | Directorio | Contenido |
 |---|---|
-| `addon/` | `addons/godot_chain/`, GDScript puro. **Cero dependencias** |
+| `addon/` | `addons/godot_chain/`: `godot_chain.gdextension`, `bin/` con las bibliotecas nativas, `plugin.cfg`, `plugin.gd`. Envoltorio de la GDExtension |
+| `rust/` | Workspace de Cargo: `godot-chain` (la librería), `nidada-rules`, `nidada-ext` y `nidada-server` (el juego de ejemplo) |
 | `backend/` | TypeScript, Node ≥ 22, el servicio y su suite de tests |
-| `examples/game-server/` | Servidor de juego mínimo. Ejemplo, no producto |
-| `examples/godot-demo/` | Proyecto Godot que ejecuta el hito |
+| `examples/godot-demo/` | Proyecto Godot que ejecuta el hito, con *Nidada* dentro |
+
+El servidor de juego de ejemplo ya no es `examples/game-server/` (Node) sino `rust/nidada-server`.
+`godot-chain` y las reglas del juego van en **dos bibliotecas** separadas, para que la librería se
+pueda usar sin el juego (`docs/implementacion-android.md`, sección 4).
 
 **Stack del backend, fijado a versión exacta en `package.json`:**
 
@@ -293,13 +308,18 @@ Monorepo, licencia **MIT OR Apache-2.0**, cuatro directorios:
 - `fastify` para HTTP, `better-sqlite3` para persistencia, `zod` para validar entrada,
   `vitest` para tests.
 
-**Prohibido en `addon/`:** cualquier dependencia, cualquier binario, y las cadenas `solana`,
-`pubkey`, `lamport`, `blockhash`, `base58`, `mint` y `spl` en el código. La CI lo comprueba con un
-`grep` (sección 9). Es el sucesor espiritual del `cargo tree` de la propuesta original: un invariante
-de diseño convertido en test automático.
+**Prohibido en `addon/`, en `rust/godot-chain` y en `rust/nidada-ext`:** las cadenas `solana`,
+`pubkey`, `lamport`, `blockhash`, `base58`, `mint` y `spl` en el código, y en los dos crates del
+dispositivo, cualquier crate `solana-*` o `spl-*`, red propia (`tokio`, `reqwest`) e hilos
+(`std::thread`): el HTTP pasa por `HTTPRequest` de Godot y todo ocurre en el hilo principal. La CI
+lo comprueba con `grep` y `cargo tree` (sección 9): un invariante de diseño convertido en test
+automático. `nidada-rules` es puro: sin Godot, sin red, sin reloj ni aleatoriedad propios.
+Las versiones van fijadas con exactitud (`=x.y.z`) en `Cargo.toml`, igual que en `package.json`.
 
-**Godot:** fija la versión que instales (4.6.x o 4.7.x en el momento de escribir esto) y decláralo en
-el README. La sensibilidad a la versión es baja precisamente por no haber código nativo.
+**Godot:** fija la versión que instales (4.7.x) y decláralo en el README. Ahora que hay código
+nativo, la sensibilidad a la versión **no es baja**: `gdext` va fijado (`=0.5.5`), la característica de
+API compilada tiene que ser menor o igual que la versión de Godot en ejecución, y la toolchain de
+Android (NDK, JDK) la dicta la versión de Godot. Rust 1.94.0, fijado en `rust-toolchain.toml`.
 
 ---
 
@@ -342,7 +362,10 @@ El backend mantiene un bucle que consulta el estado de las firmas pendientes y p
 
 ## 6. API del lado Godot
 
-Tres formas expuestas, ni una más.
+Tres formas expuestas, ni una más. **La API no cambia por estar escrita en Rust**: mismas clases,
+mismas señales, mismos errores y mismo modo mock; un juego escrito contra ella no distingue la
+implementación. Cada clase vive en `rust/godot-chain` (`ChainConfig` sobre `Resource`, `Chain` sobre
+`Node`, `ChainHandle` sobre `RefCounted`).
 
 1. **`ChainConfig`** — `Resource`. `write_url`, `read_url`, `read_token`, `game_id`, timeouts,
    política de sondeo, `mode` (`LIVE` | `MOCK`).
@@ -376,8 +399,14 @@ if not handle.is_finished():
 3. **Sin hilos.** Sondeo con backoff exponencial en `_process`; la respuesta llega por la señal
    `request_completed` en el hilo principal. Cero primitivas de concurrencia.
 4. **Registro del autoload.** Lo declara el `plugin.gd` mediante `add_autoload_singleton` al
-   activarse el addon. Justificación: es el mecanismo estándar y evita insertar nodos bajo la raíz a
-   mano, que rompe si el juego cambia la escena principal.
+   activarse el addon, apuntando a una escena `chain_autoload.tscn` cuyo nodo raíz es de clase `Chain`:
+   un `EngineSingleton` de gdext no sirve, porque no es un `Node` y no recibe `process()`. Es el
+   mecanismo estándar y evita insertar nodos bajo la raíz a mano, que rompe si el juego cambia la
+   escena principal.
+5. **Ciclo de vida en Android.** Al pasar a segundo plano Godot deja de llamar a `process()`: `Chain` no
+   hace nada especial, los handles pendientes siguen en memoria y el sondeo se reanuda al volver. Si el
+   sistema mata la aplicación, los handles se pierden pero la operación sigue en el backend; al reabrir,
+   el juego relee el inventario. No se persisten handles.
 
 ### Errores
 
@@ -389,8 +418,8 @@ if not handle.is_finished():
 
 ### Modo mock
 
-`ChainConfig` con `mode = MOCK` resuelve contra una máquina de estados **en GDScript**, en memoria,
-con reloj controlable y sin red. Debe incluir `Chain.mock_force(handle, state, error)` para poder
+`ChainConfig` con `mode = MOCK` resuelve contra una máquina de estados **en Rust**, dentro de `godot-chain`,
+en memoria, con reloj controlable y sin red. Debe incluir `Chain.mock_force(handle, state, error)` para poder
 probar la rama de reversión: es la que rompe inventarios en producción y la que nadie prueba.
 
 Esto sustituye al `mock-backend` de la propuesta original. Coste: el mock puede divergir del backend
@@ -409,10 +438,14 @@ vídeo de demostración.
 
 ---
 
-## 8. Plan de trabajo: 40 horas
+## 8. Plan de trabajo: unas 44 horas
 
 Orden estricto. Cada bloque termina con la CI en verde y un commit. No se empieza el siguiente con el
 anterior a medias.
+
+**El tiempo de desarrollo del juego no cuenta en las horas del PFM.** El presupuesto cubre sólo la
+librería: backend, `godot-chain`, su CI y su documentación. *Nidada* (servidor de juego, escenas,
+arte, reglas) se hace aparte, aunque el hito lo necesite para demostrarse.
 
 | # | Bloque | h | Acumulado |
 |---|---|---|---|
@@ -421,35 +454,53 @@ anterior a medias.
 | 3 | Backend: crear item — mint Token-2022 con `MetadataPointer`, `TokenMetadata` y `PermanentDelegate` | 6 | 14 |
 | 4 | Backend: ATA, `MintTo`, `TransferChecked` vía delegate, e inventario con parseo de metadatos | 5 | 19 |
 | 5 | Backend: seguimiento de confirmación `applied → settled`, categorías de error, `INSUFFICIENT_FUNDS` | 2 | 21 |
-| 6 | Addon: `ChainConfig`, `Chain`, `ChainHandle`, pool de `HTTPRequest`, backoff, errores | 7 | 28 |
-| 7 | Addon: modo mock, `mock_force`, suite de tests sin red | 3 | 31 |
-| 8 | `game-server` de ejemplo: autorización y reenvío con clave de escritura | 2 | 33 |
-| 9 | Proyecto Godot de demo: dos jugadores, inventario, botón de transferir | 3 | 36 |
-| 10 | README con aviso de Steam, documentación de integración, vídeo de demo | 3 | 39 |
+| A0 | **Prueba de vida**: GDExtension mínima de Rust con una clase que imprime un texto, cargada en Godot en un teléfono real | 4 | 25 |
+| A1 | `godot-chain` en Rust: `ChainConfig`, `Chain`, `ChainHandle`, pool de `HTTPRequest`, backoff, errores (sustituye al antiguo bloque 6, de 7 h) | 10 | 35 |
+| A2 | Modo mock, `mock_force` y suite *headless* en Rust (sustituye al antiguo bloque 7, de 3 h) | 4 | 39 |
+| A5 | CI de la sección 9 | 2 | 41 |
+| — | README con aviso de Steam, documentación de integración, vídeo de demo (antiguo bloque 10) | 3 | 44 |
 
-**Buffer: 1 hora.** Es decir: prácticamente ninguno. Por eso existe la línea de corte.
+**Sin buffer.** Con 44 h no queda colchón: por eso existe la línea de corte.
+
+**Fuera del cómputo — el juego**, estimado sólo para planificar el calendario. Siguen siendo
+necesarios: sin ellos no hay hito que enseñar.
+
+| Fase | Contenido | Sustituye a | h estimadas |
+|---|---|---|---|
+| A3 | `nidada-server` mínimo: el corte vertical del hito | Antiguo bloque 8 (2 h) | 5 |
+| A4 | Escena del corte vertical de *Nidada*, exportada y ejecutada en Android | Antiguo bloque 9 (3 h) | 5 |
+
+**Comparación justa con la redacción original.** Sus 40 h incluían los bloques 8 y 9 (5 h), que eran
+trabajo de juego. Quitándolos, la librería costaba 35 h en GDScript y cuesta 44 h en Rust: **9 h más**
+por Rust en el cliente. Contra el límite de 40 h se pasa en 4 h; hay que confirmar con el tutor que se
+aceptan o aplicar la línea de corte 8.1 desde el principio (**Q7**, sección 14).
 
 ### 8.1 Línea de corte
 
-Si a mitad del bloque 6 el acumulado se ha ido más de un 20%, se recorta **en este orden**, y se
+Si a mitad de A1 el acumulado se ha ido más de un 20%, se recorta **en este orden**, y se
 documenta cada recorte en el README:
 
 1. `PATCH /qualities` — ya está fuera; no lo metas «porque es rápido».
 2. `POST /grants` — el hito no lo necesita; `POST /items` ya emite la cantidad inicial.
 3. `mock_force` y la parte del modo mock que prueba reversiones; conserva el mock básico.
 4. La demo Godot se reduce a una escena única con botones y `Label`, sin arte ni pulido.
+5. Si la Q7 se responde que no a las 44 h: se aplica esta línea entera desde el principio.
 
-**Nunca se recorta el bloque 10.** Un proyecto funcionando sin documentar puntúa peor que uno con
+**Nunca se recorta el último bloque (README, documentación, vídeo).** Un proyecto funcionando sin documentar puntúa peor que uno con
 menos alcance bien documentado.
 
 ### 8.2 Reparto por semanas
+
+Las dos primeras semanas no cambian, porque son el backend:
 
 | Semana | Bloques | h |
 |---|---|---|
 | 1 | 1, 2 | 8 |
 | 2 | 3, 4 | 11 |
-| 3 | 5, 6 | 9 |
-| 4 | 7, 8, 9, 10 | 11 |
+
+Las semanas 3 y 4 (bloque 5, A0, A1, A2, A5 y la documentación: 25 h) **se rehacen cuando se
+responda la Q7**, porque dependen de cuántas horas se aceptan. **A0 va antes que el resto del cliente**
+(ver 10): es la prueba que puede tumbar la decisión entera.
 
 La semana 2 es la de mayor riesgo: es donde vive Token-2022. Si algo se va a torcer, se tuerce ahí,
 y por eso el plan B de la sección 10 se decide como muy tarde al final del bloque 3.
@@ -458,22 +509,25 @@ y por eso el plan B de la sección 10 se decide como muy tarde al final del bloq
 
 ## 9. CI
 
-GitHub Actions, un solo runner Linux. **Sin matriz de compilación**, porque no hay nada que compilar
-por plataforma: ése es precisamente el beneficio de no usar GDExtension.
+GitHub Actions, un solo runner Linux. La matriz de compilación vuelve, pero pequeña.
 
-Comprobaciones obligatorias desde el primer commit:
+| Trabajo | Qué hace |
+|---|---|
+| `backend` | `tsc --noEmit`, `eslint`, `vitest run` (incluye los vectores fijos de derivación de claves y el **test del invariante de firmante único**: ninguna transacción construida requiere más de una firma), `npm audit --audit-level=high` y revisión de licencias |
+| `rust-check` | `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test` de todo el workspace |
+| `rust-guards` | `cargo tree` de `godot-chain` y `nidada-ext` sin `solana-*`, `spl-*`, `tokio` ni `reqwest`; `nidada-rules` sin ninguna dependencia; sin `std::thread`. `cargo deny` para licencias y avisos |
+| `vocab-guard` | **Guardia de vocabulario:** `grep -riE '(solana|pubkey|lamport|blockhash|base58|spl|mint)'` sobre `addon/`, `rust/godot-chain/src` y `rust/nidada-ext/src` debe devolver vacío. Si falla, la costura está rota |
+| `android-build` | `cargo ndk` para `arm64-v8a` y `x86_64`, en `release`. Sólo comprueba que enlaza |
+| `godot-headless` | Compila las GDExtension para `linux-x86_64` y ejecuta la suite de `godot-chain` en modo mock, sin red, con Godot *headless* |
 
-- `tsc --noEmit` y `eslint` sobre `backend/`.
-- `vitest run` — incluye los vectores fijos de derivación de claves.
-- **Test del invariante de firmante único:** ninguna transacción construida requiere más de una firma.
-- **Guardia de vocabulario:** `grep -riE '(solana|pubkey|lamport|blockhash|base58|spl|mint)' addon/`
-  debe devolver vacío. Si falla, la costura está rota.
-- **Godot headless** ejecutando la suite del addon en modo mock, sin red.
-- `npm audit --audit-level=high` y revisión de licencias de dependencias.
+**No entra en la CI:** generar el APK firmado ni ejecutarlo en un emulador (lentos y frágiles en un
+runner gratuito; se hacen a mano antes de la demo y se documentan con capturas), ni los tests que
+tocan devnet. Éstos dependen de una red externa y de un faucet con límite: van en un script manual,
+`npm run test:devnet`, y su ejecución se documenta con capturas o firmas de transacción en la
+memoria.
 
-Los tests que tocan devnet **no** entran en la CI: dependen de una red externa y de un faucet con
-límite. Van en un script manual, `npm run test:devnet`, y su ejecución se documenta con capturas o
-firmas de transacción en la memoria.
+**Licencia de gdext:** MPL-2.0, copyleft por fichero. Enlazarlo no obliga a nada; parchearlo obliga a
+publicar esos ficheros. No se parchea.
 
 ---
 
@@ -485,7 +539,10 @@ Un plan B sin disparador es una excusa. Cada uno tiene condición de activación
 |---|---|---|
 | El API de `@solana/kit` con Token-2022 cuesta más de lo previsto | 2 h dentro del bloque 3 sin un mint con metadatos en devnet | Cambiar a `@solana/web3.js@1` + `@solana/spl-token` + `@solana/spl-token-metadata`, que tienen más material publicado. **Decidir antes de acabar el bloque 3, nunca después** |
 | El faucet de devnet se agota | Dos peticiones de airdrop rechazadas seguidas | Validador local (`solana-test-validator`) con `--clone` del programa Token-2022 para desarrollo; devnet sólo para la demo final |
-| El sondeo en `_process` resulta inestable | Bloque 6 supera 9 h | Reducir a sondeo con `Timer` a intervalo fijo, sin backoff, y documentar la pérdida |
+| El sondeo en `_process` resulta inestable | A1 supera 12 h (el margen de 2 h que tenía el antiguo bloque 6) | Reducir a sondeo con `Timer` a intervalo fijo, sin backoff, y documentar la pérdida |
+| **La GDExtension no carga en Android** | A0 supera **4 h** sin la clase funcionando en un teléfono | Volver al addon GDScript de la redacción original, sin cambios (secciones 2 y 6 tal como estaban). Rust se queda sólo en `nidada-server`. **Se decide al acabar A0, nunca después** |
+| El NDK de Godot y el de Rust no casan | Errores de enlace que no se resuelven en 1 h | Fijar el NDK que pide Godot y compilar Rust con ése exclusivamente |
+| Rupturas de API de `gdext` | Un ejemplo de la documentación no compila con la versión fijada | Leer el *changelog* de esa versión; no subir de versión a mitad del proyecto |
 | El vídeo o la memoria se comen el desarrollo | Fin de la semana 3 sin hito completo | Aplicar la línea de corte 8.1 entera de una vez, no gradualmente |
 
 ---
@@ -505,7 +562,11 @@ No implementar, no diseñar, no dejar hooks especulativos:
 - Atributos por jugador
 - Multi-tenant: un despliegue del backend sirve a **un** juego
 - Alta disponibilidad, réplicas, métricas, panel de administración
-- GDExtension y cualquier código nativo
+- iOS: la arquitectura no lo impide, pero no se compila, no se prueba y no se promete
+- `armv7` y x86 de 32 bits
+- Publicación en Google Play: se distribuye el APK de depuración
+- Cualquier código nativo en el dispositivo que no sea `godot-chain`, o las reglas del juego de ejemplo
+  (`nidada-rules`, `nidada-ext`), y ninguno que firme, hable con la cadena o abra su propia red
 
 ---
 
@@ -531,6 +592,10 @@ que nadie —empezando por el tribunal— las descubra por sorpresa.
    idempotencia.
 8. **El identificador de jugador debe ser inmutable.** Si cambia, sus objetos quedan bajo una clave
    derivada que nadie reclama y no hay forma de recuperarlos salvo con el permanent delegate.
+9. **El cliente depende de una GDExtension compilada.** Cada versión de Godot, cada ABI de Android y
+   cada NDK obligan a recompilar, y `gdext` rompe la API con frecuencia, de ahí la versión fijada. El
+   addon GDScript de la redacción original no tenía ese coste. Es el precio de la decisión de la
+   sección 2, aceptado por su responsable.
 
 ---
 
@@ -550,6 +615,21 @@ No decidas estos puntos: compruébalos, y anota en la memoria lo que encuentres 
 4. `TokenMetadata` es una extensión TLV de longitud variable: si los metadatos crecen después,
    `UpdateField` redimensiona la cuenta pero **no** transfiere lamports. Hay que enviarlos antes o la
    instrucción falla por falta de exención de renta.
+
+**Ya verificado el 6-8 de octubre de 2026, para el cliente en Rust:**
+
+- El crate `godot` más reciente es la 0.5.5 (9 de agosto de 2026), MSRV Rust 1.94. Su característica de
+  API **`api-4-7` existe y compila** (comprobado el 7 de octubre).
+- Regla de compatibilidad de GDExtension: carga en cualquier Godot cuya versión sea ≥ la de la API
+  compilada. Una GDExtension compilada con `api-4-7` carga en Godot 4.7.1 de escritorio (comprobado).
+- Lo que fija Godot 4.7.1 para Android (leído de su `config.gradle`): NDK `29.0.14206865`, Java 17,
+  `minSdk` 24 y `targetSdk` 36. Con la plantilla precompilada (`android_debug.apk`) el NDK sólo hace
+  falta para enlazar la parte de Rust.
+- **16 KB de páginas** (requisito de Google Play desde Android 15): con NDK r29 es el comportamiento por
+  defecto, y la `libnidada_ext.so` compilada para `aarch64-linux-android` tiene los segmentos `LOAD`
+  alineados a `0x4000` (comprobado leyendo las cabeceras del ELF).
+- **No verificado todavía:** que una GDExtension carga y funciona **en un teléfono real**. Es lo que
+  decide la fase A0. El APK generado hasta ahora no se ha instalado en ningún dispositivo.
 
 **Pendiente de verificar, contra devnet y contra documentación vigente:**
 
@@ -574,23 +654,27 @@ No decidas estos puntos: compruébalos, y anota en la memoria lo que encuentres 
 2. **¿Se exige que el backend esté en Rust?** Si la respuesta es sí, hay que añadir entre 8 y 12
    horas al presupuesto y aplicar la línea de corte 8.1 desde el principio.
 3. **¿Basta con devnet o hay que demostrar algo en mainnet?**
-4. **¿La memoria escrita y la presentación cuentan dentro de las 40 horas o van aparte?** El plan de
+4. **¿La memoria escrita y la presentación cuentan dentro de las horas del proyecto o van aparte?** El plan de
    la sección 8 asume que van aparte, salvo el bloque 10.
 5. **¿Hay que desplegar el backend en un servidor público o basta con ejecutarlo en local durante la
    defensa?**
 6. **¿El proyecto debe ser original respecto a la propuesta de la que deriva, o se admite
    explícitamente como versión reducida de ella?**
+7. **Q7: ¿se aceptan unas 44 h de librería en lugar de 40 h por usar Rust en el cliente, o se aplica
+   la línea de corte 8.1 desde el principio?** Sin respuesta, el plan de la sección 8 no tiene
+   presupuesto. Si además la Q2 se responde que el backend ha de estar en Rust, son otras 8–12 h y
+   `chain-backend` se reescribe (el contrato HTTP seguiría igual).
 
 ---
 
 ## 15. Cómo trabajar con Claude Code en este proyecto
 
-Con 40 horas, la disciplina de sesión importa tanto como el código.
+Con tan pocas horas, la disciplina de sesión importa tanto como el código.
 
 - **`CLAUDE.md` en la raíz desde el primer commit**, con los invariantes en imperativo: firmante
   único, marcar antes de llamar, cero vocabulario de cadena en `addon/`, nada fuera de la sección 7.
   Es lo que evita que el alcance se expanda solo.
-- **Una sesión por bloque de la sección 8.** Empezar la sesión pegando el bloque correspondiente.
+- **Una sesión por bloque de la sección 8** (los bloques 1 a 5 y las fases A0, A1, A2 y A5). Empezar la sesión pegando el bloque correspondiente.
   Terminarla con CI en verde y commit. No arrastrar trabajo entre bloques.
 - **Antes de tocar Token-2022, obliga a leer la documentación oficial vigente.** El orden de
   inicialización de extensiones y el cálculo de espacio con TLV son exactamente el tipo de detalle
@@ -598,7 +682,7 @@ Con 40 horas, la disciplina de sesión importa tanto como el código.
 - **Tests antes que implementación en dos sitios concretos:** los vectores de derivación de claves
   (bloque 2) y el invariante de firmante único (bloque 3). En el resto, tests después.
 - **La sección 11 es un contrato.** Si Claude Code propone «ya que estamos, añadimos un endpoint
-  para…», la respuesta es no. Ese impulso es lo que convierte 40 horas en 90.
+  para…», la respuesta es no. Ese impulso es lo que convierte 44 horas en 90.
 - **Commits pequeños y frecuentes.** Cuando una sesión se tuerce, revertir sale más barato que
   depurar lo que otro escribió mientras no mirabas.
 

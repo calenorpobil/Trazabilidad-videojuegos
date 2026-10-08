@@ -1,7 +1,7 @@
 # CLAUDE.md — `godot-chain`
 
 Activos de Solana en Godot 4 sin que el jugador vea la cadena.
-Proyecto de fin de máster. Presupuesto: **unas 44 horas**, sólo la librería (el juego *Nidada* no cuenta).
+Proyecto de fin de máster. Presupuesto: **unas 44 horas** (pendiente de confirmar, Q7), sólo la librería (el juego *Nidada* no cuenta).
 
 ---
 
@@ -10,7 +10,7 @@ Proyecto de fin de máster. Presupuesto: **unas 44 horas**, sólo la librería (
 | Documento | Estatus | Cómo usarlo |
 |---|---|---|
 | `Propuesta_PFM_godot-chain_v1_reducida.md` | **ÚNICA FUENTE DE VERDAD** | Es la especificación. Todo lo que se construye sale de aquí, **salvo lo que cambia `docs/implementacion-android.md`** |
-| `docs/implementacion-android.md` | Decisión del responsable, 6-oct-2026 | Cambia la arquitectura del cliente: Rust + GDExtension en `godot-chain` y `nidada-ext`. Sustituye al invariante 4 y a lo que la propuesta dice del addon en GDScript (secciones 2, 4.6, 9 y 11). La propuesta **aún no está actualizada**: en esos puntos manda este documento |
+| `docs/implementacion-android.md` | Decisión del responsable, 6-oct-2026 | Cambia la arquitectura del cliente: Rust + GDExtension en `godot-chain` y `nidada-ext`. Sustituye al invariante 4. La propuesta **ya está actualizada** con esta decisión (revisión del 8-oct-2026); este documento sigue siendo el desarrollo detallado (toolchain, CI, fases A0–A5). La **Q7** (44 h frente a 40) sigue abierta |
 | `docs/http-contract.md` | Congelado en el bloque 1 | Contrato del que cuelga el resto. Cambiarlo exige decisión explícita |
 | `Documento de implementación.md` | Referencia | Aspiración, no guía de acción |
 | `Viejo Documento de implementación.md` | **Histórico, superado** | Describe una arquitectura descartada (Rust + GDExtension + Metaplex). Sólo contexto de a dónde aspira el proyecto |

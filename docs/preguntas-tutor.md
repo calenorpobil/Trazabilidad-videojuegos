@@ -16,6 +16,7 @@ de empezar el bloque 2.
 | Q4 | ¿La memoria escrita y la presentación cuentan dentro de las 40 horas o van aparte? | El plan de la sección 8 asume que van aparte, salvo el bloque 10 | Sin responder |
 | Q5 | ¿Hay que desplegar el backend en un servidor público o basta con ejecutarlo en local durante la defensa? | Un despliegue público añade trabajo no presupuestado | Sin responder |
 | Q6 | ¿El proyecto debe ser original respecto a la propuesta de la que deriva, o se admite explícitamente como versión reducida de ella? | — | Sin responder |
+| Q7 | ¿Se aceptan unas 44 h de librería en lugar de 40 h por usar Rust en el cliente (`docs/implementacion-android.md`, §13), o se aplica la línea de corte 8.1 desde el principio? | Sin respuesta, el plan de esa sección no tiene presupuesto | Sin responder |
 
 ## Supuestos que conviene confirmar de paso
 

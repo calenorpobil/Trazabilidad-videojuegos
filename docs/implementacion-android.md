@@ -11,8 +11,11 @@ el cliente, que la propuesta reducida había descartado (sección 2 de la propue
 decisión está tomada por el responsable del proyecto el 6 de octubre de 2026. Este documento la
 desarrolla; no la reabre.
 
-**Hasta que se actualicen los documentos de abajo, este documento no se implementa.** La propuesta
-reducida sigue siendo la única fuente de verdad, y hoy contradice a éste en estos puntos:
+**Actualización del 8 de octubre de 2026.** `CLAUDE.md` y la propuesta reducida ya recogen esta
+decisión (la propuesta, en su revisión del 8 de octubre). La tabla de abajo se conserva como historial
+de qué cambió. Lo único que sigue abierto de ella es la **Q7**, en `docs/preguntas-tutor.md`.
+
+Originalmente, la propuesta contradecía a este documento en estos puntos:
 
 | Documento | Punto que choca | Qué hay que cambiar |
 |---|---|---|
