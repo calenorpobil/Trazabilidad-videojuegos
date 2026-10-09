@@ -1,0 +1,17 @@
+
+--En git bash:
+cd "/c/Users/Carlos/Documents/proyectos/CodeCrypto/PFM - Librería Videojuegos/rust"
+rustup override set 1.94.0-x86_64-pc-windows-msvc
+export CARGO_TARGET_DIR=C:/Users/Carlos/.cargo-target/nidada
+./build-ext.sh
+TIME_SCALE=20 cargo run -p nidada-server
+
+
+--Probar amigos y vistas
+B=http://127.0.0.1:8080
+T=$(curl -s -X POST $B/v1/players | sed -E 's/.*"session_token":"([^"]+)".*/\1/')
+curl -s $B/v1/corral -H "Authorization: Bearer $T" | grep -oE '"friend_code":"[A-Z0-9]+"'
+
+
+--Borrar la sesión
+rm ~/AppData/Roaming/Godot/app_userdata/Nidada/session.cfg
