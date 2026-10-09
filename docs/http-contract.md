@@ -58,6 +58,11 @@ Credencial ausente o inválida: `401` con código `REJECTED`.
 Toda escritura exige `Idempotency-Key: <cadena opaca, 1..128 caracteres>`. Sin ella:
 `400` con código `REJECTED`.
 
+**Quién la genera.** Desde el 9-oct-2026 la construye el plugin (`Chain`) como SHA-256 en
+hexadecimal de `(operación, call_id)`, donde `call_id` es el identificador de llamada que
+aporta el juego (propuesta 4.4). El servidor de juego la reenvía sin modificarla. Para el backend
+es una cadena opaca: no valida cómo se construyó. Un llamador que no use el plugin aporta la suya.
+
 Garantía: **marcar primero, llamar después.** El backend inserta la clave en SQLite
 dentro de una transacción antes de construir nada. Si la clave ya existe, devuelve el
 resultado anterior **con el mismo cuerpo y el mismo `operation_id`**, sin volver a
@@ -317,3 +322,4 @@ cerrado con la opción más simple, y quedan listados para que el cambio sea vis
 | Fecha | Cambio |
 |---|---|
 | 2026-09-06 | Versión inicial. Congelada. |
+| 2026-10-09 | Sección 3: se documenta que la clave de idempotencia la construye el plugin a partir de un `call_id` del juego. Sin cambio de forma en ningún endpoint ni cabecera. |

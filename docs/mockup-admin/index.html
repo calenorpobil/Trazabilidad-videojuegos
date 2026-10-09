@@ -1,0 +1,601 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Administración de activos</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --ink: #1c2330; --muted: #5d6778; --line: #dde1e8;
+  --accent: #2f5fd0; --accent-ink: #ffffff; --ok: #1b7f4c; --warn: #9a6200; --bad: #b3261e;
+  --ok-bg: #e4f4ea; --warn-bg: #fdf0d5; --bad-bg: #fbe5e3; --info-bg: #e6edfb; --code-bg: #eef0f4;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12151b; --panel: #1b2029; --ink: #e8ebf1; --muted: #9aa4b5; --line: #2d3442;
+    --accent: #6f94f0; --accent-ink: #0d1220; --ok: #5fcf8f; --warn: #e8b04e; --bad: #f1807a;
+    --ok-bg: #17301f; --warn-bg: #352a12; --bad-bg: #3a1c1a; --info-bg: #1c2740; --code-bg: #232a36;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+code, pre, .mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 13px; }
+h1 { font-size: 20px; margin: 0 0 4px; }
+h2 { font-size: 16px; margin: 24px 0 8px; }
+p { margin: 0 0 12px; }
+.muted { color: var(--muted); }
+button { font: inherit; cursor: pointer; }
+
+/* Entrada */
+#login { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 10; }
+#login form { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 24px; width: 100%; max-width: 360px; }
+#login[hidden] { display: none; }
+
+/* Estructura */
+.app { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+nav { background: var(--panel); border-right: 1px solid var(--line); padding: 16px 12px; }
+nav .brand { font-weight: 600; padding: 0 8px 12px; }
+nav .group { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 14px 8px 4px; }
+nav button { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 8px; text-align: left; background: none; border: 0; border-radius: 6px; padding: 7px 8px; color: var(--ink); }
+nav button:hover { background: var(--code-bg); }
+nav button[aria-current="page"] { background: var(--info-bg); color: var(--accent); font-weight: 600; }
+nav button.future { color: var(--muted); }
+.tag { font-size: 10px; border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; color: var(--muted); white-space: nowrap; }
+main { padding: 24px; max-width: 980px; width: 100%; }
+.topbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.banner { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 8px 12px; font-size: 13px; margin-bottom: 16px; }
+
+/* Componentes */
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+label .hint { font-weight: 400; color: var(--muted); }
+input[type=text], input[type=number], input[type=password], select, textarea {
+  width: 100%; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; }
+input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.field { margin-bottom: 12px; }
+.btn { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 6px; padding: 8px 14px; font-weight: 600; }
+.btn.secondary { background: none; color: var(--accent); border: 1px solid var(--line); }
+.btn.small { padding: 4px 9px; font-size: 13px; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.row { display: flex; gap: 8px; align-items: flex-end; }
+.row > * { flex: 1; }
+.row > .fixed { flex: 0 0 auto; }
+.pairs .pair { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin-bottom: 6px; }
+.badge { display: inline-block; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 1px 9px; }
+.badge.pending { background: var(--warn-bg); color: var(--warn); }
+.badge.applied { background: var(--info-bg); color: var(--accent); }
+.badge.settled { background: var(--ok-bg); color: var(--ok); }
+.badge.failed { background: var(--bad-bg); color: var(--bad); }
+.key { background: var(--code-bg); border-radius: 6px; padding: 6px 9px; word-break: break-all; font-size: 12px; margin-top: 4px; }
+.exchange { background: var(--code-bg); border-radius: 8px; padding: 12px; margin-top: 12px; overflow-x: auto; }
+.exchange pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
+.exchange .req { color: var(--muted); }
+.exchange .ok { color: var(--ok); } .exchange .bad { color: var(--bad); }
+.error { color: var(--bad); font-size: 13px; margin-top: 4px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; color: var(--muted); font-weight: 600; }
+td.num { text-align: right; }
+.link { background: none; border: 0; color: var(--accent); padding: 0; text-decoration: underline; font: inherit; }
+.steps { display: flex; gap: 6px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
+.steps span { font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; color: var(--muted); }
+.steps span.on { background: var(--info-bg); color: var(--accent); border-color: transparent; font-weight: 600; }
+.steps span.done { background: var(--ok-bg); color: var(--ok); border-color: transparent; }
+.steps span.bad { background: var(--bad-bg); color: var(--bad); border-color: transparent; font-weight: 600; }
+.future-card { border-style: dashed; }
+.sim { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; font-size: 13px; }
+.sim label { display: inline; font-weight: 400; margin: 0; }
+.sim select { width: auto; padding: 3px 6px; }
+
+@media (max-width: 760px) {
+  .app { grid-template-columns: 1fr; }
+  nav { border-right: 0; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 4px; }
+  nav .brand, nav .group { width: 100%; }
+  nav button { width: auto; }
+  main { padding: 16px; }
+  .grid2 { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div id="login">
+  <form id="loginForm">
+    <h1>Administración de activos</h1>
+    <p class="muted">Acceso para el equipo de desarrollo del juego.</p>
+    <div class="field"><label for="user">Usuario</label><input id="user" type="text" autocomplete="username"></div>
+    <div class="field"><label for="pass">Contraseña</label><input id="pass" type="password" autocomplete="current-password"></div>
+    <button class="btn" type="submit">Entrar</button>
+    <p class="muted" style="margin-top:12px;font-size:13px">Mockup: acepta cualquier usuario y contraseña. El acceso real exigirá una credencial de administrador distinta de la de los jugadores.</p>
+  </form>
+</div>
+
+<div class="app">
+  <nav id="nav" aria-label="Secciones"></nav>
+  <main>
+    <div class="topbar">
+      <div><h1 id="title"></h1><div class="muted" id="subtitle"></div></div>
+      <div class="muted" style="font-size:13px"><span id="who"></span> · <button class="link" id="logout">Salir</button></div>
+    </div>
+    <div class="banner"><strong>Modo simulado.</strong> Nada de lo que hagas aquí llega a un servidor: los datos viven en esta página y se pierden al recargarla. Los ejemplos iniciales son de muestra.</div>
+    <div class="card"><div class="sim" id="sim"></div></div>
+    <div id="view"></div>
+  </main>
+</div>
+
+<script>
+"use strict";
+
+/* ---------- SHA-256 (para derivar la clave de idempotencia) ---------- */
+function sha256(str) {
+  const bytes = new TextEncoder().encode(str);
+  const K = [], H = [];
+  for (let n = 2, c = 0; c < 64; n++) {
+    let p = true;
+    for (let i = 2; i * i <= n; i++) if (n % i === 0) { p = false; break; }
+    if (p) { if (c < 8) H[c] = (Math.pow(n, 1 / 2) % 1 * 2 ** 32) | 0; K[c] = (Math.pow(n, 1 / 3) % 1 * 2 ** 32) | 0; c++; }
+  }
+  const l = bytes.length, padLen = ((l + 9 + 63) >> 6) << 6, buf = new Uint8Array(padLen);
+  buf.set(bytes); buf[l] = 0x80;
+  const dv = new DataView(buf.buffer);
+  dv.setUint32(padLen - 4, (l * 8) >>> 0); dv.setUint32(padLen - 8, Math.floor(l * 8 / 2 ** 32));
+  let h = H.slice(); const w = new Int32Array(64);
+  for (let o = 0; o < padLen; o += 64) {
+    for (let i = 0; i < 16; i++) w[i] = dv.getInt32(o + i * 4);
+    for (let i = 16; i < 64; i++) {
+      const a = w[i - 15], b = w[i - 2];
+      const s0 = (a >>> 7 | a << 25) ^ (a >>> 18 | a << 14) ^ (a >>> 3);
+      const s1 = (b >>> 17 | b << 15) ^ (b >>> 19 | b << 13) ^ (b >>> 10);
+      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0;
+    }
+    let [a, b, c, d, e, f, g, hh] = h;
+    for (let i = 0; i < 64; i++) {
+      const S1 = (e >>> 6 | e << 26) ^ (e >>> 11 | e << 21) ^ (e >>> 25 | e << 7);
+      const ch = (e & f) ^ (~e & g);
+      const t1 = (hh + S1 + ch + K[i] + w[i]) | 0;
+      const S0 = (a >>> 2 | a << 30) ^ (a >>> 13 | a << 19) ^ (a >>> 22 | a << 10);
+      const mj = (a & b) ^ (a & c) ^ (b & c);
+      const t2 = (S0 + mj) | 0;
+      hh = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+    }
+    h = [(h[0] + a) | 0, (h[1] + b) | 0, (h[2] + c) | 0, (h[3] + d) | 0, (h[4] + e) | 0, (h[5] + f) | 0, (h[6] + g) | 0, (h[7] + hh) | 0];
+  }
+  return h.map(x => (x >>> 0).toString(16).padStart(8, "0")).join("");
+}
+
+/* ---------- Utilidades ---------- */
+const $ = (sel, root = document) => root.querySelector(sel);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+const rid = (prefix, n = 16) => prefix + Array.from({ length: n }, () => ALPHABET[Math.floor(Math.random() * ALPHABET.length)]).join("");
+const now = () => new Date().toLocaleTimeString("es-ES");
+
+/* ---------- Servidor simulado (reglas de docs/http-contract.md) ---------- */
+const sim = { speed: 3000, failNext: false, failCode: "EXPIRED" };
+const db = { collections: new Map(), items: new Map(), holders: new Map(), ops: new Map(), idem: new Map(), session: [] };
+
+function holderByExternal(ext, create) {
+  if (!db.holders.has(ext)) {
+    if (!create) return null;
+    db.holders.set(ext, { holder_id: rid("hld_"), external_id: ext, balances: new Map() });
+  }
+  return db.holders.get(ext);
+}
+function holderById(id) { for (const h of db.holders.values()) if (h.holder_id === id) return h; return null; }
+function resolveRef(ref, create) {
+  if (!ref || typeof ref !== "object") return { err: [400, "REJECTED", "Falta la referencia al tenedor."] };
+  const keys = Object.keys(ref);
+  if (keys.length !== 1 || !["external_id", "holder_id"].includes(keys[0]))
+    return { err: [400, "REJECTED", "La referencia lleva exactamente una clave: external_id o holder_id."] };
+  const v = ref[keys[0]];
+  if (typeof v !== "string" || !v.trim()) return { err: [400, "REJECTED", "El identificador del tenedor está vacío."] };
+  if (keys[0] === "external_id") return { holder: holderByExternal(v, create) || null, missing: v };
+  const h = holderById(v);
+  return h ? { holder: h } : { err: [404, "NOT_FOUND", "No existe ese tenedor."] };
+}
+const fail = (status, code, message) => ({ status, body: { error: { code, message } } });
+
+function startOperation(kind, effect) {
+  const op = { operation_id: rid("opr_"), kind, state: "pending", error: null, created: Date.now(), history: [{ s: "pending", t: Date.now() }] };
+  const willFail = sim.failNext; const code = sim.failCode; sim.failNext = false; syncSim();
+  db.ops.set(op.operation_id, op);
+  const move = (state, error) => { op.state = state; op.error = error || null; op.history.push({ s: state, t: Date.now() }); };
+  setTimeout(() => move("applied"), sim.speed * 0.4);
+  setTimeout(() => {
+    if (willFail) move("failed", { category: code, message: code === "EXPIRED" ? "La operación caducó antes de completarse." : "Error interno del servicio.", retryable: code === "EXPIRED" });
+    else { effect(); move("settled"); }
+  }, sim.speed);
+  return op;
+}
+
+function validQualities(q) {
+  if (q === undefined) return null;
+  if (!q || typeof q !== "object" || Array.isArray(q)) return "qualities debe ser un mapa texto→texto.";
+  const e = Object.entries(q);
+  if (e.length > 8) return "qualities admite como máximo 8 pares.";
+  for (const [k, v] of e) {
+    if (k.length < 1 || k.length > 32) return `La clave «${k}» debe tener entre 1 y 32 caracteres.`;
+    if (k === "collection") return "La clave «collection» está reservada.";
+    if (typeof v !== "string" || v.length < 1 || v.length > 64) return `El valor de «${k}» debe tener entre 1 y 64 caracteres.`;
+  }
+  return null;
+}
+const posInt = n => Number.isInteger(n) && n >= 1;
+
+function server(method, path, body, idemKey, readOnly) {
+  const write = method !== "GET";
+  if (write) {
+    if (!idemKey || idemKey.length > 128) return fail(400, "REJECTED", "Falta la cabecera Idempotency-Key (1..128 caracteres).");
+    if (db.idem.has(idemKey)) return { ...db.idem.get(idemKey), replayed: true };
+  }
+  const r = route(method, path, body);
+  if (write && r.status >= 200 && r.status < 300) db.idem.set(idemKey, r);
+  return r;
+}
+
+function route(method, path, body) {
+  let m;
+  if (method === "POST" && path === "/v1/collections") {
+    const name = body && body.name;
+    if (typeof name !== "string" || !name.trim() || name.length > 64) return fail(400, "REJECTED", "name es obligatorio (1..64 caracteres).");
+    const c = { collection_id: rid("col_"), name }; db.collections.set(c.collection_id, c);
+    return { status: 201, body: { collection_id: c.collection_id } };
+  }
+  if (method === "POST" && path === "/v1/items") {
+    const b = body || {};
+    if (!db.collections.has(b.collection_id)) return fail(404, "NOT_FOUND", "La colección no existe.");
+    if (typeof b.name !== "string" || b.name.length < 1 || b.name.length > 32) return fail(400, "REJECTED", "name debe tener entre 1 y 32 caracteres.");
+    if (typeof b.symbol !== "string" || b.symbol.length < 1 || b.symbol.length > 10) return fail(400, "REJECTED", "symbol debe tener entre 1 y 10 caracteres.");
+    if (b.uri !== undefined && (typeof b.uri !== "string" || b.uri.length > 200)) return fail(400, "REJECTED", "uri admite como máximo 200 caracteres.");
+    const qe = validQualities(b.qualities); if (qe) return fail(400, "REJECTED", qe);
+    if (!b.initial_grant || !posInt(b.initial_grant.amount)) return fail(400, "REJECTED", "initial_grant.amount debe ser un entero >= 1.");
+    const rh = resolveRef(b.initial_grant.holder, true); if (rh.err) return fail(...rh.err);
+    const item = { item_id: rid("itm_"), collection_id: b.collection_id, name: b.name, symbol: b.symbol, uri: b.uri || "", qualities: b.qualities || {} };
+    db.items.set(item.item_id, item);
+    const amount = b.initial_grant.amount, holder = rh.holder;
+    const op = startOperation("create_item", () => holder.balances.set(item.item_id, (holder.balances.get(item.item_id) || 0) + amount));
+    return { status: 202, body: { operation_id: op.operation_id, item_id: item.item_id, holder_id: holder.holder_id } };
+  }
+  if ((m = path.match(/^\/v1\/items\/([^/]+)\/grants$/)) && method === "POST") {
+    if (!db.items.has(m[1])) return fail(404, "NOT_FOUND", "El tipo de ítem no existe.");
+    if (!body || !posInt(body.amount)) return fail(400, "REJECTED", "amount debe ser un entero >= 1.");
+    const rh = resolveRef(body.holder, true); if (rh.err) return fail(...rh.err);
+    const holder = rh.holder, id = m[1], amount = body.amount;
+    const op = startOperation("grant", () => holder.balances.set(id, (holder.balances.get(id) || 0) + amount));
+    return { status: 202, body: { operation_id: op.operation_id, holder_id: holder.holder_id } };
+  }
+  if ((m = path.match(/^\/v1\/items\/([^/]+)\/transfer$/)) && method === "POST") {
+    if (!db.items.has(m[1])) return fail(404, "NOT_FOUND", "El tipo de ítem no existe.");
+    if (!body || !posInt(body.amount)) return fail(400, "REJECTED", "amount es obligatorio y debe ser un entero >= 1.");
+    const from = resolveRef(body.from, false); if (from.err) return fail(...from.err);
+    if (!from.holder) return fail(404, "NOT_FOUND", "El tenedor de origen no existe.");
+    const to = resolveRef(body.to, true); if (to.err) return fail(...to.err);
+    if (from.holder === to.holder) return fail(400, "REJECTED", "Origen y destino son el mismo tenedor.");
+    const id = m[1], amount = body.amount, a = from.holder, b = to.holder;
+    if ((a.balances.get(id) || 0) < amount) return fail(409, "INSUFFICIENT_BALANCE", "Saldo insuficiente en el origen.");
+    const op = startOperation("transfer", () => {
+      a.balances.set(id, (a.balances.get(id) || 0) - amount);
+      b.balances.set(id, (b.balances.get(id) || 0) + amount);
+    });
+    return { status: 202, body: { operation_id: op.operation_id, from_holder_id: a.holder_id, to_holder_id: b.holder_id } };
+  }
+  if ((m = path.match(/^\/v1\/operations\/([^/]+)$/)) && method === "GET") {
+    const op = db.ops.get(m[1]); if (!op) return fail(404, "NOT_FOUND", "No existe esa operación.");
+    return { status: 200, body: { state: op.state, error: op.error } };
+  }
+  if ((m = path.match(/^\/v1\/holders\/([^/]+)\/items$/)) && method === "GET") {
+    const h = holderById(m[1]); if (!h) return { status: 200, body: [] };
+    const list = [...h.balances].filter(([, n]) => n > 0).map(([id, n]) => {
+      const it = db.items.get(id); return { item_id: id, name: it.name, qualities: it.qualities, amount: n };
+    });
+    return { status: 200, body: list };
+  }
+  return fail(404, "NOT_FOUND", "Ruta desconocida.");
+}
+
+/* ---------- Datos de muestra ---------- */
+(function seed() {
+  const col = { collection_id: rid("col_"), name: "Armería (muestra)" }; db.collections.set(col.collection_id, col);
+  const it = { item_id: rid("itm_"), collection_id: col.collection_id, name: "Espada de hierro", symbol: "SWORD", uri: "", qualities: { rarity: "common", damage: "12" } };
+  db.items.set(it.item_id, it);
+  const h = holderByExternal("player-42", true); h.balances.set(it.item_id, 3);
+  const op = { operation_id: rid("opr_"), kind: "create_item", state: "settled", error: null, created: Date.now() - 60000, history: [{ s: "pending", t: Date.now() - 60000 }, { s: "settled", t: Date.now() - 55000 }] };
+  db.ops.set(op.operation_id, op);
+  db.session.push({ at: "—", label: "Tipo de ejemplo «Espada de hierro»", operation_id: op.operation_id, seed: true });
+})();
+
+/* ---------- Componentes de formulario ---------- */
+function refField(id, label) {
+  return `<div class="field"><label>${label}</label>
+    <div class="row"><select id="${id}-kind" class="fixed" style="width:200px"><option value="external_id">Identificador del juego</option><option value="holder_id">Identificador opaco</option></select>
+    <input type="text" id="${id}-val" list="dl-holders" placeholder="player-42" autocomplete="off"></div></div>`;
+}
+function readRef(id) {
+  const v = $(`#${id}-val`).value.trim(); if (!v) return null;
+  return { [$(`#${id}-kind`).value]: v };
+}
+function callIdField(op, prefix) {
+  return `<div class="field"><label for="callid">Identificador de llamada <span class="hint">(call_id, lo aporta el juego)</span></label>
+    <div class="row"><input type="text" id="callid" value="${prefix}_${rid("", 6)}" maxlength="64" autocomplete="off">
+    <button class="btn secondary fixed" type="button" id="callid-new">Nuevo</button></div>
+    <div class="key" id="callid-key" aria-live="polite"></div>
+    <div class="muted" style="font-size:12px;margin-top:4px">Misma acción reintentada → mismo identificador. Acción nueva, o reintento tras un fallo → uno nuevo.</div></div>`;
+}
+function bindCallId(op, prefix) {
+  const input = $("#callid"), out = $("#callid-key");
+  const upd = () => { const v = input.value.trim(); out.innerHTML = v ? `<span class="muted">Idempotency-Key:</span> ${sha256(op + ":" + v)}` : `<span class="muted">Escribe un identificador.</span>`; };
+  input.addEventListener("input", upd);
+  $("#callid-new").addEventListener("click", () => { input.value = `${prefix}_${rid("", 6)}`; upd(); });
+  upd();
+}
+const currentKey = op => sha256(op + ":" + $("#callid").value.trim());
+function datalists() {
+  const items = [...db.items.values()].map(i => `<option value="${esc(i.item_id)}">${esc(i.name)}</option>`).join("");
+  const holders = [...db.holders.values()].map(h => `<option value="${esc(h.external_id)}"></option><option value="${esc(h.holder_id)}"></option>`).join("");
+  const cols = [...db.collections.values()].map(c => `<option value="${esc(c.collection_id)}">${esc(c.name)}</option>`).join("");
+  return `<datalist id="dl-items">${items}</datalist><datalist id="dl-holders">${holders}</datalist><datalist id="dl-cols">${cols}</datalist>`;
+}
+function exchange(el, method, path, headers, body, res) {
+  const cls = res.status < 300 ? "ok" : "bad";
+  el.innerHTML = `<div class="exchange"><pre class="req">${esc(method)} ${esc(path)}
+${Object.entries(headers).map(([k, v]) => esc(k) + ": " + esc(v)).join("\n")}${body === undefined ? "" : "\n\n" + esc(JSON.stringify(body, null, 2))}</pre>
+<pre class="${cls}" style="margin-top:10px">← ${res.status}${res.replayed ? "  (clave ya usada: se devuelve el resultado anterior, sin operación nueva)" : ""}
+${esc(JSON.stringify(res.body, null, 2))}</pre></div>`;
+}
+function submitWrite(form, method, path, op, body, onOk, label) {
+  const out = $("#exchange"), key = currentKey(op);
+  if (!$("#callid").value.trim()) { out.innerHTML = `<div class="error">El identificador de llamada es obligatorio.</div>`; return; }
+  const res = server(method, path, body, key);
+  exchange(out, method, path, { Authorization: "Bearer ‹clave de escritura›", "Idempotency-Key": key, "Content-Type": "application/json" }, body, res);
+  if (res.status < 300 && !res.replayed) {
+    if (res.body.operation_id) db.session.unshift({ at: now(), label, operation_id: res.body.operation_id });
+    if (onOk) onOk(res);
+    refreshLists();
+  }
+}
+function opBadge(state) { return `<span class="badge ${state}">${state}</span>`; }
+function refreshLists() {
+  const dl = $("#dls"); if (dl) dl.innerHTML = datalists();
+}
+
+/* ---------- Vistas ---------- */
+const views = {};
+
+views.collections = {
+  title: "Colecciones", sub: "Agrupaciones lógicas del catálogo. No generan ninguna operación.",
+  render: () => `<div class="card"><form id="f">
+    <div class="field"><label for="name">Nombre</label><input type="text" id="name" maxlength="64" placeholder="Armería" autocomplete="off"></div>
+    ${callIdField("create_collection", "col")}
+    <button class="btn" type="submit">Crear colección</button></form><div id="exchange"></div></div>
+    <div class="card"><h2 style="margin-top:0">Creadas en esta sesión</h2><div id="list"></div></div>`,
+  mount() {
+    bindCallId("create_collection", "col");
+    const list = () => { $("#list").innerHTML = `<table><tr><th>Identificador</th><th>Nombre</th></tr>${[...db.collections.values()].map(c => `<tr><td class="mono">${esc(c.collection_id)}</td><td>${esc(c.name)}</td></tr>`).join("")}</table>`; };
+    list();
+    $("#f").addEventListener("submit", e => { e.preventDefault(); submitWrite(e.target, "POST", "/v1/collections", "create_collection", { name: $("#name").value.trim() }, list, `Colección «${$("#name").value.trim()}»`); });
+  }
+};
+
+views.items = {
+  title: "Tipos de ítem", sub: "Crea un tipo y emite su cantidad inicial. Dos efectos, una operación.",
+  render: () => `<div class="card"><form id="f">
+    <div class="grid2">
+      <div class="field"><label for="col">Colección</label><input type="text" id="col" list="dl-cols" placeholder="col_…" autocomplete="off"></div>
+      <div class="field"><label for="name">Nombre <span class="hint">(1..32)</span></label><input type="text" id="name" maxlength="32" autocomplete="off"></div>
+      <div class="field"><label for="symbol">Símbolo <span class="hint">(1..10)</span></label><input type="text" id="symbol" maxlength="10" autocomplete="off"></div>
+      <div class="field"><label for="uri">URI <span class="hint">(opcional, máx. 200)</span></label><input type="text" id="uri" maxlength="200" autocomplete="off"></div>
+    </div>
+    <div class="field pairs"><label>Cualidades <span class="hint">— atributos del <em>tipo</em>, no del ejemplar. Máximo 8 pares. No se pueden cambiar después.</span></label>
+      <div id="pairs"></div>
+      <button class="btn secondary small" type="button" id="addpair">Añadir cualidad</button> <span class="muted" id="pcount"></span></div>
+    <h2>Existencias iniciales</h2>
+    <div class="grid2">${refField("grant", "Tenedor que las recibe")}
+      <div class="field"><label for="amount">Cantidad <span class="hint">(entero ≥ 1)</span></label><input type="number" id="amount" min="1" step="1" value="1"></div></div>
+    ${callIdField("create_item", "item")}
+    <button class="btn" type="submit">Crear tipo</button></form><div id="exchange"></div></div>`,
+  mount() {
+    bindCallId("create_item", "item");
+    const pairs = $("#pairs");
+    const count = () => { const n = pairs.children.length; $("#pcount").textContent = `${n} de 8`; $("#addpair").disabled = n >= 8; };
+    const add = (k = "", v = "") => {
+      const d = document.createElement("div"); d.className = "pair";
+      d.innerHTML = `<input type="text" placeholder="clave" maxlength="32" value="${esc(k)}" aria-label="Clave"><input type="text" placeholder="valor" maxlength="64" value="${esc(v)}" aria-label="Valor"><button class="btn secondary small" type="button" aria-label="Quitar">✕</button>`;
+      d.lastChild.addEventListener("click", () => { d.remove(); count(); });
+      pairs.append(d); count();
+    };
+    add("rarity", "common"); add("damage", "12");
+    $("#addpair").addEventListener("click", () => add());
+    $("#f").addEventListener("submit", e => {
+      e.preventDefault();
+      const qualities = {};
+      for (const p of pairs.children) { const [k, v] = [...p.querySelectorAll("input")].map(i => i.value.trim()); if (k || v) qualities[k] = v; }
+      const body = { collection_id: $("#col").value.trim(), name: $("#name").value.trim(), symbol: $("#symbol").value.trim() };
+      if ($("#uri").value.trim()) body.uri = $("#uri").value.trim();
+      if (Object.keys(qualities).length) body.qualities = qualities;
+      body.initial_grant = { holder: readRef("grant") || {}, amount: Number($("#amount").value) };
+      submitWrite(e.target, "POST", "/v1/items", "create_item", body, null, `Tipo «${body.name}»`);
+    });
+  }
+};
+
+views.grants = {
+  title: "Entregar unidades", sub: "Emisión nueva a un tenedor. No quita nada a nadie.",
+  render: () => `<div class="card"><form id="f">
+    <div class="field"><label for="item">Tipo de ítem</label><input type="text" id="item" list="dl-items" placeholder="itm_…" autocomplete="off"></div>
+    <div class="grid2">${refField("to", "Tenedor que las recibe")}
+      <div class="field"><label for="amount">Cantidad <span class="hint">(entero ≥ 1)</span></label><input type="number" id="amount" min="1" step="1" value="1"></div></div>
+    ${callIdField("grant", "grant")}
+    <button class="btn" type="submit">Entregar</button></form><div id="exchange"></div></div>`,
+  mount() {
+    bindCallId("grant", "grant");
+    $("#f").addEventListener("submit", e => {
+      e.preventDefault();
+      const id = $("#item").value.trim();
+      submitWrite(e.target, "POST", `/v1/items/${id}/grants`, "grant", { holder: readRef("to") || {}, amount: Number($("#amount").value) }, null, `Entrega de ${$("#amount").value} a ${$("#to-val").value.trim()}`);
+    });
+  }
+};
+
+views.transfers = {
+  title: "Transferencias", sub: "Para correcciones de soporte. El origen no firma: lo hace la autoridad del juego.",
+  render: () => `<div class="card"><form id="f">
+    <div class="field"><label for="item">Tipo de ítem</label><input type="text" id="item" list="dl-items" placeholder="itm_…" autocomplete="off"></div>
+    <div class="grid2">${refField("from", "Origen")}${refField("to", "Destino")}</div>
+    <div class="field" style="max-width:240px"><label for="amount">Cantidad <span class="hint">(obligatoria, entero ≥ 1)</span></label><input type="number" id="amount" min="1" step="1" value="1"></div>
+    <p class="muted" style="font-size:13px">No hay transferencia parcial: entra la cantidad pedida entera o no entra.</p>
+    ${callIdField("transfer", "xfer")}
+    <button class="btn" type="submit">Transferir</button></form><div id="exchange"></div></div>`,
+  mount() {
+    bindCallId("transfer", "xfer");
+    $("#f").addEventListener("submit", e => {
+      e.preventDefault();
+      const id = $("#item").value.trim();
+      submitWrite(e.target, "POST", `/v1/items/${id}/transfer`, "transfer", { from: readRef("from") || {}, to: readRef("to") || {}, amount: Number($("#amount").value) }, null, `Transferencia de ${$("#amount").value}: ${$("#from-val").value.trim()} → ${$("#to-val").value.trim()}`);
+    });
+  }
+};
+
+views.operations = {
+  title: "Operaciones", sub: "Estado de una escritura. Solo en «settled» es definitiva.",
+  render: () => `<div class="card"><form id="f"><div class="row"><div><label for="op">Identificador de operación</label>
+    <input type="text" id="op" placeholder="opr_…" autocomplete="off"></div><button class="btn fixed" type="submit">Consultar</button></div></form>
+    <div id="detail"></div><div id="exchange"></div></div>
+    <div class="card"><h2 style="margin-top:0">Actividad de esta sesión</h2><div id="list"></div>
+    <p class="muted" style="font-size:13px;margin:8px 0 0">Solo recoge lo hecho desde esta página. El historial completo del servicio está en «Historial de operaciones» (futuras versiones).</p></div>`,
+  mount() {
+    let current = null;
+    const steps = op => {
+      const order = ["pending", "applied", "settled"];
+      return `<div class="steps">${order.map(s => {
+        const reached = op.history.some(h => h.s === s);
+        const cls = op.state === "failed" ? (reached ? "done" : "") : (reached ? (op.state === s ? "on" : "done") : "");
+        return `<span class="${cls}">${s}</span>`;
+      }).join("")}${op.state === "failed" ? `<span class="bad">failed</span>` : ""}</div>`;
+    };
+    const detail = () => {
+      if (!current) return;
+      const op = db.ops.get(current); const el = $("#detail"); if (!el) return;
+      if (!op) { el.innerHTML = ""; return; }
+      el.innerHTML = `<h2>${esc(op.operation_id)} ${opBadge(op.state)}</h2>${steps(op)}
+        ${op.state === "applied" ? `<p class="muted" style="font-size:13px">Confirmada pero no final: todavía puede pasar a failed. No la des por buena.</p>` : ""}
+        ${op.error ? `<p class="error">${esc(op.error.category)} — ${esc(op.error.message)} ${op.error.retryable ? "(reintentable con un identificador de llamada nuevo)" : "(no reintentable)"}</p>` : ""}`;
+    };
+    const list = () => {
+      const el = $("#list"); if (!el) return;
+      el.innerHTML = `<table><tr><th>Hora</th><th>Acción</th><th>Operación</th><th>Estado</th></tr>${db.session.map(s => {
+        const op = db.ops.get(s.operation_id);
+        return `<tr><td>${esc(s.at)}</td><td>${esc(s.label)}</td><td><button class="link mono" data-op="${esc(s.operation_id)}">${esc(s.operation_id)}</button></td><td>${op ? opBadge(op.state) : ""}</td></tr>`;
+      }).join("") || `<tr><td colspan="4" class="muted">Aún no has hecho nada.</td></tr>`}</table>`;
+    };
+    const lookup = id => {
+      current = id; const res = server("GET", `/v1/operations/${id}`);
+      exchange($("#exchange"), "GET", `/v1/operations/${id}`, { Authorization: "Bearer ‹token de lectura›" }, undefined, res);
+      detail();
+    };
+    $("#f").addEventListener("submit", e => { e.preventDefault(); lookup($("#op").value.trim()); });
+    $("#list").addEventListener("click", e => { const b = e.target.closest("[data-op]"); if (b) { $("#op").value = b.dataset.op; lookup(b.dataset.op); } });
+    list();
+    this.tick = () => { list(); detail(); };
+  }
+};
+
+views.inventory = {
+  title: "Inventario de un tenedor", sub: "Qué tiene un jugador. Muestra el estado definitivo (settled).",
+  render: () => `<div class="card"><form id="f"><div class="row"><div><label for="h">Tenedor</label>
+    <input type="text" id="h" list="dl-holders" placeholder="hld_… (o el identificador del juego, solo en este mockup)" autocomplete="off"></div>
+    <button class="btn fixed" type="submit">Consultar</button></div></form><div id="result"></div><div id="exchange"></div></div>
+    <p class="muted" style="font-size:13px">La consulta real solo acepta el identificador opaco (<span class="mono">hld_…</span>). Aquí también se admite el del juego para comodidad.</p>`,
+  mount() {
+    let current = null;
+    const show = () => {
+      if (!current) return;
+      const res = server("GET", `/v1/holders/${current}/items`);
+      const rows = res.body;
+      $("#result").innerHTML = `<h2>${esc(current)}</h2>` + (rows.length ? `<table><tr><th>Ítem</th><th>Cualidades</th><th class="num">Cantidad</th></tr>${rows.map(r =>
+        `<tr><td>${esc(r.name)}<div class="mono muted">${esc(r.item_id)}</div></td><td>${Object.entries(r.qualities).map(([k, v]) => `<code>${esc(k)}=${esc(v)}</code>`).join(" ") || "—"}</td><td class="num">${r.amount}</td></tr>`).join("")}</table>`
+        : `<p class="muted">Inventario vacío (o tenedor desconocido).</p>`);
+      exchange($("#exchange"), "GET", `/v1/holders/${current}/items`, { Authorization: "Bearer ‹token de lectura›" }, undefined, res);
+    };
+    $("#f").addEventListener("submit", e => {
+      e.preventDefault(); const v = $("#h").value.trim();
+      const byExt = holderByExternal(v, false); current = byExt ? byExt.holder_id : v; show();
+    });
+    this.tick = show;
+  }
+};
+
+/* Funciones sin endpoint en el contrato v1 */
+const FUTURE = {
+  catalog: { title: "Listado de colecciones y tipos", needs: "Un endpoint de lectura del catálogo (por ejemplo GET /v1/collections y GET /v1/items). El contrato v1 no lo tiene.", meanwhile: "El servidor de juego puede llevar su propia tabla de tipos creados. Aquí solo se ven los creados desde esta página." },
+  history: { title: "Historial de operaciones", needs: "Un endpoint que liste operaciones con filtro por estado. Hoy solo se puede consultar una por su identificador.", meanwhile: "«Operaciones» muestra lo hecho en esta sesión." },
+  retry: { title: "Reintentar una operación fallida", needs: "El historial anterior para localizarlas, y un criterio para detectar un tipo creado a medias antes de reintentar.", meanwhile: "Repetir la acción a mano con un identificador de llamada nuevo, tras revisar que el primer intento no dejó nada." },
+  reconcile: { title: "Reconciliación", needs: "Leer, para cada jugador y tipo, la cantidad del servidor de juego y la del inventario, y compararlas. Necesita la lista de tenedores y tipos.", meanwhile: "Consultar el inventario de un tenedor y compararlo a mano." },
+  status: { title: "Panel de estado", needs: "El historial de operaciones y un indicador del saldo de la autoridad del juego, que paga las operaciones. Ninguno tiene endpoint.", meanwhile: "—" }
+};
+function futureView(k) {
+  const f = FUTURE[k];
+  return {
+    title: f.title, sub: "En futuras versiones",
+    render: () => `<div class="card future-card"><p><span class="tag">En futuras versiones</span></p>
+      <h2 style="margin-top:0">Qué falta</h2><p>${esc(f.needs)}</p>
+      <h2>Mientras tanto</h2><p>${esc(f.meanwhile)}</p></div>`,
+    mount() {}
+  };
+}
+
+/* ---------- Navegación ---------- */
+const NAV = [
+  ["Catálogo", [["collections", "Colecciones"], ["items", "Tipos de ítem"], ["catalog", "Listado de catálogo", true]]],
+  ["Existencias", [["grants", "Entregar unidades"], ["transfers", "Transferencias"], ["inventory", "Inventario"]]],
+  ["Seguimiento", [["operations", "Operaciones"], ["history", "Historial", true], ["retry", "Reintentar fallidas", true], ["reconcile", "Reconciliación", true], ["status", "Panel de estado", true]]]
+];
+let currentView = null;
+function buildNav() {
+  $("#nav").innerHTML = `<div class="brand">Administración de activos</div>` + NAV.map(([g, items]) =>
+    `<div class="group">${g}</div>` + items.map(([id, label, fut]) =>
+      `<button data-view="${id}" class="${fut ? "future" : ""}">${esc(label)}${fut ? `<span class="tag">futuro</span>` : ""}</button>`).join("")).join("");
+}
+function go(id) {
+  const v = FUTURE[id] ? futureView(id) : views[id];
+  currentView = v;
+  for (const b of document.querySelectorAll("nav button")) {
+    if (b.dataset.view === id) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
+  }
+  $("#title").textContent = v.title; $("#subtitle").textContent = v.sub;
+  $("#view").innerHTML = `<div id="dls">${datalists()}</div>` + v.render();
+  v.mount();
+  location.hash = id;
+}
+$("#nav").addEventListener("click", e => { const b = e.target.closest("button[data-view]"); if (b) go(b.dataset.view); });
+
+/* ---------- Controles de simulación ---------- */
+function syncSim() {
+  const f = $("#sim-fail"); if (f) f.checked = sim.failNext;
+}
+function buildSim() {
+  $("#sim").innerHTML = `<strong>Simulación</strong>
+    <span><label for="sim-speed">Velocidad:</label> <select id="sim-speed"><option value="1000">rápida (1 s)</option><option value="3000" selected>normal (3 s)</option><option value="8000">lenta (8 s)</option></select></span>
+    <span><input type="checkbox" id="sim-fail"> <label for="sim-fail">Hacer fallar la próxima operación con</label>
+    <select id="sim-code"><option value="EXPIRED">EXPIRED (reintentable)</option><option value="INTERNAL">INTERNAL</option></select></span>`;
+  $("#sim-speed").addEventListener("change", e => sim.speed = Number(e.target.value));
+  $("#sim-fail").addEventListener("change", e => sim.failNext = e.target.checked);
+  $("#sim-code").addEventListener("change", e => sim.failCode = e.target.value);
+}
+
+/* ---------- Acceso ---------- */
+$("#loginForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const u = $("#user").value.trim(), p = $("#pass").value;
+  if (!u || !p) return;
+  $("#who").textContent = u; $("#login").hidden = true;
+});
+$("#logout").addEventListener("click", () => { $("#pass").value = ""; $("#login").hidden = false; });
+
+buildNav(); buildSim();
+const startId = location.hash.slice(1);
+go(views[startId] || FUTURE[startId] ? startId : "items");
+setInterval(() => { if (currentView && currentView.tick) currentView.tick(); }, 500);
+</script>
+</body>
+</html>

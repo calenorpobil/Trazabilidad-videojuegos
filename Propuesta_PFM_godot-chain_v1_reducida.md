@@ -238,7 +238,7 @@ de los puntos a verificar antes de escribir código** (sección 13).
 | Autenticación de escrituras | `Authorization: Bearer <write_key>` — la tiene el servidor de juego |
 | Autenticación de lecturas | `Authorization: Bearer <read_token>` — viaja en el binario del juego |
 | Autorización de operaciones | Del servidor de juego, con sus propios datos |
-| Idempotencia | Cabecera `Idempotency-Key` **obligatoria** en toda escritura |
+| Idempotencia | Cabecera `Idempotency-Key` **obligatoria** en toda escritura. La **decide el plugin** (ver abajo) |
 | Escritura de estado en el juego | **Sólo en `settled`.** `applied` es puramente cosmético |
 
 **Tablas:**
@@ -255,6 +255,28 @@ idempotency  (key PK, operation_id, created_at)
 inserta la clave en `idempotency` dentro de una transacción SQLite. Si el `INSERT` choca con la clave
 primaria, devuelve el resultado anterior sin tocar Solana. Si no choca, procede. Invertir el orden
 —llamar y luego marcar— deja una ventana en la que un reintento mintea dos veces.
+
+**Quién decide la clave (decisión del 9-oct-2026).** La construye el plugin, a partir de un
+**identificador de llamada** (`call_id`) que aporta el juego. El juego no escribe nunca una
+`Idempotency-Key`: sólo dice *qué acción lógica es esta*, y `Chain` la convierte en clave.
+
+- Toda operación de escritura de `Chain` recibe `call_id` como **último argumento, obligatorio**.
+  Es una cadena de 1 a 64 caracteres que identifica la acción de negocio («el regalo 42», «la
+  compra 7»).
+- `Chain` calcula la clave como SHA-256 en hexadecimal de `(operación, call_id)` y la envía en la
+  cabecera. Incluir la operación evita que `grant` y `transfer` con el mismo `call_id` choquen. Los
+  demás argumentos no entran: reutilizar un `call_id` con otros datos devuelve el resultado
+  original (contrato 9.5), que es la respuesta menos dañina.
+- El servidor de juego reenvía la clave sin tocarla. El backend sólo la guarda y compara.
+- Reglas para el juego: un `call_id` por acción lógica; el **mismo** en todos sus reintentos,
+  incluido tras reabrir la aplicación; **nuevo** para una acción nueva, aunque sus datos sean
+  idénticos a los de una anterior; y **nuevo** para reintentar tras un `failed`, porque el backend
+  exige una clave nueva (contrato 8).
+- El `call_id` debe poder recuperarse tras un reinicio, así que lo fija el servidor de juego en el
+  momento en que registra la acción (en su tabla `operations`, antes de llamar), no el cliente al
+  vuelo.
+- Un llamador que no pasa por el plugin (p. ej. el servidor de juego dando de alta tipos) aporta su
+  propia clave; el backend no distingue el origen.
 
 **Segunda capa, gratis:** Solana rechaza una firma ya procesada, lo que cubre los reintentos dentro
 de la ventana de validez del blockhash (~1 minuto) aunque la primera capa falle. Es red de seguridad,
@@ -373,7 +395,7 @@ implementación. Cada clase vive en `rust/godot-chain` (`ChainConfig` sobre `Res
 3. **`ChainHandle`** — `RefCounted` devuelto por cada operación.
 
 ```gdscript
-var handle := Chain.transfer("itm_a1b2", 1, "hld_c3d4")
+var handle := Chain.transfer("itm_a1b2", 1, "hld_c3d4", "gift_42")
 handle.settled.connect(_on_settled)
 if not handle.is_finished():
     await handle.finished
@@ -407,6 +429,9 @@ if not handle.is_finished():
    hace nada especial, los handles pendientes siguen en memoria y el sondeo se reanuda al volver. Si el
    sistema mata la aplicación, los handles se pierden pero la operación sigue en el backend; al reabrir,
    el juego relee el inventario. No se persisten handles.
+6. **La clave de idempotencia la construye `Chain`** a partir del `call_id` que pasa el juego (ver
+   4.4). Es determinista: el handle la usa en sus reintentos de red y, tras reabrir la aplicación,
+   el mismo `call_id` produce la misma clave. `call_id` es obligatorio en toda escritura.
 
 ### Errores
 
@@ -596,6 +621,12 @@ que nadie —empezando por el tribunal— las descubra por sorpresa.
    cada NDK obligan a recompilar, y `gdext` rompe la API con frecuencia, de ahí la versión fijada. El
    addon GDScript de la redacción original no tenía ese coste. Es el precio de la decisión de la
    sección 2, aceptado por su responsable.
+10. **El `call_id` es responsabilidad del juego.** `Chain` no puede saber si dos llamadas iguales son
+    la misma acción reintentada o dos acciones distintas. Si el juego reutiliza un `call_id` para una
+    acción nueva, ésta no se ejecuta y devuelve el resultado de la anterior, sin aviso, porque las
+    claves no caducan. Si genera uno nuevo en cada reintento de la misma acción, ésta se ejecuta dos
+    veces. `Chain` no lo detecta; lo evita el servidor de juego guardando el `call_id` antes de
+    llamar.
 
 ---
 

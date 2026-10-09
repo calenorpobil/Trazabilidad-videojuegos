@@ -254,9 +254,16 @@ respuestas de escritura.
 Hoy ninguna acción es idempotente. Dar de comer da igual, pero un regalo repetido por la red
 o por un reintento se haría dos veces.
 
-- Tabla `operations` con el estado y la `Idempotency-Key` (p. ej. `gift:<id>`). La fila se
-  inserta **antes** de llamar al backend (diseño 6.4).
-- La clave es única por operación lógica y **no se reutiliza nunca**: el contrato (§9.5)
+- Tabla `operations` con el estado y el `call_id` (p. ej. `gift_<id>`). La fila se inserta
+  **antes** de llamar al backend (diseño 6.4). Desde el 9-oct-2026 la clave de idempotencia
+  no la escribe el juego: la construye `Chain` a partir del `call_id` (propuesta 4.4).
+- El `call_id` lo fija el servidor al registrar la acción, de modo que un reinicio no lo
+  pierde. Un reintento de la misma acción reutiliza el mismo; una acción nueva, aunque sea
+  idéntica a otra anterior, lleva uno nuevo. `Chain` no puede detectar un error aquí
+  (propuesta 12.10).
+- Lo que el servidor lance por su cuenta sin pasar por el plugin, como el alta de especies
+  (10.2), sigue aportando su propia clave.
+- El `call_id` es único por operación lógica y **no se reutiliza nunca**: el contrato (§9.5)
   devuelve el resultado original si se repite una clave con otro cuerpo, así que reutilizarla
   devolvería un resultado que no corresponde.
 
@@ -273,3 +280,86 @@ jugadores. Patrón obligatorio:
 4. volver a tomarla y actualizar la operación.
 
 J3 añadirá un test que falle si un manejador mantiene el cerrojo durante la llamada.
+
+## 10. Alta de especies en cadena — 9 de octubre de 2026
+
+Decidido antes de escribir J4. Nada de esto se implementa todavía. Describe cómo una especie
+que ya existe en el juego (hoy sólo en `nidada-rules`) pasa a tener su `Item` en `godot-chain`.
+
+### 10.1 Qué lo dispara
+
+Un **alta de contenido** hecha por el equipo, nunca una acción del jugador. Coherente con el
+diseño 3.2: las especies se crean de antemano y ninguna durante la partida.
+
+El disparo es una **página web de administración** de `nidada-server`, no un comando. Queda por
+diseñar y no entra en el hito de la librería (es parte del juego, que no cuenta en las horas):
+
+- Necesita una credencial de administrador distinta del token de sesión de los jugadores.
+  Sin ella, cualquiera que llegue a la ruta podría mintear.
+- Lanza el mismo flujo de 10.2; la página es sólo la forma de pedirlo y de ver el estado.
+- Mientras no exista, el flujo se puede probar con una petición a mano a esa ruta.
+
+### 10.2 Flujo
+
+1. **Catálogo.** Las especies viven en `nidada-rules`. El servidor lee de ahí nombre, elemento,
+   rareza y `growth_hours`.
+2. **Colección.** Si no existe «Especies», `POST /v1/collections` (no produce transacción).
+3. **Marcar primero.** Antes de llamar al backend se inserta en `operations` la fila con la
+   clave `create-species:<especie>` (p. ej. `create-species:brasa`) en estado `pending`
+   (9.2). La conexión se suelta antes de la llamada (9.3).
+4. **Petición.** `POST /v1/items` con el `write_key` y esa `Idempotency-Key`, con las
+   `qualities` generadas desde el catálogo (10.4) y el `initial_grant` de 10.6.
+5. **Guardar la asociación.** En cuanto llega la respuesta, el servidor escribe el `item_id`
+   (10.3). El `item_id` existe antes de que la operación termine.
+6. **Esperar a `settled`.** Hasta entonces la especie no se ofrece a nadie (invariante 5 de
+   `CLAUDE.md`).
+7. **Activar.** En `settled` la especie queda disponible para `grant` (mascotas iniciales) y
+   `transfer`.
+8. **Reconciliar.** Se aplica el invariante del diseño 3.1: individuos de la especie del
+   jugador == `amount` de su inventario. Si no cuadra, manda la cadena.
+
+### 10.3 La asociación especie ↔ `item_id`
+
+En el servidor de juego, no en un fichero. No hay una tabla de especies (el catálogo es código
+de `nidada-rules`, que es puro y no toca la base de datos), así que se añade una tabla:
+
+```
+species_items (species TEXT PRIMARY KEY, item_id TEXT, operation_id TEXT, state TEXT, created_at INTEGER)
+```
+
+`item_id` es nulo hasta el paso 5. `state` sigue a la operación (`pending`, `applied`,
+`settled`, `failed`). Una migración nueva, como las anteriores.
+
+### 10.4 Las `qualities` salen del catálogo
+
+Se generan desde `nidada-rules`, no se escriben a mano: `kind=pet`, `element`, `rarity`,
+`growth_hours`. Así el catálogo y la cadena no pueden divergir. Son inmutables en v1
+(`PATCH /qualities` está bajo la línea de corte), así que un error exige crear otra especie.
+
+### 10.5 Fallos y reintentos
+
+- **Red cortada.** Se reintenta con la **misma clave**. El backend devuelve la respuesta original.
+- **Servidor caído tras el paso 4.** Al arrancar se reenvían, con su clave, las filas
+  `pending` sin `item_id`.
+- **Operación en `failed`.** Reutilizar la clave devolvería el mismo fallo para siempre
+  (contrato 3 y 9.5). Política: **revisión manual y clave nueva con sufijo**
+  (`create-species:brasa:2`). Antes se comprueba que el primer intento no dejó un mint
+  huérfano. No hay reintento automático con clave nueva: un fallo no transitorio (saldo
+  agotado de la autoridad) dejaría mints a medias.
+
+### 10.6 `initial_grant`
+
+Es obligatorio en `POST /v1/items` (contrato 4.3). Va a un **tenedor técnico**
+`external_id = "game-reserve"`, que no es un jugador. Cantidad: 1.
+
+- No es un tope de suministro: `POST /v1/items/{id}/grants` emite más cuando haga falta.
+- No choca con la reconciliación, que es por jugador. Esa unidad no tiene individuo asociado.
+- El tenedor lo crea el backend la primera vez que se nombra.
+
+### 10.7 Queda fuera
+
+- **`qualities` en SQLite.** Si el backend las cachea para servir `GET /holders/{id}/items`
+  o las lee de la cadena en cada consulta es decisión del bloque 3 de la librería, no del juego.
+- **Botón de «corregir» una especie ya creada.** No hay operación de edición ni de borrado.
+- **Alta de un tipo distinto de especie** (accesorios como el Cascabel de luna): el mismo flujo
+  vale, pero sus `qualities` y su `initial_grant` se decidirán cuando se necesiten.
