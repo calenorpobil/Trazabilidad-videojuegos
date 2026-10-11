@@ -261,8 +261,9 @@ o por un reintento se haría dos veces.
   pierde. Un reintento de la misma acción reutiliza el mismo; una acción nueva, aunque sea
   idéntica a otra anterior, lleva uno nuevo. `Chain` no puede detectar un error aquí
   (propuesta 12.10).
-- Lo que el servidor lance por su cuenta sin pasar por el plugin, como el alta de especies
-  (10.2), sigue aportando su propia clave.
+- Lo que el servidor lance por su cuenta sin pasar por el plugin aporta su propia clave. El alta del
+  catálogo no es de ese tipo: la hace el backend al aplicar el `catalog.json` (10.2), con las claves
+  `catalog_<id>`.
 - El `call_id` es único por operación lógica y **no se reutiliza nunca**: el contrato (§9.5)
   devuelve el resultado original si se repite una clave con otro cuerpo, así que reutilizarla
   devolvería un resultado que no corresponde.
@@ -291,61 +292,91 @@ que ya existe en el juego (hoy sólo en `nidada-rules`) pasa a tener su `Item` e
 Un **alta de contenido** hecha por el equipo, nunca una acción del jugador. Coherente con el
 diseño 3.2: las especies se crean de antemano y ninguna durante la partida.
 
-El disparo es una **página web de administración** de `nidada-server`, no un comando. Queda por
-diseñar y no entra en el hito de la librería (es parte del juego, que no cuenta en las horas):
+Para *Nidada*, el disparo es **aplicar un `catalog.json`** (formato en la propuesta, 3). El fichero
+**se genera desde `nidada-rules`**, así que las `qualities` salen de ahí y no se teclean (10.4), y un
+test comprueba que fichero y catálogo coinciden. Se aplica desde la consola («Importar catálogo») o
+con el comando del backend. Es el «script de carga» que prevé el diseño 3.2, pero lo único que
+programa *Nidada* es la generación del fichero: el alta, el plan previo y la idempotencia son del
+producto.
 
-- Necesita una credencial de administrador distinta del token de sesión de los jugadores.
-  Sin ella, cualquiera que llegue a la ruta podría mintear.
-- Lanza el mismo flujo de 10.2; la página es sólo la forma de pedirlo y de ver el estado.
-- Mientras no exista, el flujo se puede probar con una petición a mano a esa ruta.
+La **consola de administración** no es parte de *Nidada*: la trae el `chain-backend` (propuesta 3),
+porque el servicio es autoalojado y cada estudio la recibe al desplegarlo. Maqueta en
+`docs/mockup-admin/index.html`. Además de importar el catálogo, sirve para ver el resultado (listado
+de tipos, estado de cada operación, inventarios) y para operaciones sueltas.
+
+Qué queda del lado del juego:
+- El servidor de juego **no** sirve ninguna página de administración ni guarda credenciales de
+  administrador.
+- El servidor de juego llama al backend con el `write_key` (entregas, transferencias) y el
+  `read_token` (lecturas), como cualquier llamador del contrato. El alta del catálogo ya no es cosa
+  suya: la hace el backend al aplicar el fichero.
+
+**Queda abierto** (de la consola, no del juego; ver propuesta 3): caducidad de la sesión de
+administración, si hay más de un administrador y si los listados llevan límite de tasa.
 
 ### 10.2 Flujo
 
-1. **Catálogo.** Las especies viven en `nidada-rules`. El servidor lee de ahí nombre, elemento,
-   rareza y `growth_hours`.
-2. **Colección.** Si no existe «Especies», `POST /v1/collections` (no produce transacción).
-3. **Marcar primero.** Antes de llamar al backend se inserta en `operations` la fila con la
-   clave `create-species:<especie>` (p. ej. `create-species:brasa`) en estado `pending`
-   (9.2). La conexión se suelta antes de la llamada (9.3).
-4. **Petición.** `POST /v1/items` con el `write_key` y esa `Idempotency-Key`, con las
-   `qualities` generadas desde el catálogo (10.4) y el `initial_grant` de 10.6.
-5. **Guardar la asociación.** En cuanto llega la respuesta, el servidor escribe el `item_id`
-   (10.3). El `item_id` existe antes de que la operación termine.
-6. **Esperar a `settled`.** Hasta entonces la especie no se ofrece a nadie (invariante 5 de
-   `CLAUDE.md`).
-7. **Activar.** En `settled` la especie queda disponible para `grant` (mascotas iniciales) y
+1. **Catálogo.** Las especies viven en `nidada-rules`. Un paso de generación escribe de ahí el
+   `catalog.json` (nombre, símbolo, elemento, rareza, `growth_hours`) y un test comprueba que
+   coinciden.
+2. **Plan.** Se aplica el fichero desde la consola o con el comando del backend. Primero sale el plan,
+   sin tocar nada: *nuevo*, *ya existe*, *diverge*, *fallido* o *error*.
+3. **Alta.** Al confirmar, el backend crea la colección «Especies» y un tipo por especie con su
+   `initial_grant` (10.6). La clave de idempotencia sale del `id` de cada entrada (`catalog_brasa`):
+   marcar primero, llamar después es cosa del backend (invariante 2), no del servidor de juego.
+4. **Descubrir los tipos.** El servidor de juego lee `GET /v1/items` (contrato 5.4) y rellena
+   `species_items` emparejando por `symbol` (10.3). No necesita que nadie le pase los `item_id`.
+5. **Esperar a `settled`.** Una especie cuyo tipo no está en `settled` no se ofrece a nadie
+   (invariante 5 de `CLAUDE.md`). El listado ya trae el `state`.
+6. **Activar.** En `settled` la especie queda disponible para `grant` (mascotas iniciales) y
    `transfer`.
-8. **Reconciliar.** Se aplica el invariante del diseño 3.1: individuos de la especie del
+7. **Reconciliar.** Se aplica el invariante del diseño 3.1: individuos de la especie del
    jugador == `amount` de su inventario. Si no cuadra, manda la cadena.
 
 ### 10.3 La asociación especie ↔ `item_id`
 
-En el servidor de juego, no en un fichero. No hay una tabla de especies (el catálogo es código
-de `nidada-rules`, que es puro y no toca la base de datos), así que se añade una tabla:
+En el servidor de juego. No hay una tabla de especies (el catálogo es código de `nidada-rules`, que
+es puro y no toca la base de datos), así que se añade una:
 
 ```
-species_items (species TEXT PRIMARY KEY, item_id TEXT, operation_id TEXT, state TEXT, created_at INTEGER)
+species_items (species TEXT PRIMARY KEY, item_id TEXT NOT NULL, synced_at INTEGER)
 ```
 
-`item_id` es nulo hasta el paso 5. `state` sigue a la operación (`pending`, `applied`,
-`settled`, `failed`). Una migración nueva, como las anteriores.
+Es una **copia local** de lo que dice el backend, no una fuente de verdad: se rellena y se refresca
+leyendo `GET /v1/items` y emparejando por `symbol`. Una migración nueva, como las anteriores. Si la
+tabla se pierde, se reconstruye igual.
+
+Para emparejar, el símbolo de cada especie es su nombre en mayúsculas y sin acentos (`BRASA`,
+`CIENAGA`; el más largo mide 7, y el límite es 10). **Abierto:** el contrato no obliga a que el
+`symbol` sea único, así que el servidor de juego debe rechazar un emparejamiento ambiguo en lugar de
+elegir uno.
 
 ### 10.4 Las `qualities` salen del catálogo
 
 Se generan desde `nidada-rules`, no se escriben a mano: `kind=pet`, `element`, `rarity`,
-`growth_hours`. Así el catálogo y la cadena no pueden divergir. Son inmutables en v1
-(`PATCH /qualities` está bajo la línea de corte), así que un error exige crear otra especie.
+`growth_hours`. Así el catálogo y la cadena no pueden divergir. Un error o un retoque se corrige
+**editando el tipo en el sitio** (contrato 4.6): se cambia la entrada en `catalog.json` y se vuelve a
+aplicar. El `symbol` no se edita, así que un error en él exige una especie nueva.
+
+**Ojo con el balance.** Editar cambia *todos* los ejemplares ya repartidos. Un retoque de `growth_hours`
+afecta a las mascotas que ya existen; si no debe ser así, se crea una especie nueva (otro `id` y otro
+`symbol`) en lugar de editar.
 
 ### 10.5 Fallos y reintentos
 
-- **Red cortada.** Se reintenta con la **misma clave**. El backend devuelve la respuesta original.
-- **Servidor caído tras el paso 4.** Al arrancar se reenvían, con su clave, las filas
-  `pending` sin `item_id`.
-- **Operación en `failed`.** Reutilizar la clave devolvería el mismo fallo para siempre
-  (contrato 3 y 9.5). Política: **revisión manual y clave nueva con sufijo**
-  (`create-species:brasa:2`). Antes se comprueba que el primer intento no dejó un mint
-  huérfano. No hay reintento automático con clave nueva: un fallo no transitorio (saldo
-  agotado de la autoridad) dejaría mints a medias.
+- **Red cortada o aplicación interrumpida.** Volver a aplicar el fichero es seguro: cada entrada lleva
+  siempre la misma clave y el backend devuelve la respuesta original.
+- **Entrada en `failed`.** Reutilizar la clave devolvería el mismo fallo para siempre (contrato 3 y
+  9.5), así que el plan la marca *fallido* y **no la reintenta sola**. Política: **revisión manual y
+  `id` nuevo** (`brasa-2`). Antes se comprueba que el primer intento no dejó un mint huérfano. Un fallo
+  no transitorio (saldo agotado de la autoridad) dejaría mints a medias si se reintentara en automático.
+- **Entrada modificada tras crearse.** El plan la marca *cambia* y, al confirmar, edita el mismo
+  tipo (propuesta 3). Si lo que cambió es el `symbol`, la colección o el `initial_grant`, la marca
+  *diverge* y no la aplica.
+- **Edición en curso o en `failed`.** Si la edición sigue en curso, el plan la marca *en curso* y no
+  la reenvía. Si acabó en `failed`, el tipo sigue como estaba y la `revision` ya subió, así que al
+  volver a aplicar el fichero el plan vuelve a decir *cambia* y la clave es nueva. Antes conviene
+  revisar la causa (p. ej. el saldo de la autoridad).
 
 ### 10.6 `initial_grant`
 
@@ -358,8 +389,9 @@ Es obligatorio en `POST /v1/items` (contrato 4.3). Va a un **tenedor técnico**
 
 ### 10.7 Queda fuera
 
-- **`qualities` en SQLite.** Si el backend las cachea para servir `GET /holders/{id}/items`
-  o las lee de la cadena en cada consulta es decisión del bloque 3 de la librería, no del juego.
+- **Dónde guarda el backend las `qualities`.** Resuelto el 11-oct-2026 en la propuesta (4.4):
+  las guarda en SQLite al crear el tipo y de ahí las sirve. El listado `GET /v1/items` de la
+  consola de administración (contrato 5.4) las devuelve desde esa copia.
 - **Botón de «corregir» una especie ya creada.** No hay operación de edición ni de borrado.
 - **Alta de un tipo distinto de especie** (accesorios como el Cascabel de luna): el mismo flujo
   vale, pero sus `qualities` y su `initial_grant` se decidirán cuando se necesiten.

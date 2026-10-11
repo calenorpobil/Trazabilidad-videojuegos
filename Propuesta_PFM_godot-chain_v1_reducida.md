@@ -55,6 +55,22 @@ Un **addon de Godot 4** que permite a un desarrollador de videojuegos crear obje
 existen como activos reales en Solana, y transferirlos entre jugadores, sin escribir código on-chain
 y sin que el jugador final sepa que hay una blockchain debajo.
 
+**Objetivo final y modelo de servicio (11-oct-2026).** El proyecto es un **servicio de trazabilidad
+para estudios de videojuegos**, y se ofrece **autoalojado**: cada estudio despliega su propio
+backend, custodia su propia semilla y opera su propia instancia. No hay un servicio central que
+sirva a varios estudios. Es lo que cabe en el presupuesto, y es una decisión, no una omisión
+(ver 11). Lo que se entrega a un estudio es:
+
+| Pieza | Qué es | Quién la opera |
+|---|---|---|
+| `godot-chain` (addon) | La GDExtension que el estudio añade a su juego | El estudio, dentro de su juego |
+| `chain-backend` | El servicio, con su consola de administración | El estudio, desplegado por su cuenta |
+| Servidor de juego | La lógica y las decisiones de **su** juego; llama al backend con el `write_key` | El estudio (lo escribe él) |
+
+*Nidada* es el estudio de ejemplo: aporta un servidor de juego y un juego que integran las dos
+primeras piezas, para demostrar que funciona de extremo a extremo. No forma parte de lo que se
+entrega.
+
 **Premisas que no se negocian:**
 
 1. El jugador no percibe la blockchain. Nada de *seed phrases*, gas ni wallets.
@@ -122,6 +138,70 @@ es un juego donde cualquiera se mintea lo que quiera.
 **Consecuencia:** el `game-server` de ejemplo no es decorado. Sin él, el proyecto demuestra una
 arquitectura insegura.
 
+**Consola de administración (11-oct-2026).** Es parte del **producto**: la sirve el propio
+`chain-backend`, de modo que cada estudio la recibe al desplegarlo y no tiene que construir la suya.
+Vive bajo `/admin` y el navegador **sólo habla con el backend**:
+
+```
+Navegador (consola) ──cookie de sesión──▶ chain-backend (rutas /admin, mismas funciones internas que la API)
+```
+
+- **Sin intermediario.** La consola llama a las funciones del backend por dentro, no por HTTP, así que
+  ninguna credencial de la API (`write_key`, `read_token`) pasa por el navegador.
+- **Acceso.** Una credencial de administrador propia, distinta de las dos anteriores, que se configura
+  al arrancar (variable de entorno, nunca en el repositorio) y se cambia en `/admin` por una cookie de
+  sesión `HttpOnly` y `SameSite=Strict`. Sin cookie válida, las rutas de `/admin` responden `401`.
+  Por defecto escucha sólo en `127.0.0.1`; exponerla es una decisión explícita de quien despliega.
+- **No es parte del contrato HTTP.** Las rutas `/admin` son internas del backend y no las usa el addon
+  ni el servidor de juego.
+- **Qué hace:** crear colecciones y tipos, importar un catálogo, entregar, transferir, consultar
+  operaciones e inventarios y listar el catálogo. Maqueta en `docs/mockup-admin/index.html`.
+- **Fuera del hito.** Se recorta junto a los listados (8.1). Cuando exista, el servidor de juego sigue
+  siendo quien decide qué gana cada jugador; la consola es para el equipo del estudio.
+
+**Catálogo declarativo (11-oct-2026).** Un estudio no programa nada para dar de alta sus objetos: los
+describe en un fichero de datos, `catalog.json`, que versiona junto a su juego, y el backend lo aplica.
+Se **describe** aquí y no se construye en el hito: es una función de la consola y del backend, bajo la
+línea de corte (8.1).
+
+```json
+{
+  "collections": [{ "id": "species", "name": "Especies" }],
+  "items": [{
+    "id": "brasa", "collection": "species", "name": "Brasa", "symbol": "BRASA",
+    "qualities": { "kind": "pet", "element": "fire", "rarity": "common", "growth_hours": "72" },
+    "initial_grant": { "holder": "game-reserve", "amount": 1 }
+  }]
+}
+```
+
+- **Se aplica desde la consola** («Importar catálogo») **o con un comando** del backend
+  (`catalog apply catalog.json`). No hay una tercera vía.
+- **Primero un plan, sin tocar nada.** Cada entrada sale como *nuevo*, *ya existe*, *cambia*, *en curso*,
+  *diverge*, *fallido* o *error* (el fichero no cumple los límites del contrato 4.3). Sólo al confirmar
+  se aplica.
+- **Repetible.** El `id` de cada entrada fija su `call_id` (`catalog_<id>`), y con él la clave de
+  idempotencia (4.4). Aplicarlo dos veces no crea nada dos veces, y un corte a medias se reanuda.
+- **Cambios: se editan en el sitio.** Si una entrada ya creada cambia en el fichero, el plan la marca
+  *cambia* y, al confirmar, el backend **edita el mismo tipo** (`PATCH /v1/items/{id}`, contrato
+  4.6): mismo `item_id`, mismas unidades en manos de los jugadores, una transacción por tipo y ninguna
+  migración. Se pueden cambiar `name`, `uri` y `qualities`. La clave de cada edición incluye la
+  `revision` del tipo (`catalog_<id>:r<revision+1>`): una misma edición reintentada no se repite, y una
+  edición nueva, aunque deshaga la anterior o repita una que falló, no devuelve el resultado viejo.
+  Sólo se admite una edición a la vez por tipo (contrato 4.6).
+- **Divergencia (lo que no se puede editar).** Cambiar el `symbol`, la colección o el `initial_grant` de
+  una entrada ya creada no se aplica: el plan la marca *diverge*. El `symbol` es la clave de emparejamiento
+  del servidor de juego, y las existencias iniciales ya se emitieron. Una entrada *fallida* tampoco se
+  reintenta sola.
+- **Cambio de significado: tipo nuevo.** La edición en el sitio cambia **todas** las unidades ya
+  repartidas. Si un cambio no debe alcanzar a lo entregado (rebalanceos que respeten lo ya obtenido,
+  el tipo como certificado histórico), se añade una entrada nueva con otro `id` y otro `symbol`
+  (`brasa-2`, `BRASA2`). Pasar los saldos al tipo nuevo es una tarea aparte, sin herramienta en v1: una
+  transferencia por jugador y tipo.
+- **Quién lo escribe.** Un estudio con el catálogo ya definido en código (como *Nidada* en
+  `nidada-rules`) no lo teclea a mano: lo genera desde su código, y un test comprueba que coinciden.
+  Es lo único que programa el estudio, y sólo si le interesa evitar la duplicación.
+
 ---
 
 ## 4. Decisiones cerradas
@@ -168,7 +248,8 @@ Cómo se sostiene, operación por operación:
 
 | Operación | Instrucción | Quién firma |
 |---|---|---|
-| Crear un tipo de objeto | `CreateAccount` + `InitializeMetadataPointer` + `InitializeMint` + `InitializeTokenMetadata` | Autoridad (como pagadora y como *mint authority*) |
+| Crear un tipo de objeto | `CreateAccount` + `InitializeMetadataPointer` + `InitializeMint` + `InitializeTokenMetadata` | Autoridad (como pagadora, como *mint authority* y como **autoridad de actualización** de los metadatos, que se fija aquí: sin ella el tipo sería inmutable) |
+| Editar un tipo (fuera del hito) | Transferencia de lamports si crece + `UpdateField` y `RemoveKey` (13, puntos 5 a 8) | Autoridad (como pagadora y como autoridad de actualización) |
 | Crear la cuenta de token de un jugador | `CreateAssociatedTokenAccount` | Autoridad (como pagadora; el propietario no firma) |
 | Entregar unidades a un jugador | `MintTo` | Autoridad (como *mint authority*) |
 | Transferir entre jugadores | `TransferChecked` | Autoridad (como **permanent delegate**) |
@@ -245,11 +326,18 @@ de los puntos a verificar antes de escribir código** (sección 13).
 
 ```sql
 collections (collection_id PK, game_id, name, created_at)
-items        (item_id PK, collection_id, mint, name, symbol, uri, created_at)
+items        (item_id PK, collection_id, mint, name, symbol, uri, qualities, operation_id,
+              revision, edit_operation_id, created_at)
 operations   (operation_id PK, kind, state, signature, error_code, error_message,
               created_at, updated_at)
 idempotency  (key PK, operation_id, created_at)
 ```
+
+`items.qualities` es texto JSON, sin la clave reservada `collection`. Se guarda al crear el tipo y de
+ahí se sirve: el backend **no lee la cadena en cada consulta**. La cadena sigue siendo la fuente de
+verdad de la propiedad. Las `qualities` son editables (contrato 4.6, fuera del hito), así que **la edición
+actualiza también esta copia** al llegar a `settled`; si no, el listado y el inventario mostrarían datos viejos.
+`items.operation_id` apunta a la operación que creó el tipo y da su `state` en el listado (11-oct-2026).
 
 **Idempotencia — el orden importa: marcar primero, llamar después.** Ante una escritura, el backend
 inserta la clave en `idempotency` dentro de una transacción SQLite. Si el `INSERT` choca con la clave
@@ -358,9 +446,11 @@ Vocabulario **sin cadena**. Si un endpoint necesita decir «blockhash», la cost
 | `POST` | `/v1/items` | escritura | `{ operation_id, item_id }` — crea el tipo y emite la cantidad inicial |
 | `POST` | `/v1/items/{item_id}/grants` | escritura | `{ operation_id }` — entrega unidades a un tenedor |
 | `POST` | `/v1/items/{item_id}/transfer` | escritura | `{ operation_id }` |
-| `PATCH` | `/v1/items/{item_id}/qualities` | escritura | `{ operation_id }` — **bajo la línea de corte** |
+| `PATCH` | `/v1/items/{item_id}` | escritura | `{ operation_id }` — edita `name`, `uri` y `qualities` del tipo **en el sitio**. **Bajo la línea de corte**; se construye con la consola |
 | `GET` | `/v1/operations/{operation_id}` | lectura | `{ state, error }` |
 | `GET` | `/v1/holders/{holder_id}/items` | lectura | `[ { item_id, name, qualities, amount } ]` |
+| `GET` | `/v1/collections` | lectura | `{ collections: [...] }` — para la web de administración. **Bajo la línea de corte** |
+| `GET` | `/v1/items` | lectura | `{ items: [...] }`, filtrable por `collection_id` — para la web de administración. **Bajo la línea de corte** |
 
 Las escrituras exigen `write_key` + `Idempotency-Key`. Las lecturas, `read_token`.
 
@@ -505,11 +595,17 @@ aceptan o aplicar la línea de corte 8.1 desde el principio (**Q7**, sección 14
 Si a mitad de A1 el acumulado se ha ido más de un 20%, se recorta **en este orden**, y se
 documenta cada recorte en el README:
 
-1. `PATCH /qualities` — ya está fuera; no lo metas «porque es rápido».
+1. `PATCH /v1/items/{id}` (edición en el sitio) — ya está fuera; no lo metas «porque es rápido». Se
+   construye con la consola, que es quien lo necesita (3). Estimación, a medir: 3–5 h.
 2. `POST /grants` — el hito no lo necesita; `POST /items` ya emite la cantidad inicial.
 3. `mock_force` y la parte del modo mock que prueba reversiones; conserva el mock básico.
 4. La demo Godot se reduce a una escena única con botones y `Label`, sin arte ni pulido.
 5. Si la Q7 se responde que no a las 44 h: se aplica esta línea entera desde el principio.
+
+Los dos listados de catálogo (`GET /v1/collections` y `GET /v1/items`, 11-oct-2026) y la consola de
+administración (3) no entran en el hito: sirven sólo a esa consola. Se recortan **antes** que el punto 1. No cuentan en el
+presupuesto de 44 h hasta que se decida lo contrario, y quien los implemente debe apuntar las horas
+aparte para que esa decisión se tome con datos.
 
 **Nunca se recorta el último bloque (README, documentación, vídeo).** Un proyecto funcionando sin documentar puntúa peor que uno con
 menos alcance bien documentado.
@@ -585,8 +681,12 @@ No implementar, no diseñar, no dejar hooks especulativos:
 - Salida de activos a wallets del jugador (`claim`)
 - Operaciones en lote
 - Atributos por jugador
-- Multi-tenant: un despliegue del backend sirve a **un** juego
-- Alta disponibilidad, réplicas, métricas, panel de administración
+- Multi-tenant: un despliegue del backend sirve a **un** juego. El servicio es **autoalojado**: cada
+  estudio despliega el suyo (ver 1). Un servicio alojado que sirva a varios estudios exigiría
+  credenciales por estudio, aislamiento de datos, custodia de varias semillas y facturación
+- Alta disponibilidad, réplicas, métricas
+- Panel de administración **dentro del hito**: la consola de 3 existe, pero se recorta antes que
+  nada (8.1) y no cuenta en las 44 h
 - iOS: la arquitectura no lo impide, pero no se compila, no se prueba y no se promete
 - `armv7` y x86 de 32 bits
 - Publicación en Google Play: se distribuye el APK de depuración
@@ -627,6 +727,14 @@ que nadie —empezando por el tribunal— las descubra por sorpresa.
     claves no caducan. Si genera uno nuevo en cada reintento de la misma acción, ésta se ejecuta dos
     veces. `Chain` no lo detecta; lo evita el servidor de juego guardando el `call_id` antes de
     llamar.
+11. **El servicio es autoalojado: el estudio opera y custodia.** Cada estudio despliega su backend,
+    guarda su semilla maestra (limitación 2), financia la autoridad de su juego y hace sus copias
+    de seguridad de SQLite. Quien pierda el fichero de la semilla o la base de datos pierde el acceso
+    a sus activos. El proyecto documenta cómo, pero no lo opera ni lo respalda.
+12. **Editar un tipo cambia todas sus unidades a la vez.** Las unidades no guardan datos propios, así que
+    una edición en el sitio (contrato 4.6) alcanza a todo lo ya repartido y no deja rastro de los
+    valores anteriores en el tipo. Quien necesite conservar lo antiguo debe crear un tipo nuevo. Y como
+    el `symbol` no se edita, un error en el símbolo exige también un tipo nuevo.
 
 ---
 
@@ -646,6 +754,32 @@ No decidas estos puntos: compruébalos, y anota en la memoria lo que encuentres 
 4. `TokenMetadata` es una extensión TLV de longitud variable: si los metadatos crecen después,
    `UpdateField` redimensiona la cuenta pero **no** transfiere lamports. Hay que enviarlos antes o la
    instrucción falla por falta de exención de renta.
+
+**Ya verificado el 11 de octubre de 2026, para la edición de un tipo en el sitio** (documentación oficial de
+Solana sobre la extensión de metadatos y el código de la interfaz `token-metadata`):
+
+5. **Qué instrucciones hay.** `UpdateField` **añade o actualiza** un campo base (`name`, `symbol`, `uri`) o
+   una clave propia. `RemoveKey` **elimina una clave propia**, nunca un campo base. Ambas las firma la
+   **autoridad de actualización** de los metadatos, no la de acuñación: hay que fijarla en
+   `InitializeTokenMetadata` y apuntarla a la autoridad del juego. Si se dejara sin autoridad, el tipo
+   sería inmutable para siempre. Con una sola firma (la autoridad, que además paga) se respeta el
+   invariante 1.
+6. **Edición de `qualities` como conjunto completo.** Se traduce en un `UpdateField` por cada clave nueva o
+   cambiada y un `RemoveKey` por cada clave que falta. Sólo se envían las que cambian. `RemoveKey` lleva
+   una marca `idempotent`: con `true`, no falla si la clave ya no existe; con `false`, falla. Conviene
+   `true` para que reaplicar una edición no rompa. La clave reservada `collection` nunca se toca.
+7. **Tamaño y renta.** Ambas instrucciones redimensionan los metadatos y **ninguna transfiere lamports**:
+   si crecen, hay que enviarlos **antes** y en la misma transacción. Se calculan sobre el tamaño final
+   tras todas las instrucciones. Si encogen, los lamports sobrantes se quedan en el mint; no hay
+   reembolso. La documentación no da una fórmula cerrada de tamaño: se calcula con las utilidades del SDK
+   de metadatos, que es justo el detalle que no se reconstruye de memoria (CLAUDE.md, sección 4).
+8. **Límite de tamaño de la transacción (cálculo propio, no de la documentación).** Una transacción de
+   Solana admite unos 1.232 bytes. Ocho pares con clave de 32 y valor de 64 caracteres, todos cambiados
+   a la vez, sumarían alrededor de 960 bytes sólo de datos de instrucción, más firma, claves de cuenta y
+   *blockhash*, y rozarían o superarían ese límite. Con valores normales y editando sólo lo que cambia,
+   sobra margen. El backend debe **rechazar** una edición que no quepa, no partirla en varias
+   transacciones, para que una edición siga siendo una operación atómica. **Por comprobar con una
+   transacción real** antes de fijar el límite.
 
 **Ya verificado el 6-8 de octubre de 2026, para el cliente en Rust:**
 

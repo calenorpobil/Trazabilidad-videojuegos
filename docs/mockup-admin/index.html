@@ -107,7 +107,7 @@ td.num { text-align: right; }
     <div class="field"><label for="user">Usuario</label><input id="user" type="text" autocomplete="username"></div>
     <div class="field"><label for="pass">Contraseña</label><input id="pass" type="password" autocomplete="current-password"></div>
     <button class="btn" type="submit">Entrar</button>
-    <p class="muted" style="margin-top:12px;font-size:13px">Mockup: acepta cualquier usuario y contraseña. El acceso real exigirá una credencial de administrador distinta de la de los jugadores.</p>
+    <p class="muted" style="margin-top:12px;font-size:13px">Mockup: acepta cualquier usuario y contraseña. El acceso real usará la credencial de administrador que el estudio configura al desplegar su backend, distinta de la clave de escritura y del token de lectura.</p>
   </form>
 </div>
 
@@ -166,6 +166,8 @@ function sha256(str) {
 
 /* ---------- Utilidades ---------- */
 const $ = (sel, root = document) => root.querySelector(sel);
+/* Reescribe sólo si cambió: evita parpadeos y no pierde clics ni selecciones en las vistas que se refrescan solas. */
+function setHtml(el, html) { if (el.dataset.h !== html) { el.innerHTML = html; el.dataset.h = html; } }
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 const rid = (prefix, n = 16) => prefix + Array.from({ length: n }, () => ALPHABET[Math.floor(Math.random() * ALPHABET.length)]).join("");
@@ -173,7 +175,7 @@ const now = () => new Date().toLocaleTimeString("es-ES");
 
 /* ---------- Servidor simulado (reglas de docs/http-contract.md) ---------- */
 const sim = { speed: 3000, failNext: false, failCode: "EXPIRED" };
-const db = { collections: new Map(), items: new Map(), holders: new Map(), ops: new Map(), idem: new Map(), session: [] };
+const db = { collections: new Map(), items: new Map(), holders: new Map(), ops: new Map(), idem: new Map(), session: [], catalog: new Map() };
 
 function holderByExternal(ext, create) {
   if (!db.holders.has(ext)) {
@@ -186,6 +188,7 @@ function holderById(id) { for (const h of db.holders.values()) if (h.holder_id =
 function resolveRef(ref, create) {
   if (!ref || typeof ref !== "object") return { err: [400, "REJECTED", "Falta la referencia al tenedor."] };
   const keys = Object.keys(ref);
+  if (keys.length === 0) return { err: [400, "REJECTED", "Falta el tenedor: indica su external_id o su holder_id."] };
   if (keys.length !== 1 || !["external_id", "holder_id"].includes(keys[0]))
     return { err: [400, "REJECTED", "La referencia lleva exactamente una clave: external_id o holder_id."] };
   const v = ref[keys[0]];
@@ -194,7 +197,7 @@ function resolveRef(ref, create) {
   const h = holderById(v);
   return h ? { holder: h } : { err: [404, "NOT_FOUND", "No existe ese tenedor."] };
 }
-const fail = (status, code, message) => ({ status, body: { error: { code, message } } });
+const fail = (status, code, message) => ({ status, body: { error: { code, message, retryable: status === 429 || status >= 500 } } });
 
 function startOperation(kind, effect) {
   const op = { operation_id: rid("opr_"), kind, state: "pending", error: null, created: Date.now(), history: [{ s: "pending", t: Date.now() }] };
@@ -203,7 +206,7 @@ function startOperation(kind, effect) {
   const move = (state, error) => { op.state = state; op.error = error || null; op.history.push({ s: state, t: Date.now() }); };
   setTimeout(() => move("applied"), sim.speed * 0.4);
   setTimeout(() => {
-    if (willFail) move("failed", { category: code, message: code === "EXPIRED" ? "La operación caducó antes de completarse." : "Error interno del servicio.", retryable: code === "EXPIRED" });
+    if (willFail) move("failed", { code, message: code === "EXPIRED" ? "La operación caducó antes de completarse." : "Error interno del servicio.", retryable: code === "EXPIRED" });
     else { effect(); move("settled"); }
   }, sim.speed);
   return op;
@@ -234,12 +237,30 @@ function server(method, path, body, idemKey, readOnly) {
   return r;
 }
 
-function route(method, path, body) {
+const iso = ms => new Date(ms).toISOString().replace(/\.\d+Z$/, "Z");
+
+function route(method, fullPath, body) {
   let m;
+  const [path, query = ""] = fullPath.split("?");
+  const params = new URLSearchParams(query);
+  if (method === "GET" && path === "/v1/collections") {
+    const list = [...db.collections.values()].sort((a, b) => b.created - a.created)
+      .map(c => ({ collection_id: c.collection_id, name: c.name, created_at: iso(c.created) }));
+    return { status: 200, body: { collections: list } };
+  }
+  if (method === "GET" && path === "/v1/items") {
+    const cid = params.get("collection_id");
+    if (cid && !db.collections.has(cid)) return fail(404, "NOT_FOUND", "La colección no existe.");
+    const list = [...db.items.values()].filter(i => !cid || i.collection_id === cid).sort((a, b) => b.created - a.created)
+      .map(i => ({ item_id: i.item_id, collection_id: i.collection_id, name: i.name, symbol: i.symbol, uri: i.uri, qualities: i.qualities,
+        operation_id: i.operation_id, state: db.ops.get(i.operation_id).state, revision: i.revision,
+        edit: i.edit_operation_id ? { operation_id: i.edit_operation_id, state: db.ops.get(i.edit_operation_id).state } : null, created_at: iso(i.created) }));
+    return { status: 200, body: { items: list } };
+  }
   if (method === "POST" && path === "/v1/collections") {
     const name = body && body.name;
     if (typeof name !== "string" || !name.trim() || name.length > 64) return fail(400, "REJECTED", "name es obligatorio (1..64 caracteres).");
-    const c = { collection_id: rid("col_"), name }; db.collections.set(c.collection_id, c);
+    const c = { collection_id: rid("col_"), name, created: Date.now() }; db.collections.set(c.collection_id, c);
     return { status: 201, body: { collection_id: c.collection_id } };
   }
   if (method === "POST" && path === "/v1/items") {
@@ -251,11 +272,31 @@ function route(method, path, body) {
     const qe = validQualities(b.qualities); if (qe) return fail(400, "REJECTED", qe);
     if (!b.initial_grant || !posInt(b.initial_grant.amount)) return fail(400, "REJECTED", "initial_grant.amount debe ser un entero >= 1.");
     const rh = resolveRef(b.initial_grant.holder, true); if (rh.err) return fail(...rh.err);
-    const item = { item_id: rid("itm_"), collection_id: b.collection_id, name: b.name, symbol: b.symbol, uri: b.uri || "", qualities: b.qualities || {} };
+    const item = { item_id: rid("itm_"), collection_id: b.collection_id, name: b.name, symbol: b.symbol, uri: b.uri || "", qualities: b.qualities || {}, revision: 0, edit_operation_id: null, created: Date.now() };
     db.items.set(item.item_id, item);
     const amount = b.initial_grant.amount, holder = rh.holder;
     const op = startOperation("create_item", () => holder.balances.set(item.item_id, (holder.balances.get(item.item_id) || 0) + amount));
+    item.operation_id = op.operation_id;
     return { status: 202, body: { operation_id: op.operation_id, item_id: item.item_id, holder_id: holder.holder_id } };
+  }
+  if ((m = path.match(/^\/v1\/items\/([^/]+)$/)) && method === "PATCH") {
+    const it = db.items.get(m[1]); if (!it) return fail(404, "NOT_FOUND", "El tipo de ítem no existe.");
+    const b = body || {}, extra = Object.keys(b).filter(k => !["name", "uri", "qualities"].includes(k));
+    if (extra.length) return fail(400, "REJECTED", `Campo no editable: ${extra.join(", ")}.`);
+    if (!Object.keys(b).length) return fail(400, "REJECTED", "Indica al menos name, uri o qualities.");
+    if (b.name !== undefined && (typeof b.name !== "string" || b.name.length < 1 || b.name.length > 32)) return fail(400, "REJECTED", "name debe tener entre 1 y 32 caracteres.");
+    if (b.uri !== undefined && (typeof b.uri !== "string" || b.uri.length > 200)) return fail(400, "REJECTED", "uri admite como máximo 200 caracteres.");
+    const qe = validQualities(b.qualities); if (qe) return fail(400, "REJECTED", qe);
+    if (db.ops.get(it.operation_id).state !== "settled") return fail(400, "REJECTED", "El tipo todavía no está liquidado.");
+    const last = it.edit_operation_id && db.ops.get(it.edit_operation_id);
+    if (last && (last.state === "pending" || last.state === "applied")) return fail(400, "REJECTED", "Hay una edición en curso para este tipo.");
+    const op = startOperation("update_item", () => {
+      if (b.name !== undefined) it.name = b.name;
+      if (b.uri !== undefined) it.uri = b.uri;
+      if (b.qualities !== undefined) it.qualities = b.qualities;
+    });
+    it.revision += 1; it.edit_operation_id = op.operation_id;
+    return { status: 202, body: { operation_id: op.operation_id } };
   }
   if ((m = path.match(/^\/v1\/items\/([^/]+)\/grants$/)) && method === "POST") {
     if (!db.items.has(m[1])) return fail(404, "NOT_FOUND", "El tipo de ítem no existe.");
@@ -282,34 +323,35 @@ function route(method, path, body) {
   }
   if ((m = path.match(/^\/v1\/operations\/([^/]+)$/)) && method === "GET") {
     const op = db.ops.get(m[1]); if (!op) return fail(404, "NOT_FOUND", "No existe esa operación.");
-    return { status: 200, body: { state: op.state, error: op.error } };
+    return { status: 200, body: { operation_id: op.operation_id, state: op.state, error: op.error } };
   }
   if ((m = path.match(/^\/v1\/holders\/([^/]+)\/items$/)) && method === "GET") {
-    const h = holderById(m[1]); if (!h) return { status: 200, body: [] };
+    const h = holderById(m[1]); if (!h) return { status: 200, body: { holder_id: m[1], items: [] } };
     const list = [...h.balances].filter(([, n]) => n > 0).map(([id, n]) => {
-      const it = db.items.get(id); return { item_id: id, name: it.name, qualities: it.qualities, amount: n };
+      const it = db.items.get(id);
+      return { item_id: id, collection_id: it.collection_id, name: it.name, symbol: it.symbol, uri: it.uri, qualities: it.qualities, amount: n };
     });
-    return { status: 200, body: list };
+    return { status: 200, body: { holder_id: h.holder_id, items: list } };
   }
   return fail(404, "NOT_FOUND", "Ruta desconocida.");
 }
 
 /* ---------- Datos de muestra ---------- */
 (function seed() {
-  const col = { collection_id: rid("col_"), name: "Armería (muestra)" }; db.collections.set(col.collection_id, col);
-  const it = { item_id: rid("itm_"), collection_id: col.collection_id, name: "Espada de hierro", symbol: "SWORD", uri: "", qualities: { rarity: "common", damage: "12" } };
-  db.items.set(it.item_id, it);
-  const h = holderByExternal("player-42", true); h.balances.set(it.item_id, 3);
+  const col = { collection_id: rid("col_"), name: "Armería (muestra)", created: Date.now() - 120000 }; db.collections.set(col.collection_id, col);
   const op = { operation_id: rid("opr_"), kind: "create_item", state: "settled", error: null, created: Date.now() - 60000, history: [{ s: "pending", t: Date.now() - 60000 }, { s: "settled", t: Date.now() - 55000 }] };
   db.ops.set(op.operation_id, op);
+  const it = { item_id: rid("itm_"), collection_id: col.collection_id, name: "Espada de hierro", symbol: "SWORD", uri: "", qualities: { rarity: "common", damage: "12" }, operation_id: op.operation_id, revision: 0, edit_operation_id: null, created: Date.now() - 60000 };
+  db.items.set(it.item_id, it);
+  const h = holderByExternal("player-42", true); h.balances.set(it.item_id, 3);
   db.session.push({ at: "—", label: "Tipo de ejemplo «Espada de hierro»", operation_id: op.operation_id, seed: true });
 })();
 
 /* ---------- Componentes de formulario ---------- */
-function refField(id, label) {
-  return `<div class="field"><label>${label}</label>
+function refField(id, label, value = "", hint = "") {
+  return `<div class="field"><label>${label}${hint ? ` <span class="hint">${hint}</span>` : ""}</label>
     <div class="row"><select id="${id}-kind" class="fixed" style="width:200px"><option value="external_id">Identificador del juego</option><option value="holder_id">Identificador opaco</option></select>
-    <input type="text" id="${id}-val" list="dl-holders" placeholder="player-42" autocomplete="off"></div></div>`;
+    <input type="text" id="${id}-val" list="dl-holders" placeholder="player-42" value="${esc(value)}" autocomplete="off"></div></div>`;
 }
 function readRef(id) {
   const v = $(`#${id}-val`).value.trim(); if (!v) return null;
@@ -338,7 +380,7 @@ function datalists() {
 }
 function exchange(el, method, path, headers, body, res) {
   const cls = res.status < 300 ? "ok" : "bad";
-  el.innerHTML = `<div class="exchange"><pre class="req">${esc(method)} ${esc(path)}
+  el.innerHTML = `<div class="exchange"><div class="muted" style="font-size:12px;margin-bottom:6px">Equivalente HTTP del contrato, para ver qué ocurre. La consola corre dentro del backend de tu estudio: la página nunca ve la clave de escritura ni el token de lectura.</div><pre class="req">${esc(method)} ${esc(path)}
 ${Object.entries(headers).map(([k, v]) => esc(k) + ": " + esc(v)).join("\n")}${body === undefined ? "" : "\n\n" + esc(JSON.stringify(body, null, 2))}</pre>
 <pre class="${cls}" style="margin-top:10px">← ${res.status}${res.replayed ? "  (clave ya usada: se devuelve el resultado anterior, sin operación nueva)" : ""}
 ${esc(JSON.stringify(res.body, null, 2))}</pre></div>`;
@@ -390,7 +432,7 @@ views.items = {
       <div id="pairs"></div>
       <button class="btn secondary small" type="button" id="addpair">Añadir cualidad</button> <span class="muted" id="pcount"></span></div>
     <h2>Existencias iniciales</h2>
-    <div class="grid2">${refField("grant", "Tenedor que las recibe")}
+    <div class="grid2">${refField("grant", "Tenedor que las recibe", "game-reserve", "(obligatorio; por defecto, la reserva del juego)")}
       <div class="field"><label for="amount">Cantidad <span class="hint">(entero ≥ 1)</span></label><input type="number" id="amount" min="1" step="1" value="1"></div></div>
     ${callIdField("create_item", "item")}
     <button class="btn" type="submit">Crear tipo</button></form><div id="exchange"></div></div>`,
@@ -423,12 +465,13 @@ views.grants = {
   title: "Entregar unidades", sub: "Emisión nueva a un tenedor. No quita nada a nadie.",
   render: () => `<div class="card"><form id="f">
     <div class="field"><label for="item">Tipo de ítem</label><input type="text" id="item" list="dl-items" placeholder="itm_…" autocomplete="off"></div>
-    <div class="grid2">${refField("to", "Tenedor que las recibe")}
+    <div class="grid2">${refField("to", "Tenedor que las recibe", "", "(obligatorio)")}
       <div class="field"><label for="amount">Cantidad <span class="hint">(entero ≥ 1)</span></label><input type="number" id="amount" min="1" step="1" value="1"></div></div>
     ${callIdField("grant", "grant")}
     <button class="btn" type="submit">Entregar</button></form><div id="exchange"></div></div>`,
   mount() {
     bindCallId("grant", "grant");
+    $("#item").value = prefill.item; prefill.item = "";
     $("#f").addEventListener("submit", e => {
       e.preventDefault();
       const id = $("#item").value.trim();
@@ -441,13 +484,14 @@ views.transfers = {
   title: "Transferencias", sub: "Para correcciones de soporte. El origen no firma: lo hace la autoridad del juego.",
   render: () => `<div class="card"><form id="f">
     <div class="field"><label for="item">Tipo de ítem</label><input type="text" id="item" list="dl-items" placeholder="itm_…" autocomplete="off"></div>
-    <div class="grid2">${refField("from", "Origen")}${refField("to", "Destino")}</div>
+    <div class="grid2">${refField("from", "Origen", "", "(obligatorio)")}${refField("to", "Destino", "", "(obligatorio)")}</div>
     <div class="field" style="max-width:240px"><label for="amount">Cantidad <span class="hint">(obligatoria, entero ≥ 1)</span></label><input type="number" id="amount" min="1" step="1" value="1"></div>
     <p class="muted" style="font-size:13px">No hay transferencia parcial: entra la cantidad pedida entera o no entra.</p>
     ${callIdField("transfer", "xfer")}
     <button class="btn" type="submit">Transferir</button></form><div id="exchange"></div></div>`,
   mount() {
     bindCallId("transfer", "xfer");
+    $("#item").value = prefill.item; prefill.item = "";
     $("#f").addEventListener("submit", e => {
       e.preventDefault();
       const id = $("#item").value.trim();
@@ -479,7 +523,7 @@ views.operations = {
       if (!op) { el.innerHTML = ""; return; }
       el.innerHTML = `<h2>${esc(op.operation_id)} ${opBadge(op.state)}</h2>${steps(op)}
         ${op.state === "applied" ? `<p class="muted" style="font-size:13px">Confirmada pero no final: todavía puede pasar a failed. No la des por buena.</p>` : ""}
-        ${op.error ? `<p class="error">${esc(op.error.category)} — ${esc(op.error.message)} ${op.error.retryable ? "(reintentable con un identificador de llamada nuevo)" : "(no reintentable)"}</p>` : ""}`;
+        ${op.error ? `<p class="error">${esc(op.error.code)} — ${esc(op.error.message)} ${op.error.retryable ? "(reintentable con un identificador de llamada nuevo)" : "(no reintentable)"}</p>` : ""}`;
     };
     const list = () => {
       const el = $("#list"); if (!el) return;
@@ -511,7 +555,7 @@ views.inventory = {
     const show = () => {
       if (!current) return;
       const res = server("GET", `/v1/holders/${current}/items`);
-      const rows = res.body;
+      const rows = res.body.items;
       $("#result").innerHTML = `<h2>${esc(current)}</h2>` + (rows.length ? `<table><tr><th>Ítem</th><th>Cualidades</th><th class="num">Cantidad</th></tr>${rows.map(r =>
         `<tr><td>${esc(r.name)}<div class="mono muted">${esc(r.item_id)}</div></td><td>${Object.entries(r.qualities).map(([k, v]) => `<code>${esc(k)}=${esc(v)}</code>`).join(" ") || "—"}</td><td class="num">${r.amount}</td></tr>`).join("")}</table>`
         : `<p class="muted">Inventario vacío (o tenedor desconocido).</p>`);
@@ -525,9 +569,186 @@ views.inventory = {
   }
 };
 
+/* Listado de catálogo: GET /v1/collections y GET /v1/items (contrato 5.3 y 5.4) */
+views.catalog = {
+  title: "Listado de catálogo", sub: "Colecciones y tipos de ítem creados. Un tipo cuya creación falló sigue apareciendo.",
+  render: () => `<div class="card"><h2 style="margin-top:0">Colecciones</h2><div id="cols"></div></div>
+    <div class="card"><div class="grid2">
+      <div class="field"><label for="fcol">Colección</label><select id="fcol"></select></div>
+      <div class="field"><label for="fq">Buscar <span class="hint">(nombre, símbolo o identificador)</span></label><input type="text" id="fq" autocomplete="off"></div></div>
+      <div class="field" style="margin-bottom:0"><label style="display:inline;font-weight:400"><input type="checkbox" id="fok"> Ocultar los que no están en <span class="mono">settled</span></label></div>
+      <div id="items" style="margin-top:12px"></div><div id="exchange"></div></div>`,
+  mount() {
+    let filter = "", query = "", onlyOk = false, shown = "";
+    const colName = id => (db.collections.get(id) || {}).name || id;
+    const renderCols = () => {
+      const res = server("GET", "/v1/collections");
+      const counts = {}; for (const i of db.items.values()) counts[i.collection_id] = (counts[i.collection_id] || 0) + 1;
+      setHtml($("#cols"), `<table><tr><th>Nombre</th><th>Identificador</th><th class="num">Tipos</th><th>Creada</th></tr>${res.body.collections.map(c =>
+        `<tr><td>${esc(c.name)}</td><td class="mono">${esc(c.collection_id)}</td><td class="num">${counts[c.collection_id] || 0}</td><td>${esc(c.created_at)}</td></tr>`).join("")
+        || `<tr><td colspan="4" class="muted">No hay colecciones.</td></tr>`}</table>`);
+      const sel = $("#fcol"), opts = `<option value="">Todas</option>` + res.body.collections.map(c => `<option value="${esc(c.collection_id)}">${esc(c.name)}</option>`).join("");
+      if (sel.dataset.sig !== opts) { sel.innerHTML = opts; sel.dataset.sig = opts; sel.value = filter; }
+    };
+    const renderItems = () => {
+      const path = "/v1/items" + (filter ? `?collection_id=${filter}` : "");
+      const res = server("GET", path);
+      if (res.status !== 200) { $("#items").innerHTML = `<p class="error">${esc(res.body.error.message)}</p>`; return; }
+      const q = query.toLowerCase();
+      const rows = res.body.items.filter(i => (!onlyOk || i.state === "settled") && (!q || [i.name, i.symbol, i.item_id].some(s => s.toLowerCase().includes(q))));
+      setHtml($("#items"), `<table><tr><th>Tipo</th><th>Colección</th><th>Cualidades</th><th>Estado</th><th></th></tr>${rows.map(i =>
+        `<tr><td>${esc(i.name)} <span class="muted">(${esc(i.symbol)})</span><div class="mono muted">${esc(i.item_id)}</div></td>
+         <td>${esc(colName(i.collection_id))}</td>
+         <td>${Object.entries(i.qualities).map(([k, v]) => `<code>${esc(k)}=${esc(v)}</code>`).join(" ") || "—"}</td>
+         <td>${opBadge(i.state)}<div class="mono muted">${esc(i.operation_id)}</div></td>
+         <td>${i.state === "settled" ? `<button class="link" data-grant="${esc(i.item_id)}">Entregar</button> · <button class="link" data-xfer="${esc(i.item_id)}">Transferir</button>` : `<span class="muted">No utilizable aún</span>`}</td></tr>`).join("")
+        || `<tr><td colspan="5" class="muted">No hay tipos que coincidan.</td></tr>`}</table>`);
+      if (shown !== path) { shown = path; exchange($("#exchange"), "GET", path, { Authorization: "Bearer ‹token de lectura›" }, undefined, res); }
+    };
+    $("#fcol").addEventListener("change", e => { filter = e.target.value; renderItems(); });
+    $("#fq").addEventListener("input", e => { query = e.target.value.trim(); renderItems(); });
+    $("#fok").addEventListener("change", e => { onlyOk = e.target.checked; renderItems(); });
+    $("#items").addEventListener("click", e => {
+      const g = e.target.closest("[data-grant]"), x = e.target.closest("[data-xfer]");
+      if (g) { prefill.item = g.dataset.grant; go("grants"); }
+      if (x) { prefill.item = x.dataset.xfer; go("transfers"); }
+    });
+    renderCols(); renderItems();
+    this.tick = () => { renderCols(); renderItems(); };
+  }
+};
+const prefill = { item: "" };
+
+/* Catálogo declarativo (propuesta 3): un fichero de datos describe colecciones y tipos; se planifica y se aplica. */
+const SAMPLE_CATALOG = {
+  collections: [{ id: "species", name: "Especies" }],
+  items: [
+    { id: "brasa", collection: "species", name: "Brasa", symbol: "BRASA",
+      qualities: { kind: "pet", element: "fire", rarity: "common", growth_hours: "72" },
+      initial_grant: { holder: "game-reserve", amount: 1 } },
+    { id: "gota", collection: "species", name: "Gota", symbol: "GOTA",
+      qualities: { kind: "pet", element: "water", rarity: "common", growth_hours: "72" },
+      initial_grant: { holder: "game-reserve", amount: 1 } }
+  ]
+};
+const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+function planCatalog(text) {
+  let cat;
+  try { cat = JSON.parse(text); } catch (e) { return { error: "JSON no válido: " + e.message }; }
+  if (!cat || typeof cat !== "object") return { error: "El fichero debe ser un objeto con collections e items." };
+  const cols = Array.isArray(cat.collections) ? cat.collections : [], items = Array.isArray(cat.items) ? cat.items : [];
+  const rows = [], ids = new Set(), colIds = new Set(cols.map(c => c && c.id));
+  const row = (kind, id, status, detail, entry) => rows.push({ kind, id, status, detail, entry });
+  for (const c of cols) {
+    const id = c && c.id;
+    if (!id || typeof c.name !== "string" || !c.name.trim() || c.name.length > 64) { row("colección", id || "?", "error", "Hace falta id y name (1..64).", c); continue; }
+    if (ids.has("c:" + id)) { row("colección", id, "error", "Identificador repetido en el fichero.", c); continue; }
+    ids.add("c:" + id);
+    const m = db.catalog.get("c:" + id), cur = m && db.collections.get(m.collection_id);
+    if (!m) row("colección", id, "new", "Se creará.", c);
+    else if (cur.name === c.name) row("colección", id, "exists", m.collection_id, c);
+    else row("colección", id, "diverges", `Ya existe como «${cur.name}». Los nombres no se editan: usa otro id.`, c);
+  }
+  for (const it of items) {
+    const id = it && it.id;
+    let err = null;
+    if (!id) err = "Falta id.";
+    else if (ids.has("i:" + id)) err = "Identificador repetido en el fichero.";
+    else if (!colIds.has(it.collection) && !db.catalog.has("c:" + it.collection)) err = `La colección «${it.collection}» no está en el fichero.`;
+    else if (typeof it.name !== "string" || it.name.length < 1 || it.name.length > 32) err = "name debe tener entre 1 y 32 caracteres.";
+    else if (typeof it.symbol !== "string" || it.symbol.length < 1 || it.symbol.length > 10) err = "symbol debe tener entre 1 y 10 caracteres.";
+    else if (it.uri !== undefined && (typeof it.uri !== "string" || it.uri.length > 200)) err = "uri admite como máximo 200 caracteres.";
+    else if (validQualities(it.qualities)) err = validQualities(it.qualities);
+    else if (!it.initial_grant || typeof it.initial_grant.holder !== "string" || !it.initial_grant.holder.trim() || !posInt(it.initial_grant.amount)) err = "initial_grant necesita holder (texto) y amount (entero ≥ 1).";
+    if (err) { row("tipo", id || "?", "error", err, it); continue; }
+    ids.add("i:" + id);
+    const m = db.catalog.get("i:" + id);
+    if (!m) { row("tipo", id, "new", "Se creará.", it); continue; }
+    const cur = db.items.get(m.item_id), op = db.ops.get(m.operation_id);
+    if (op.state === "failed") { row("tipo", id, "failed", "La creación falló. No se reintenta sola: revisa y usa otro id (p. ej. " + id + "-2).", it); continue; }
+    const colMap = db.catalog.get("c:" + it.collection);
+    if (it.symbol !== cur.symbol || !colMap || colMap.collection_id !== cur.collection_id) {
+      row("tipo", id, "diverges", "El símbolo y la colección no se editan. Si es un error, crea otra entrada con otro id y otro symbol (p. ej. " + id + "-2).", it); continue;
+    }
+    const edit = cur.edit_operation_id && db.ops.get(cur.edit_operation_id);
+    if (edit && (edit.state === "pending" || edit.state === "applied")) { row("tipo", id, "inprogress", "Hay una edición en curso. No se reenvía.", it); continue; }
+    const patch = {};
+    if (cur.name !== it.name) patch.name = it.name;
+    if (cur.uri !== (it.uri || "")) patch.uri = it.uri || "";
+    if (!sameJson(cur.qualities, it.qualities || {})) patch.qualities = it.qualities || {};
+    if (Object.keys(patch).length) {
+      const r = { kind: "tipo", id, status: "changes", entry: it, patch, item_id: m.item_id, revision: cur.revision,
+        detail: "Se editará el mismo tipo (" + Object.keys(patch).join(", ") + "); todas sus unidades lo reflejarán." };
+      rows.push(r);
+    }
+    else row("tipo", id, "exists", `${m.item_id} · ${op.state} · revisión ${cur.revision}`, it);
+  }
+  return { rows };
+}
+
+function applyCatalog(plan) {
+  for (const r of plan.rows.filter(r => r.status === "new" && r.kind === "colección")) {
+    const key = sha256("create_collection:catalog_col_" + r.id);
+    const res = server("POST", "/v1/collections", { name: r.entry.name }, key);
+    if (res.status === 201) db.catalog.set("c:" + r.id, { collection_id: res.body.collection_id });
+  }
+  for (const r of plan.rows.filter(r => r.status === "new" && r.kind === "tipo")) {
+    const it = r.entry, col = db.catalog.get("c:" + it.collection);
+    if (!col) continue;
+    const body = { collection_id: col.collection_id, name: it.name, symbol: it.symbol, initial_grant: { holder: { external_id: it.initial_grant.holder }, amount: it.initial_grant.amount } };
+    if (it.uri) body.uri = it.uri;
+    if (it.qualities && Object.keys(it.qualities).length) body.qualities = it.qualities;
+    const res = server("POST", "/v1/items", body, sha256("create_item:catalog_" + r.id));
+    if (res.status === 202) {
+      db.catalog.set("i:" + r.id, { item_id: res.body.item_id, operation_id: res.body.operation_id });
+      db.session.unshift({ at: now(), label: `Catálogo: tipo «${it.name}»`, operation_id: res.body.operation_id });
+    }
+  }
+}
+
+function applyEdits(plan) {
+  for (const r of plan.rows.filter(r => r.status === "changes")) {
+    const key = sha256("update_item:catalog_" + r.id + ":r" + (r.revision + 1));
+    const res = server("PATCH", `/v1/items/${r.item_id}`, r.patch, key);
+    if (res.status === 202) db.session.unshift({ at: now(), label: `Catálogo: edición de «${r.entry.name}»`, operation_id: res.body.operation_id });
+  }
+}
+
+views.importer = {
+  title: "Importar catálogo", sub: "Describe tus colecciones y tipos en un fichero y aplícalo. Se puede repetir sin riesgo.",
+  render: () => `<div class="card">
+    <p class="muted" style="font-size:13px">En tu proyecto este fichero (<span class="mono">catalog.json</span>) vive en git junto al juego. Cada entrada lleva un <span class="mono">id</span> propio: de él sale la clave de idempotencia, así que aplicarlo dos veces no crea nada dos veces. Si una entrada ya creada cambia, se edita el mismo tipo: conserva su identificador y las unidades de los jugadores, pero todas las unidades reflejan el cambio. El símbolo y la colección no se editan («diverge»).</p>
+    <div class="field"><label for="cat">Catálogo</label><textarea id="cat" rows="18" class="mono" spellcheck="false"></textarea></div>
+    <div class="row"><button class="btn secondary fixed" type="button" id="plan">Planificar</button><button class="btn fixed" type="button" id="apply" disabled>Aplicar</button><span class="muted" id="hint" style="flex:1"></span></div>
+    <div id="plan-out" style="margin-top:12px"></div></div>`,
+  mount() {
+    $("#cat").value = JSON.stringify(SAMPLE_CATALOG, null, 2);
+    let planned = false;
+    const LABEL = { changes: ["pending", "cambia"], inprogress: ["applied", "en curso"], new: ["applied", "nuevo"], exists: ["settled", "ya existe"], diverges: ["failed", "diverge"], failed: ["failed", "fallido"], error: ["failed", "error"] };
+    const show = () => {
+      if (!planned) return;
+      const plan = planCatalog($("#cat").value);
+      if (plan.error) { setHtml($("#plan-out"), `<p class="error">${esc(plan.error)}</p>`); $("#apply").disabled = true; return; }
+      const n = s => plan.rows.filter(r => r.status === s).length;
+      const todo = n("new") + n("changes");
+      $("#apply").disabled = n("error") > 0 || todo === 0;
+      $("#hint").textContent = n("error") ? "Corrige los errores para poder aplicar." : todo ? `Se crearán ${n("new")} y se editarán ${n("changes")}. Las demás no se tocan.` : "No hay nada que crear ni editar.";
+      setHtml($("#plan-out"), `<table><tr><th>Tipo</th><th>Entrada</th><th>Plan</th><th>Detalle</th></tr>${plan.rows.map(r =>
+        `<tr><td>${esc(r.kind)}</td><td class="mono">${esc(r.id)}</td><td><span class="badge ${LABEL[r.status][0]}">${LABEL[r.status][1]}</span></td><td>${esc(r.detail)}</td></tr>`).join("")}</table>`);
+    };
+    $("#plan").addEventListener("click", () => { planned = true; show(); });
+    $("#cat").addEventListener("input", () => { if (planned) show(); });
+    $("#apply").addEventListener("click", () => {
+      const plan = planCatalog($("#cat").value); if (plan.error) return;
+      applyCatalog(plan); applyEdits(plan); show();
+    });
+    this.tick = show;
+  }
+};
+
 /* Funciones sin endpoint en el contrato v1 */
 const FUTURE = {
-  catalog: { title: "Listado de colecciones y tipos", needs: "Un endpoint de lectura del catálogo (por ejemplo GET /v1/collections y GET /v1/items). El contrato v1 no lo tiene.", meanwhile: "El servidor de juego puede llevar su propia tabla de tipos creados. Aquí solo se ven los creados desde esta página." },
   history: { title: "Historial de operaciones", needs: "Un endpoint que liste operaciones con filtro por estado. Hoy solo se puede consultar una por su identificador.", meanwhile: "«Operaciones» muestra lo hecho en esta sesión." },
   retry: { title: "Reintentar una operación fallida", needs: "El historial anterior para localizarlas, y un criterio para detectar un tipo creado a medias antes de reintentar.", meanwhile: "Repetir la acción a mano con un identificador de llamada nuevo, tras revisar que el primer intento no dejó nada." },
   reconcile: { title: "Reconciliación", needs: "Leer, para cada jugador y tipo, la cantidad del servidor de juego y la del inventario, y compararlas. Necesita la lista de tenedores y tipos.", meanwhile: "Consultar el inventario de un tenedor y compararlo a mano." },
@@ -546,7 +767,7 @@ function futureView(k) {
 
 /* ---------- Navegación ---------- */
 const NAV = [
-  ["Catálogo", [["collections", "Colecciones"], ["items", "Tipos de ítem"], ["catalog", "Listado de catálogo", true]]],
+  ["Catálogo", [["collections", "Colecciones"], ["items", "Tipos de ítem"], ["catalog", "Listado de catálogo"], ["importer", "Importar catálogo"]]],
   ["Existencias", [["grants", "Entregar unidades"], ["transfers", "Transferencias"], ["inventory", "Inventario"]]],
   ["Seguimiento", [["operations", "Operaciones"], ["history", "Historial", true], ["retry", "Reintentar fallidas", true], ["reconcile", "Reconciliación", true], ["status", "Panel de estado", true]]]
 ];

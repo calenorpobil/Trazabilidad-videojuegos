@@ -51,6 +51,10 @@ asume longitud. Nunca viaja una dirección en crudo por este contrato.
 
 Credencial ausente o inválida: `401` con código `REJECTED`.
 
+La consola de administración del backend (`/admin`) tiene su propia credencial y sus propias
+rutas, internas del backend. **No forman parte de este contrato** y ni el addon ni el servidor
+de juego las usan.
+
 ---
 
 ## 3. Idempotencia
@@ -175,17 +179,49 @@ Entrega unidades a un tenedor. Emisión nueva, no mueve nada de nadie.
   primera defensa.
 - `from` y `to` no pueden resolver al mismo tenedor: `400` / `REJECTED`.
 
-### 4.6 `PATCH /v1/items/{item_id}/qualities`
+### 4.6 `PATCH /v1/items/{item_id}`
 
-**Bajo la línea de corte (8.1, punto 1). No se implementa en v1.** Queda escrito para
-que el contrato no cambie de forma si algún día entra.
+**Edita el tipo en el sitio.** Cambia los datos de un tipo ya creado, sin crear otro: el
+`item_id` no cambia y los tenedores conservan sus unidades. Decidido el 11-oct-2026; sustituye
+al borrador anterior (`PATCH …/qualities`, sólo cualidades).
+
+**Fuera del hito (8.1).** No se implementa hasta que se construya la consola de administración,
+que es quien la necesita (el catálogo declarativo aplica con ella los cambios en entradas ya
+creadas). Mientras no exista: `404`.
 
 ```json
-{ "qualities": { "damage": "14" } }
+{
+  "name": "Brasa de fuego",
+  "uri": "https://ejemplo.test/brasa.json",
+  "qualities": { "kind": "pet", "element": "fire", "rarity": "common", "growth_hours": "96" }
+}
 ```
 → `202` `{ "operation_id": "opr_..." }`
 
-Mientras no exista: `404`.
+| Campo | Reglas |
+|---|---|
+| `name`, `uri` | Opcionales. Mismos límites que en 4.3 |
+| `qualities` | Opcional. Es el conjunto **completo** nuevo, no un parche: las claves que falten se **eliminan**. Mismos límites que en 4.3; `collection` está reservada y se conserva |
+
+- Al menos uno de los tres. Cualquier otro campo, incluidos `symbol` y `collection_id`,
+  se rechaza: `400` / `REJECTED`. El `symbol` no se edita porque es la clave con la que un
+  servidor de juego puede emparejar sus objetos con el catálogo (plan de juego 10.3).
+- El tipo debe existir (`404`) y su creación debe estar en `settled`; si no, `400` / `REJECTED`.
+- **Afecta a todas las unidades a la vez.** Las unidades no guardan datos propios: si `damage`
+  pasa de 12 a 14, lo reflejan todas las ya repartidas. Para un cambio de significado que no
+  deba alcanzar a lo ya entregado, se crea un tipo nuevo (propuesta 3).
+- Es una operación como las demás: `pending → applied → settled | failed`. Hasta `settled`, las
+  lecturas siguen devolviendo los datos antiguos. Si falla, el tipo queda como estaba.
+- **Una edición a la vez por tipo.** Mientras la anterior no ha llegado a `settled` o `failed`, otra
+  edición del mismo tipo se rechaza: `400` / `REJECTED`.
+- **`revision`.** Sube en 1 al **aceptar** cada edición (`202`), no al liquidarla. Así una edición
+  que falla ya consumió su número, y reintentarla produce una clave nueva en vez de devolver el fallo
+  anterior (contrato 8).
+- Si el cambio encarece la operación, el backend lo costea con la autoridad del juego. Si no puede:
+  `INSUFFICIENT_FUNDS`.
+- Una edición cuyo resultado no cabe en una sola operación se rechaza: `400` / `REJECTED`. Con valores
+  de tamaño normal no ocurre; sólo con los ocho pares al máximo de longitud (propuesta, sección 13).
+- Cada edición exige su propia `Idempotency-Key`: repetir una clave devolvería la edición anterior.
 
 ---
 
@@ -230,6 +266,66 @@ backend.
 - Los ejemplares no se distinguen entre sí. Sólo hay `amount`, porque los activos son
   fungibles (limitación 12.1).
 - Tenedor sin objetos: `200` con `items: []`, no `404`.
+
+### 5.3 `GET /v1/collections`
+
+Añadido el 11-oct-2026 para la web de administración. Lectura (`read_token`).
+
+→ `200`
+```json
+{
+  "collections": [
+    { "collection_id": "col_7Hs2...", "name": "Armería", "created_at": "2026-10-11T09:30:00Z" }
+  ]
+}
+```
+
+- Orden: la más reciente primero. Sin paginación (sección 8).
+- Sin colecciones: `200` con `collections: []`.
+
+### 5.4 `GET /v1/items`
+
+Añadido el 11-oct-2026 para la web de administración. Lectura (`read_token`).
+
+Parámetro opcional: `?collection_id=col_...`. Con un identificador que no existe: `404` /
+`NOT_FOUND`. Sin parámetro, devuelve todos los tipos.
+
+→ `200`
+```json
+{
+  "items": [
+    {
+      "item_id": "itm_a1b2...",
+      "collection_id": "col_7Hs2...",
+      "name": "Espada de hierro",
+      "symbol": "SWORD",
+      "uri": "https://ejemplo.test/espada.json",
+      "qualities": { "rarity": "common", "damage": "12" },
+      "operation_id": "opr_3Kd9...",
+      "state": "settled",
+      "revision": 1,
+      "edit": { "operation_id": "opr_9Xc2...", "state": "settled" },
+      "created_at": "2026-10-11T09:31:00Z"
+    }
+  ]
+}
+```
+
+- `revision` empieza en `0` y sube en 1 cada vez que se acepta una edición (4.6).
+- `edit` describe la **última** edición aceptada, o es `null` si el tipo nunca se editó. Con
+  `state` en `pending` o `applied`, hay una edición en curso y los datos mostrados son todavía los
+  antiguos.
+
+- `state` es el de la operación que **creó** el tipo (`pending` | `applied` | `settled` |
+  `failed`). Un tipo cuya creación falló **sigue apareciendo**, con `state: "failed"`: es
+  lo que permite al administrador verlo y decidir qué hacer (la política de reintento está
+  en `docs/plan-juego.md` 10.5). Nunca aparece en el inventario de un tenedor.
+- `qualities` no incluye la clave reservada `collection`.
+- Los datos salen de SQLite, no de la cadena: el backend guarda las `qualities` al crear
+  el tipo. No refleja existencias; para eso, el inventario de un tenedor (5.2).
+- Orden: el más reciente primero. Sin paginación (sección 8).
+- Es una lectura con `read_token`, y por tanto de acceso público de facto como el resto
+  (limitación 12.5): el catálogo ya es público en la cadena.
 
 ---
 
@@ -323,3 +419,5 @@ cerrado con la opción más simple, y quedan listados para que el cambio sea vis
 |---|---|
 | 2026-09-06 | Versión inicial. Congelada. |
 | 2026-10-09 | Sección 3: se documenta que la clave de idempotencia la construye el plugin a partir de un `call_id` del juego. Sin cambio de forma en ningún endpoint ni cabecera. |
+| 2026-10-11 | Sección 4.6: la edición de un tipo pasa a ser `PATCH /v1/items/{item_id}` (antes `…/qualities`), con `name`, `uri` y `qualities` como conjunto completo; `symbol` y `collection_id` no se editan. Sigue fuera del hito. Sección 5.4: se añaden `revision` y `edit` a cada tipo. Una edición a la vez por tipo; `revision` sube al aceptarla. |
+| 2026-10-11 | Secciones 5.3 y 5.4: `GET /v1/collections` y `GET /v1/items` (listados de catálogo para la web de administración). Sólo lecturas nuevas; ninguna ruta existente cambia. Fuera del hito: bajo la línea de corte. Sección 2: se aclara que las rutas `/admin` de la consola no son parte del contrato. |
