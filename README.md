@@ -31,13 +31,13 @@ Dispositivo del jugador
     Proyecto Godot 4  +  addon godot-chain (GDExtension en Rust)
         | escrituras                          | lecturas
         v                                     |
-    game-server de ejemplo (nidada-server)    |
+    game-server de ejemplo                    |
         | clave de escritura                  |
         v                                     v
     chain-backend  (TypeScript + SQLite)
         | claves derivadas de una semilla maestra por juego
         v
-    Solana devnet  -  Token-2022
+    Solana devnet  -  chain-assets (Anchor)  -CPI->  Token-2022
 ```
 
 Las **escrituras** van del juego al servidor de juego y de ahí al backend, nunca
@@ -51,24 +51,27 @@ token de sólo lectura.
 | Directorio | Contenido |
 |---|---|
 | `addon/addons/godot_chain/` | El addon. Hoy, un esqueleto en GDScript; será el envoltorio de la GDExtension |
+| `programs/chain-assets/` | El programa Anchor, que controla los activos Token-2022 mediante PDA. Aún no existe |
 | `backend/` | El servicio: TypeScript, Node >= 22, SQLite |
 | `rust/` | Workspace de Cargo: reglas, GDExtension y servidor de *Nidada*. `godot-chain` irá aquí, aún no existe |
-| `examples/godot-demo/` | Proyecto Godot que ejecuta el hito |
+| `examples/chain-demo/` | Proyecto Godot de la demo sencilla que ejecuta el hito. Aún no existe |
+| `examples/game-server/` | Servidor de juego mínimo del hito. Aún no existe |
+| `examples/godot-demo/` | Proyecto Godot de *Nidada*, un juego de mascotas aparte del hito |
 | `docs/especificacion/propuesta-pfm.md` | **La especificación.** Única fuente de verdad |
 | `docs/especificacion/http-contract.md` | **Contrato HTTP, congelado.** El artefacto del que cuelga todo |
 | `docs/seguimiento/verificaciones.md` | Hechos comprobados, con fecha, y lo que falta por comprobar |
 | `docs/seguimiento/preguntas-tutor.md` | Lo que bloquea el proyecto y no decide quien implementa |
-| `docs/juego/` | Diseño y plan del juego de ejemplo, *Nidada* |
+| `docs/juego/` | Diseño y plan de *Nidada* |
 | `docs/archivo/` | Documentos superados. Sólo contexto |
 
 ## Estado
 
-**Librería:** bloque 1 de 10 completado (esqueleto, contrato congelado, CI). El backend
-y el addon todavía no hacen nada. Plan de trabajo en la sección 8 de
+**Librería:** bloque 1 completado (esqueleto, contrato congelado, CI). El programa, el
+backend y el addon todavía no hacen nada. Plan de trabajo en la sección 8 de
 `docs/especificacion/propuesta-pfm.md`.
 
-**Juego de ejemplo, *Nidada*:** fases J1 (cuidado) y J5 (amigos y visitas) hechas, en
-escritorio. Todavía no usa `godot-chain`. Plan en `docs/juego/plan.md`.
+***Nidada*:** fases J1 (cuidado) y J5 (amigos y visitas) hechas, en escritorio. Es un
+proyecto aparte, fuera del hito, y no usa `godot-chain`. Plan en `docs/juego/plan.md`.
 
 ## Requisitos
 
@@ -113,20 +116,26 @@ Son decisiones, no defectos:
    rompería la idempotencia.
 8. **El identificador de jugador debe ser inmutable.** Si cambia, sus objetos quedan
    bajo una clave derivada que nadie reclama.
+9. **`chain-assets` no está auditado.** Tiene poder sobre todos los activos de cada juego:
+   apto para devnet, no para mainnet sin una auditoría.
+10. **Quien tenga la autoridad de actualización del programa controla todos los juegos.**
+    En devnet se conserva para poder corregir errores; un despliegue real tendría que
+    congelarla o que cada estudio desplegara su propio programa.
 
 ## Procedimiento de rotación ante compromiso de la semilla
 
 Escrito, no implementado:
 
 1. Generar una semilla maestra nueva y una autoridad nueva.
-2. Para cada activo existente, transferir la autoridad de emisión a la nueva autoridad.
-3. Para cada tenedor, mover su saldo a la dirección derivada de la nueva semilla usando
-   el delegado permanente antiguo, mientras siga siendo válido.
+2. Ejecutar `rotate_authority` con la autoridad antigua. Los activos no cambian, porque sus
+   poderes los tiene la PDA del juego.
+3. Para cada tenedor, mover su saldo a la dirección derivada de la nueva semilla con
+   `transfer`.
 4. Republicar el mapa `holder_id` -> dirección.
 5. Destruir la semilla comprometida.
 
-El paso 3 depende de si el delegado permanente puede reasignarse tras la creación del
-activo: pendiente de verificar (`docs/seguimiento/verificaciones.md`, P2).
+Es una carrera: quien tenga la semilla comprometida también puede ejecutar
+`rotate_authority`, y si lo hace primero, el estudio pierde el juego.
 
 ## Licencia
 

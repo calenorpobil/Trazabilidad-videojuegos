@@ -1,10 +1,11 @@
 # Propuesta PFM — `godot-chain`
 
 **Activos de Solana en Godot 4 sin que el jugador vea la cadena.**
-Versión reducida, dimensionada para **un mes / unas 44 horas reales** de desarrollo asistido con Claude Code
-(40 en la redacción original; ver la revisión del 8 de octubre, abajo).
+Versión reducida, dimensionada en **unas 53 horas reales** de desarrollo asistido con Claude Code
+(40 en la redacción original; ver las revisiones de abajo).
 
-Fecha de redacción: 25 de agosto de 2026. **Revisada el 8 de octubre de 2026** (cliente en Rust, sección 2).
+Fecha de redacción: 25 de agosto de 2026. **Revisada el 8 de octubre de 2026** (cliente en Rust, sección 2)
+**y el 4 de noviembre de 2026** (programa Anchor propio y demo sencilla).
 
 ---
 
@@ -27,18 +28,41 @@ cambia: secciones 2, 3, 4.6, 6, 8, 9, 10, 11, 12, 13, 14 y 15. **No cambia:** el
 el contrato HTTP (congelado), el hito de la sección 7, y los invariantes 1, 2, 3, 5, 6, 7 y 8 de
 `CLAUDE.md`. Lo que queda abierto es la **Q7** (sección 14): las horas extra.
 
-### 0.1 Requisitos básicos que se asume que hay que cumplir
+### Revisión del 4 de noviembre de 2026
 
-Marcados como supuestos porque no constan por escrito. **Confírmalos con el tutor antes de escribir
-la primera línea** (ver sección 14).
+El responsable del proyecto decidió dos cosas a la vista de las instrucciones de entrega del máster
+(0.1):
 
-| # | Supuesto | Cómo lo cumple este proyecto |
-|---|---|---|
-| R1 | Uso real y no trivial de Solana | Transacciones reales en devnet con Token-2022 y la extensión de metadatos |
-| R2 | Producto demostrable de extremo a extremo | Hito de la sección 7, ejecutable en vivo desde Godot |
-| R3 | Decisiones de arquitectura justificadas | Secciones 3, 4 y 12 |
-| R4 | Calidad de ingeniería: tests, CI, documentación | Secciones 9 y 8, bloques 7 y 10 |
-| R5 | Alcance realista para el tiempo disponible | Sección 8, con presupuesto horario y línea de corte |
+1. **Se escribe un programa Anchor propio**, `chain-assets` (4.7). Revierte la premisa 3 y el
+   invariante 8 anterior. Los activos siguen siendo Token-2022 reales: el programa tiene los poderes
+   sobre ellos mediante PDA, no reimplementa tokens ni contiene lógica de juego.
+2. **El hito se demuestra con una demo sencilla**, no con *Nidada* (sección 7). *Nidada* sigue en el
+   repositorio como proyecto aparte y deja de condicionar la librería.
+
+Cambian las secciones 0.1, 1, 3, 4.1, 4.2, 4.3, 4.6, 7, 8, 9, 10, 11, 12, 13 y 14, y se añade la 4.7.
+**No cambian:** el contrato HTTP (congelado), el backend en TypeScript, el cliente en Rust, el
+vocabulario sin cadena de `addon/`, y los invariantes 1 a 7 de `CLAUDE.md`. Quedan abiertas la **Q1**,
+para confirmarla con el tutor, y la **Q7**, ahora sobre 53 h. El hito ya no necesita Android ni reglas
+compartidas: Rust en el cliente se sostiene por ser decisión del responsable (sección 2, motivo 2).
+
+### 0.1 Requisitos de entrega del máster
+
+Hasta el 4 de noviembre eran supuestos. Ahora salen de las instrucciones generales de entrega del TFM,
+que el repositorio no incluye porque son material del curso. **Falta que el tutor confirme que aplican
+tal cual a este proyecto** (sección 14).
+
+| Criterio | Peso | Qué pide | Cómo lo cumple este proyecto |
+|---|---|---|---|
+| Código fuente | 30 % | MVP funcional, código limpio, 5 tests o más, README completo | Hito de la sección 7, secciones 8 y 9 |
+| Programa Solana (Anchor) | 25 % | 5 instrucciones o más, PDAs, validaciones, seguridad, comentarios, desplegado en devnet con Program ID visible | `chain-assets` (4.7) |
+| Vídeo | 15 % | 5 minutos como máximo, 720p, voz, demostración práctica con transacción en un explorador, enlace público | Guion: el hito de la sección 7 |
+| Documentación | 10 % | Diagramas de arquitectura y de flujo de datos (Mermaid preferido, `docs/diagramas.md`), comentarios, 5 capturas o más en `screenshots/` | Último bloque de la sección 8. Si las capturas de la demo valen como «dashboard» es la **Q8** |
+| Innovación | 15 % | Diferenciarse del esqueleto base y documentar qué se añade | Activos Token-2022 reales, jugador sin wallet, firmante único, idempotencia, `applied`/`settled`, cliente Godot |
+| IA y MCP | 5 % | Documentar el uso de IA; MCP es opcional | Sección del README sobre el uso de Claude Code |
+
+También se exige: repositorio público, `LICENSE`, y un README con problema que resuelve, tecnologías,
+instalación, Program ID, casos de uso, capturas, diagramas, enlace al vídeo, innovaciones, uso de IA y
+autor. Retraso: −10 % a 1 día, −20 % a 2-3 días; más de 3 días no se acepta.
 
 ### 0.2 Cómo escribir el código y la documentación
 
@@ -65,17 +89,20 @@ sirva a varios estudios. Es lo que cabe en el presupuesto, y es una decisión, n
 |---|---|---|
 | `godot-chain` (addon) | La GDExtension que el estudio añade a su juego | El estudio, dentro de su juego |
 | `chain-backend` | El servicio, con su consola de administración | El estudio, desplegado por su cuenta |
+| `chain-assets` | El programa on-chain que tiene los poderes sobre los activos (4.7) | Se despliega una vez; cada juego es una PDA suya, controlada por la autoridad del estudio |
 | Servidor de juego | La lógica y las decisiones de **su** juego; llama al backend con el `write_key` | El estudio (lo escribe él) |
 
-*Nidada* es el estudio de ejemplo: aporta un servidor de juego y un juego que integran las dos
-primeras piezas, para demostrar que funciona de extremo a extremo. No forma parte de lo que se
-entrega.
+La demo del hito (`examples/chain-demo/` y `examples/game-server/`) hace de estudio de ejemplo: integra
+las piezas para demostrar que funciona de extremo a extremo. No forma parte de lo que se entrega a un
+estudio. *Nidada*, el juego de mascotas, sigue como proyecto aparte, fuera del hito.
 
 **Premisas que no se negocian:**
 
 1. El jugador no percibe la blockchain. Nada de *seed phrases*, gas ni wallets.
 2. El addon no gestiona identidad. Recibe el identificador del jugador desde fuera.
-3. No se despliega ningún programa propio. Sólo programas ya desplegados y auditados.
+3. Un único programa propio, mínimo y sin lógica de juego (4.7). Los activos son Token-2022, un
+   programa ya desplegado: no se reimplementan tokens. El desarrollador del juego sigue sin escribir
+   código on-chain.
 4. Ningún concepto de Solana cruza a GDScript. Si se filtra, es un fallo de diseño, y la CI lo
    detecta automáticamente (sección 9).
 5. Las claves privadas nunca están en el binario del juego.
@@ -115,13 +142,13 @@ Dispositivo del jugador
     Proyecto Godot 4  +  addon godot-chain (GDExtension en Rust)
         │ escrituras                          │ lecturas
         ▼                                     │
-    game-server de ejemplo (Rust, nidada-server)│
+    game-server de ejemplo (examples/game-server)
         │  clave de escritura                 │
         ▼                                     ▼
     chain-backend  (TypeScript + SQLite)
         │  claves derivadas de una semilla maestra por juego
         ▼
-    Solana devnet  —  Token-2022
+    Solana devnet  —  chain-assets (Anchor)  ──CPI──▶  Token-2022
 ```
 
 **Escrituras** (crear un objeto, entregarlo, transferirlo) van del juego al servidor de juego, y de
@@ -216,9 +243,9 @@ línea de corte (8.1).
 | Tipo de activo | **Sólo fungibles.** 0 decimales, supply ≥ 1 |
 | Atributos on-chain | **Sólo por tipo**, en `additional_metadata` del mint |
 | Atributos por jugador | No existen en v1. Ni en el backend ni en ningún sitio |
-| `PermanentDelegate` | **Activado** al crear cada mint, apuntando a la autoridad del juego |
+| `PermanentDelegate` | **Activado** al crear cada mint, apuntando a la PDA del juego (4.7) |
 | `NonTransferable` | **No.** Ver 12.4 |
-| Programa propio | Ninguno |
+| Programa propio | **`chain-assets`**, mínimo y sin lógica de juego (4.7) |
 | Operaciones en lote | **No.** Ocho objetos son ocho transacciones |
 
 **Por qué Token-2022 y no Metaplex.** Metaplex Token Metadata está marcado por su propio autor como
@@ -232,8 +259,8 @@ porque el jugador nunca ve una cartera.
 **Por qué sólo atributos por tipo.** Fungible significa intercambiable. Si la copia de un jugador
 tuviera atributos distintos a la de otro, no serían el mismo token. En Solana los metadatos viven en
 el mint, que es *el tipo*, no *el ejemplar*; las extensiones a nivel de cuenta de token controlan
-comportamiento y no almacenan datos arbitrarios. Atributos divergentes por jugador exigirían un
-programa propio o activos no fungibles, y ambas cosas están descartadas.
+comportamiento y no almacenan datos arbitrarios. Atributos divergentes por jugador exigirían guardar
+estado por ejemplar en el programa o usar activos no fungibles, y ambas cosas están descartadas.
 
 **Nota crítica sobre extensiones.** La mayoría de extensiones de Token-2022 se activan al crear el
 mint y **no se pueden añadir después**. Lo que no se decida ahora no se puede retrofitear sobre
@@ -246,13 +273,22 @@ es también la cuenta pagadora.
 
 Cómo se sostiene, operación por operación:
 
-| Operación | Instrucción | Quién firma |
-|---|---|---|
-| Crear un tipo de objeto | `CreateAccount` + `InitializeMetadataPointer` + `InitializeMint` + `InitializeTokenMetadata` | Autoridad (como pagadora, como *mint authority* y como **autoridad de actualización** de los metadatos, que se fija aquí: sin ella el tipo sería inmutable) |
-| Editar un tipo (fuera del hito) | Transferencia de lamports si crece + `UpdateField` y `RemoveKey` (13, puntos 5 a 8) | Autoridad (como pagadora y como autoridad de actualización) |
-| Crear la cuenta de token de un jugador | `CreateAssociatedTokenAccount` | Autoridad (como pagadora; el propietario no firma) |
-| Entregar unidades a un jugador | `MintTo` | Autoridad (como *mint authority*) |
-| Transferir entre jugadores | `TransferChecked` | Autoridad (como **permanent delegate**) |
+| Operación | Instrucción de `chain-assets` | Por dentro, por CPI | Firma de la transacción |
+|---|---|---|---|
+| Crear un tipo de objeto | `create_item` | `CreateAccount` + `InitializeMetadataPointer` + `InitializePermanentDelegate` + `InitializeMint` + `InitializeTokenMetadata` | Autoridad, como pagadora. El mint y la PDA del juego firman con sus semillas |
+| Crear la cuenta de token de un jugador | Dentro de `grant` y `transfer` | `CreateAssociatedTokenAccount` | Autoridad, como pagadora; el propietario no firma |
+| Entregar unidades a un jugador | `grant` | `MintTo` | Autoridad. La PDA del juego actúa como *mint authority* |
+| Transferir entre jugadores | `transfer` | `TransferChecked` | Autoridad. La PDA del juego actúa como **permanent delegate** |
+| Cambiar la autoridad del juego | `rotate_authority` | Ninguno | Autoridad actual |
+| Editar un tipo (fuera del hito) | `update_item`, sólo si se construye la consola (4.7) | Transferencia de lamports si crece + `UpdateField` y `RemoveKey` (13, puntos 5 a 8) | Autoridad, como pagadora. La PDA del juego actúa como autoridad de actualización |
+
+La firma de una PDA por CPI (`invoke_signed`) no es una firma de la transacción: el invariante se
+refiere a las firmas requeridas de la transacción, y ésas siguen siendo una.
+
+**Corrección del 4 de noviembre de 2026.** La versión anterior de esta tabla era incorrecta: daba por
+hecho que al crear un tipo sólo firmaba la autoridad, pero `CreateAccount` exige también la firma de la
+**cuenta nueva**, y un mint con clave propia habría sido un segundo firmante. Que el mint sea una PDA
+del programa es lo que hace cierto el firmante único.
 
 El jugador emisor de una transferencia **no firma nunca**, porque el permanent delegate puede mover
 tokens de cualquier cuenta de ese mint.
@@ -302,14 +338,14 @@ se escribe en el bloque 2, antes de la implementación.
 **Procedimiento de rotación ante compromiso** (escrito, no implementado; va al README):
 
 1. Generar una semilla maestra nueva y una autoridad nueva.
-2. Para cada mint existente, transferir el `mint authority` a la nueva autoridad con `SetAuthority`.
-3. Para cada tenedor, mover su saldo a la dirección derivada de la nueva semilla usando el permanent
-   delegate antiguo, mientras siga siendo válido.
+2. Ejecutar `rotate_authority` con la autoridad antigua: una sola transacción. Los mints no cambian,
+   porque sus poderes los tiene la PDA del juego, no la autoridad.
+3. Para cada tenedor, mover su saldo a la dirección derivada de la nueva semilla con `transfer`.
 4. Republicar el mapa `holder_id` → dirección.
 5. Destruir la semilla comprometida.
 
-El paso 3 depende de si el permanent delegate puede reasignarse tras la creación del mint: **es uno
-de los puntos a verificar antes de escribir código** (sección 13).
+Es una carrera: quien tenga la semilla comprometida también puede ejecutar `rotate_authority`. Si lo
+hace primero, el estudio pierde el juego (12.2).
 
 ### 4.4 Persistencia y seguridad
 
@@ -402,19 +438,26 @@ Monorepo, licencia **MIT OR Apache-2.0**, estos directorios:
 | Directorio | Contenido |
 |---|---|
 | `addon/` | `addons/godot_chain/`: `godot_chain.gdextension`, `bin/` con las bibliotecas nativas, `plugin.cfg`, `plugin.gd`. Envoltorio de la GDExtension |
-| `rust/` | Workspace de Cargo: `godot-chain` (la librería), `nidada-rules`, `nidada-ext` y `nidada-server` (el juego de ejemplo) |
+| `programs/chain-assets/` | El programa Anchor (4.7), con `Anchor.toml` en la raíz |
+| `rust/` | Workspace de Cargo: `godot-chain` (la librería), y `nidada-rules`, `nidada-ext` y `nidada-server` (*Nidada*) |
 | `backend/` | TypeScript, Node ≥ 22, el servicio y su suite de tests |
-| `examples/godot-demo/` | Proyecto Godot que ejecuta el hito, con *Nidada* dentro |
+| `examples/chain-demo/` | Proyecto Godot de la demo sencilla, que ejecuta el hito |
+| `examples/game-server/` | Servidor de juego mínimo del hito: TypeScript, `fastify` y `better-sqlite3`, las mismas dependencias que el backend |
+| `examples/godot-demo/` | Proyecto Godot de *Nidada*, fuera del hito |
 
-El servidor de juego de ejemplo ya no es `examples/game-server/` (Node) sino `rust/nidada-server`.
-`godot-chain` y las reglas del juego van en **dos bibliotecas** separadas, para que la librería se
-pueda usar sin el juego (`docs/especificacion/arquitectura-cliente-rust.md`, sección 4).
+El servidor de juego del hito vuelve a ser `examples/game-server/`: reutiliza la pila del backend y sólo
+autoriza, guarda el `call_id` antes de llamar (4.4) y reenvía con el `write_key`. `rust/nidada-server`
+sigue siendo el servidor de *Nidada*. `godot-chain` y las reglas del juego van en **dos bibliotecas**
+separadas, para que la librería se pueda usar sin el juego
+(`docs/especificacion/arquitectura-cliente-rust.md`, sección 4).
 
 **Stack del backend, fijado a versión exacta en `package.json`:**
 
 - `@solana/kit` — es el SDK vigente; `@solana/web3.js` v1 está marcado como heredado y las
   aplicaciones nuevas se construyen sobre Kit.
-- `@solana-program/token-2022` y `@solana-program/token` — clientes generados de los programas.
+- `@solana-program/token-2022` y `@solana-program/token` — clientes generados de los programas, para
+  leer inventarios. Las escrituras pasan por `chain-assets`, con un cliente generado de su IDL para
+  seguir sobre Kit (herramienta y versión por verificar, sección 13).
 - `fastify` para HTTP, `better-sqlite3` para persistencia, `zod` para validar entrada,
   `vitest` para tests.
 
@@ -430,6 +473,44 @@ Las versiones van fijadas con exactitud (`=x.y.z`) en `Cargo.toml`, igual que en
 nativo, la sensibilidad a la versión **no es baja**: `gdext` va fijado (`=0.5.5`), la característica de
 API compilada tiene que ser menor o igual que la versión de Godot en ejecución, y la toolchain de
 Android (NDK, JDK) la dicta la versión de Godot. Rust 1.94.0, fijado en `rust-toolchain.toml`.
+
+### 4.7 Programa on-chain: `chain-assets` (4-nov-2026)
+
+**Decisión: un programa Anchor mínimo, que tiene los poderes sobre los activos y nada más.** Los activos
+siguen siendo Token-2022: el programa no lleva saldos ni reimplementa tokens, sólo los controla por CPI.
+No contiene lógica de juego: quién gana qué lo decide el servidor de juego. Anchor `=1.2.2`, la última
+estable a 4 de noviembre de 2026.
+
+| Cuenta | Semillas | Qué es |
+|---|---|---|
+| `Game` | `["game", game_id]` | Guarda `authority`, `game_id` y `bump`. Es *mint authority*, autoridad de actualización y *permanent delegate* de todos los activos del juego |
+| Mint del tipo | `["item", game, item_seed]` | Mint Token-2022 con sus extensiones. Es una PDA, así que se crea sin clave propia. `item_seed` lo calcula el backend a partir del `item_id` |
+
+| Instrucción | Qué hace | Validaciones principales |
+|---|---|---|
+| `initialize_game` | Crea `Game` y fija su autoridad | `game_id` de longitud acotada; no se puede repetir, porque la PDA ya existe |
+| `create_item` | Crea el mint con `MetadataPointer`, `PermanentDelegate` y `TokenMetadata` | Firma la autoridad de `Game`; límites de `name`, `symbol`, `uri` y `qualities` iguales al contrato 4.3 |
+| `grant` | Crea la cuenta del jugador si hace falta y emite unidades | Firma la autoridad de `Game`; `amount > 0` |
+| `transfer` | Mueve unidades entre jugadores mediante el delegado | Firma la autoridad de `Game`; `amount > 0`; emisor y receptor distintos; el saldo lo rechaza Token-2022 |
+| `rotate_authority` | Cambia la autoridad de `Game` | Firma la autoridad actual; la nueva es distinta |
+
+**Sólo estas cinco**, salvo `update_item`, que se añade únicamente si se construye la consola (8.1),
+porque editar un tipo necesita que la PDA actúe como autoridad de actualización. Cada instrucción emite
+un evento con `emit!` y lleva comentarios de documentación. Cada una tiene al menos un test negativo:
+otro firmante, cantidad cero, tipo de otro juego.
+
+**Por qué compensa, además de pedirlo la entrega (0.1):**
+
+1. **Hace cierto el firmante único.** Un mint PDA no necesita firmar la transacción (4.2).
+2. **Simplifica la rotación.** Cambiar una autoridad es una instrucción, no un recorrido por todos los
+   mints, y deja de depender de si el delegado permanente se puede reasignar (4.3).
+3. **Separa juegos con la misma pieza.** Un solo despliegue del programa sirve a cualquier estudio, cada
+   uno con su `Game`, sin que el servicio deje de ser autoalojado.
+
+**Qué no cambia.** El contrato HTTP sigue igual: `POST /v1/items` devuelve `{ operation_id, item_id }` y
+emite la cantidad inicial, enviando `create_item` y `grant` en la misma transacción si caben (13). Las
+colecciones siguen sin existir on-chain y el jugador sigue sin firmar nada. El addon no sabe que el
+programa existe.
 
 ---
 
@@ -548,83 +629,94 @@ real, y no hay tests de conformidad que lo impidan. Queda anotado en 12.6.
 > colección, crear un objeto con cualidades de tipo, entregarlo al jugador A, transferir una unidad
 > del jugador A al jugador B, y ver el inventario de ambos actualizado en pantalla.
 
+**Se demuestra con una demo sencilla** (`examples/chain-demo/`): una sola escena de Godot, con un botón
+por operación, los inventarios de A y B, y el estado `applied`/`settled` de cada operación. Sin arte, sin
+reglas de juego y sin *Nidada*: su único fin es probar con facilidad las funciones de la cadena, y sus
+pantallas sirven para el vídeo y las capturas. Las transacciones se enseñan en un explorador con las
+firmas que registra el backend, nunca desde `addon/`.
+
 Nada más entra en el proyecto hasta que esto funcione de extremo a extremo. Es también el guion del
 vídeo de demostración.
 
 ---
 
-## 8. Plan de trabajo: unas 44 horas
+## 8. Plan de trabajo: unas 53 horas
 
 Orden estricto. Cada bloque termina con la CI en verde y un commit. No se empieza el siguiente con el
-anterior a medias.
+anterior a medias. **Las horas de los bloques nuevos son una estimación, a medir.**
 
-**El tiempo de desarrollo del juego no cuenta en las horas del PFM.** El presupuesto cubre sólo la
-librería: backend, `godot-chain`, su CI y su documentación. *Nidada* (servidor de juego, escenas,
-arte, reglas) se hace aparte, aunque el hito lo necesite para demostrarse.
+**El tiempo de desarrollo de la demo y de *Nidada* no cuenta en las horas del PFM.** El presupuesto
+cubre la librería: programa, backend, `godot-chain`, su CI y su documentación.
 
 | # | Bloque | h | Acumulado |
 |---|---|---|---|
 | 1 | Contrato HTTP escrito y congelado. Esqueleto del monorepo. `CLAUDE.md`. CI vacía en verde | 3 | 3 |
 | 2 | Backend: configuración, derivación de claves **con vectores de test**, SQLite, idempotencia, máquina de estados de operaciones | 5 | 8 |
-| 3 | Backend: crear item — mint Token-2022 con `MetadataPointer`, `TokenMetadata` y `PermanentDelegate` | 6 | 14 |
-| 4 | Backend: ATA, `MintTo`, `TransferChecked` vía delegate, e inventario con parseo de metadatos | 5 | 19 |
-| 5 | Backend: seguimiento de confirmación `applied → settled`, categorías de error, `INSUFFICIENT_FUNDS` | 2 | 21 |
-| A0 | **Prueba de vida**: GDExtension mínima de Rust con una clase que imprime un texto, cargada en Godot en un teléfono real | 4 | 25 |
-| A1 | `godot-chain` en Rust: `ChainConfig`, `Chain`, `ChainHandle`, pool de `HTTPRequest`, backoff, errores (sustituye al antiguo bloque 6, de 7 h) | 10 | 35 |
-| A2 | Modo mock, `mock_force` y suite *headless* en Rust (sustituye al antiguo bloque 7, de 3 h) | 4 | 39 |
-| A5 | CI de la sección 9 | 2 | 41 |
-| — | README con aviso de Steam, documentación de integración, vídeo de demo (antiguo bloque 10) | 3 | 44 |
+| OC1 | Programa: entorno de Anchor, `initialize_game`, `rotate_authority` y `create_item` con mint PDA, `MetadataPointer`, `TokenMetadata` y `PermanentDelegate`. Tests, también negativos. Despliegue en devnet | 8 | 16 |
+| OC2 | Programa: `grant` y `transfer`, con sus tests | 4 | 20 |
+| 3 | Backend: cliente del programa y crear item, con el **test del invariante de firmante único** | 3 | 23 |
+| 4 | Backend: entregar, transferir e inventario con parseo de metadatos | 3 | 26 |
+| 5 | Backend: seguimiento de confirmación `applied → settled`, categorías de error, `INSUFFICIENT_FUNDS` | 2 | 28 |
+| A0 | **Prueba de vida**: GDExtension mínima de Rust con una clase que imprime un texto, cargada en Godot en un teléfono real | 4 | 32 |
+| A1 | `godot-chain` en Rust: `ChainConfig`, `Chain`, `ChainHandle`, pool de `HTTPRequest`, backoff, errores (sustituye al antiguo bloque 6, de 7 h) | 10 | 42 |
+| A2 | Modo mock, `mock_force` y suite *headless* en Rust (sustituye al antiguo bloque 7, de 3 h) | 4 | 46 |
+| A5 | CI de la sección 9 | 2 | 48 |
+| — | Entregables de 0.1: README completo con aviso de Steam, diagramas Mermaid, capturas, documentación de integración y vídeo (antiguo bloque 10) | 5 | 53 |
 
-**Sin buffer.** Con 44 h no queda colchón: por eso existe la línea de corte.
+**Sin buffer.** Con 53 h no queda colchón: por eso existe la línea de corte.
 
-**Fuera del cómputo — el juego**, estimado sólo para planificar el calendario. Siguen siendo
-necesarios: sin ellos no hay hito que enseñar.
+**Fuera del cómputo — la demo**, estimada sólo para planificar el calendario. Sigue siendo necesaria:
+sin ella no hay hito que enseñar.
 
 | Fase | Contenido | Sustituye a | h estimadas |
 |---|---|---|---|
-| A3 | `nidada-server` mínimo: el corte vertical del hito | Antiguo bloque 8 (2 h) | 5 |
-| A4 | Escena del corte vertical de *Nidada*, exportada y ejecutada en Android | Antiguo bloque 9 (3 h) | 5 |
+| A3 | `examples/game-server/` mínimo | Corte vertical en `nidada-server` (5 h) | 2 |
+| A4 | `examples/chain-demo/`: la escena del hito, en escritorio | Escena de *Nidada* en Android (5 h) | 2 |
 
 **Comparación justa con la redacción original.** Sus 40 h incluían los bloques 8 y 9 (5 h), que eran
-trabajo de juego. Quitándolos, la librería costaba 35 h en GDScript y cuesta 44 h en Rust: **9 h más**
-por Rust en el cliente. Contra el límite de 40 h se pasa en 4 h; hay que confirmar con el tutor que se
-aceptan o aplicar la línea de corte 8.1 desde el principio (**Q7**, sección 14).
+trabajo de juego. Quitándolos, la librería costaba 35 h en GDScript. Rust en el cliente añade 9 h, el
+programa Anchor unas 7 h y los entregables de 0.1 otras 2 h: **53 h**. Contra el límite de 40 h se pasa
+en 13 h; hay que confirmar con el tutor que se aceptan o aplicar la línea de corte 8.1 (**Q7**, sección 14).
 
 ### 8.1 Línea de corte
 
 Si a mitad de A1 el acumulado se ha ido más de un 20%, se recorta **en este orden**, y se
 documenta cada recorte en el README:
 
-1. `PATCH /v1/items/{id}` (edición en el sitio) — ya está fuera; no lo metas «porque es rápido». Se
-   construye con la consola, que es quien lo necesita (3). Estimación, a medir: 3–5 h.
-2. `POST /grants` — el hito no lo necesita; `POST /items` ya emite la cantidad inicial.
-3. `mock_force` y la parte del modo mock que prueba reversiones; conserva el mock básico.
-4. La demo Godot se reduce a una escena única con botones y `Label`, sin arte ni pulido.
-5. Si la Q7 se responde que no a las 44 h: se aplica esta línea entera desde el principio.
+1. `PATCH /v1/items/{id}` (edición en el sitio) y `update_item` — ya están fuera; no los metas «porque
+   es rápido». Se construyen con la consola, que es quien los necesita (3). Estimación, a medir: 3–5 h.
+2. **Android: A0 y `android-build`.** El hito ya no lo necesita, porque la demo corre en escritorio.
+   Unas 5 h. Pendiente de decisión del responsable: la decisión de Android del 6 de octubre era para
+   *Nidada*.
+3. `POST /grants` — el hito no lo necesita; `POST /items` ya emite la cantidad inicial. La instrucción
+   `grant` se conserva, porque `POST /items` la usa.
+4. `mock_force` y la parte del modo mock que prueba reversiones; conserva el mock básico.
+5. Si la Q7 se responde que no a las 53 h: se aplica esta línea entera desde el principio.
 
 Los dos listados de catálogo (`GET /v1/collections` y `GET /v1/items`, 11-oct-2026) y la consola de
 administración (3) no entran en el hito: sirven sólo a esa consola. Se recortan **antes** que el punto 1. No cuentan en el
-presupuesto de 44 h hasta que se decida lo contrario, y quien los implemente debe apuntar las horas
+presupuesto de 53 h hasta que se decida lo contrario, y quien los implemente debe apuntar las horas
 aparte para que esa decisión se tome con datos.
+
+**El programa no se recorta por debajo de cinco instrucciones**, porque es lo que pide la entrega (0.1).
 
 **Nunca se recorta el último bloque (README, documentación, vídeo).** Un proyecto funcionando sin documentar puntúa peor que uno con
 menos alcance bien documentado.
 
 ### 8.2 Reparto por semanas
 
-Las dos primeras semanas no cambian, porque son el backend:
-
 | Semana | Bloques | h |
 |---|---|---|
 | 1 | 1, 2 | 8 |
-| 2 | 3, 4 | 11 |
+| 2 | OC1, OC2 | 12 |
+| 3 | 3, 4, 5 | 8 |
 
-Las semanas 3 y 4 (bloque 5, A0, A1, A2, A5 y la documentación: 25 h) **se rehacen cuando se
-responda la Q7**, porque dependen de cuántas horas se aceptan. **A0 va antes que el resto del cliente**
-(ver 10): es la prueba que puede tumbar la decisión entera.
+El resto (A0, A1, A2, A5 y la documentación: 25 h) **se reparte cuando se responda la Q7**, porque
+depende de cuántas horas se aceptan y de si Android sigue. Si sigue, **A0 va antes que el resto del
+cliente** (ver 10): es la prueba que puede tumbar la decisión entera.
 
-La semana 2 es la de mayor riesgo: es donde vive Token-2022. Si algo se va a torcer, se tuerce ahí,
-y por eso el plan B de la sección 10 se decide como muy tarde al final del bloque 3.
+La semana 2 es la de mayor riesgo: es donde viven Anchor y Token-2022. Si algo se va a torcer, se tuerce
+ahí, y por eso el plan B de la sección 10 se decide como muy tarde al final de OC1.
 
 ---
 
@@ -635,9 +727,10 @@ GitHub Actions, un solo runner Linux. La matriz de compilación vuelve, pero peq
 | Trabajo | Qué hace |
 |---|---|
 | `backend` | `tsc --noEmit`, `eslint`, `vitest run` (incluye los vectores fijos de derivación de claves y el **test del invariante de firmante único**: ninguna transacción construida requiere más de una firma), `npm audit --audit-level=high` y revisión de licencias |
+| `program` | `anchor build` y los tests de `chain-assets`, sin devnet |
 | `rust-check` | `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test` de todo el workspace |
 | `rust-guards` | `cargo tree` de `godot-chain` y `nidada-ext` sin `solana-*`, `spl-*`, `tokio` ni `reqwest`; `nidada-rules` sin ninguna dependencia; sin `std::thread`. `cargo deny` para licencias y avisos |
-| `vocab-guard` | **Guardia de vocabulario:** `grep -riE '(solana|pubkey|lamport|blockhash|base58|spl|mint)'` sobre `addon/`, `rust/godot-chain/src` y `rust/nidada-ext/src` debe devolver vacío. Si falla, la costura está rota |
+| `vocab-guard` | **Guardia de vocabulario:** `grep -riE '(solana|pubkey|lamport|blockhash|base58|spl|mint)'` sobre `addon/`, `rust/godot-chain/src`, `rust/nidada-ext/src` y `examples/chain-demo/` debe devolver vacío. Si falla, la costura está rota |
 | `android-build` | `cargo ndk` para `arm64-v8a` y `x86_64`, en `release`. Sólo comprueba que enlaza |
 | `godot-headless` | Compila las GDExtension para `linux-x86_64` y ejecuta la suite de `godot-chain` en modo mock, sin red, con Godot *headless* |
 
@@ -658,7 +751,9 @@ Un plan B sin disparador es una excusa. Cada uno tiene condición de activación
 
 | Riesgo | Disparador | Plan B |
 |---|---|---|
-| El API de `@solana/kit` con Token-2022 cuesta más de lo previsto | 2 h dentro del bloque 3 sin un mint con metadatos en devnet | Cambiar a `@solana/web3.js@1` + `@solana/spl-token` + `@solana/spl-token-metadata`, que tienen más material publicado. **Decidir antes de acabar el bloque 3, nunca después** |
+| Crear por CPI un mint PDA con metadatos cuesta más de lo previsto o no cabe en una transacción | 3 h dentro de OC1 sin un mint PDA con metadatos en devnet | Que el mint tenga clave propia y `create_item` exija su firma como excepción **documentada** al invariante 1, o reducir los límites de `qualities` sin tocar el contrato salvo decisión explícita. **Decidir antes de acabar OC1, nunca después** |
+| El entorno de Anchor no funciona en la máquina de desarrollo (Windows, disco casi lleno) | 1 h dentro de OC1 sin `anchor build` | Compilar en WSL con espacio liberado, o en la CI con el trabajo `program` |
+| El cliente generado del IDL sobre `@solana/kit` cuesta más de lo previsto | 2 h dentro del bloque 3 sin llamar al programa desde el backend | Cambiar a `@solana/web3.js@1` + `@coral-xyz/anchor`, que tienen más material publicado. **Decidir antes de acabar el bloque 3, nunca después** |
 | El faucet de devnet se agota | Dos peticiones de airdrop rechazadas seguidas | Validador local (`solana-test-validator`) con `--clone` del programa Token-2022 para desarrollo; devnet sólo para la demo final |
 | El sondeo en `_process` resulta inestable | A1 supera 12 h (el margen de 2 h que tenía el antiguo bloque 6) | Reducir a sondeo con `Timer` a intervalo fijo, sin backoff, y documentar la pérdida |
 | **La GDExtension no carga en Android** | A0 supera **4 h** sin la clase funcionando en un teléfono | Volver al addon GDScript de la redacción original, sin cambios (secciones 2 y 6 tal como estaban). Rust se queda sólo en `nidada-server`. **Se decide al acabar A0, nunca después** |
@@ -676,7 +771,8 @@ No implementar, no diseñar, no dejar hooks especulativos:
 - Staking, marketplace, multi-chain, Unity
 - NFTs comprimidos y activos no fungibles de cualquier tipo
 - Metaplex, en cualquiera de sus programas
-- Programa Anchor propio y cualquier lógica de juego on-chain
+- Lógica de juego on-chain, saldos propios en el programa, y cualquier instrucción de `chain-assets` que no
+  esté en 4.7
 - Gestión de identidad o login
 - Salida de activos a wallets del jugador (`claim`)
 - Operaciones en lote
@@ -686,7 +782,7 @@ No implementar, no diseñar, no dejar hooks especulativos:
   credenciales por estudio, aislamiento de datos, custodia de varias semillas y facturación
 - Alta disponibilidad, réplicas, métricas
 - Panel de administración **dentro del hito**: la consola de 3 existe, pero se recorta antes que
-  nada (8.1) y no cuenta en las 44 h
+  nada (8.1) y no cuenta en las 53 h. Si la Q8 exige un «dashboard», se reconsidera con el tutor
 - iOS: la arquitectura no lo impide, pero no se compila, no se prueba y no se promete
 - `armv7` y x86 de 32 bits
 - Publicación en Google Play: se distribuye el APK de depuración
@@ -735,6 +831,11 @@ que nadie —empezando por el tribunal— las descubra por sorpresa.
     una edición en el sitio (contrato 4.6) alcanza a todo lo ya repartido y no deja rastro de los
     valores anteriores en el tipo. Quien necesite conservar lo antiguo debe crear un tipo nuevo. Y como
     el `symbol` no se edita, un error en el símbolo exige también un tipo nuevo.
+13. **`chain-assets` no está auditado.** Tiene poder sobre todos los activos de cada juego. Es apto para
+    devnet, que es el alcance de este proyecto; no para mainnet sin una auditoría.
+14. **Quien tenga la autoridad de actualización del programa controla todos los juegos.** Puede cambiar
+    el código y, con él, mover cualquier activo. En devnet se conserva para poder corregir errores; un
+    despliegue real tendría que congelarla o que cada estudio desplegara su propio programa.
 
 ---
 
@@ -796,39 +897,65 @@ Solana sobre la extensión de metadatos y el código de la interfaz `token-metad
 - **No verificado todavía:** que una GDExtension carga y funciona **en un teléfono real**. Es lo que
   decide la fase A0. El APK generado hasta ahora no se ha instalado en ningún dispositivo.
 
+**Ya verificado el 4 de noviembre de 2026:**
+
+- Godot: la última estable es la 4.7.2-stable, publicada el 18 de agosto. `nidada-ext` compilada con
+  `api-4-7` carga en ella en Windows. Sustituye al punto 1.
+- `SystemInstruction::CreateAccount` declara como `SIGNER` tanto la cuenta pagadora como **la cuenta
+  nueva** (documentación de `solana-system-interface`). Es el motivo de la corrección de 4.2.
+- `anchor-lang`: la última estable es la 1.2.2. Hay una 2.0.0-rc.2, que no se usa (crates.io).
+- Anchor admite extensiones de Token-2022 con restricciones `extensions::metadata_pointer::…` y
+  `extensions::permanent_delegate::…`, y `token_metadata_initialize` por CPI. Los ejemplos oficiales de
+  `solana-developers/program-examples` pagan aparte la renta de los metadatos con una transferencia.
+  Advertencia de la documentación de Anchor: no todas las instrucciones de extensión están implementadas, y
+  algunas pueden exigir CPI a mano. Esos ejemplos usan un mint con clave propia, **no una PDA**.
+
 **Pendiente de verificar, contra devnet y contra documentación vigente:**
 
 5. Cifras reales de renta de un mint de Token-2022 con `MetadataPointer` + `TokenMetadata` +
    `PermanentDelegate`, y de una cuenta de token asociada. **No uses cifras de memoria.**
-6. Si el `PermanentDelegate` puede reasignarse tras la creación del mint. De ello depende el paso 3
-   del procedimiento de rotación (4.3).
+6. Si el `PermanentDelegate` puede reasignarse tras la creación del mint. Ya no condiciona la rotación
+   (4.3), porque el delegado es una PDA que no cambia. Sólo es curiosidad; no bloquea nada.
 7. Versiones exactas de `@solana/kit` y `@solana-program/token-2022`, y si el API de cliente por
    plugins ha cambiado respecto a los ejemplos que encuentres.
 8. Texto literal vigente de la regla de onboarding de Steam sobre blockchain, y las políticas
    actuales de Google Play y App Store.
+9. **Que un mint PDA con estas extensiones se puede crear por CPI**, con una sola firma en la
+   transacción. Es lo que sostiene 4.2 y 4.7: primera prueba de OC1, contra devnet.
+10. **Que `create_item` más `grant` caben en una transacción** con el máximo del contrato (8 pares de 32 y
+    64 caracteres), en tamaño y en unidades de cómputo. Ver el punto 8 de arriba. Si no caben, el
+    backend rechaza o limita; no parte la operación sin una decisión explícita.
+11. Qué versión de la toolchain de Solana pide Anchor 1.2.2, y cuánto ocupa: el disco de desarrollo
+    está casi lleno.
+12. Qué herramienta genera hoy un cliente sobre `@solana/kit` a partir de un IDL de Anchor 1.x, y qué
+    arnés de tests del programa conviene usar sin devnet.
 
 ---
 
 ## 14. Preguntas para el tutor, que no debes responder tú
 
-**Estas van resueltas antes del primer commit.** La primera puede invalidar el proyecto entero.
+**Conviene resolverlas cuanto antes.** Las instrucciones de entrega (0.1) ya orientan la Q1 y la Q3.
 
-1. **¿El PFM exige escribir un programa on-chain propio (Anchor)?** Esta propuesta usa
-   exclusivamente programas ya desplegados. Si el criterio de evaluación exige código on-chain, hay
-   que rediseñar el proyecto, no ajustarlo.
+1. **¿Se confirma que el PFM exige un programa Anchor propio, con cinco instrucciones como mínimo, y que
+   `chain-assets` (4.7) lo cumple aunque los activos sean Token-2022?** Las instrucciones de entrega
+   lo piden y el proyecto ya lo incorpora (4-nov-2026). Lo que falta es la confirmación.
 2. **¿Se exige que el backend esté en Rust?** Si la respuesta es sí, hay que añadir entre 8 y 12
    horas al presupuesto y aplicar la línea de corte 8.1 desde el principio.
-3. **¿Basta con devnet o hay que demostrar algo en mainnet?**
+3. **¿Basta con devnet o hay que demostrar algo en mainnet?** Las instrucciones de entrega dicen que
+   devnet es suficiente. Sólo falta confirmar que aplican.
 4. **¿La memoria escrita y la presentación cuentan dentro de las horas del proyecto o van aparte?** El plan de
-   la sección 8 asume que van aparte, salvo el bloque 10.
+   la sección 8 asume que van aparte, salvo el último bloque.
 5. **¿Hay que desplegar el backend en un servidor público o basta con ejecutarlo en local durante la
    defensa?**
 6. **¿El proyecto debe ser original respecto a la propuesta de la que deriva, o se admite
    explícitamente como versión reducida de ella?**
-7. **Q7: ¿se aceptan unas 44 h de librería en lugar de 40 h por usar Rust en el cliente, o se aplica
-   la línea de corte 8.1 desde el principio?** Sin respuesta, el plan de la sección 8 no tiene
-   presupuesto. Si además la Q2 se responde que el backend ha de estar en Rust, son otras 8–12 h y
-   `chain-backend` se reescribe (el contrato HTTP seguiría igual).
+7. **Q7: ¿se aceptan unas 53 h de librería en lugar de 40 h, por Rust en el cliente y por el programa
+   Anchor, o se aplica la línea de corte 8.1 desde el principio?** Sin respuesta, el plan de la sección 8
+   no tiene presupuesto. Si además la Q2 se responde que el backend ha de estar en Rust, son otras
+   8–12 h y `chain-backend` se reescribe (el contrato HTTP seguiría igual).
+8. **Q8: ¿las capturas «del dashboard» pueden ser de la demo de Godot y de un explorador?** Las
+   instrucciones piden un dashboard, y la consola de administración está bajo la línea de corte (8.1). Si
+   hace falta una web, la consola deja de ser recortable y hay que presupuestarla.
 
 ---
 
@@ -839,7 +966,7 @@ Con tan pocas horas, la disciplina de sesión importa tanto como el código.
 - **`CLAUDE.md` en la raíz desde el primer commit**, con los invariantes en imperativo: firmante
   único, marcar antes de llamar, cero vocabulario de cadena en `addon/`, nada fuera de la sección 7.
   Es lo que evita que el alcance se expanda solo.
-- **Una sesión por bloque de la sección 8** (los bloques 1 a 5 y las fases A0, A1, A2 y A5). Empezar la sesión pegando el bloque correspondiente.
+- **Una sesión por bloque de la sección 8** (los bloques 1 a 5, OC1 y OC2, y las fases A0, A1, A2 y A5). Empezar la sesión pegando el bloque correspondiente.
   Terminarla con CI en verde y commit. No arrastrar trabajo entre bloques.
 - **Antes de tocar Token-2022, obliga a leer la documentación oficial vigente.** El orden de
   inicialización de extensiones y el cálculo de espacio con TLV son exactamente el tipo de detalle
@@ -847,7 +974,7 @@ Con tan pocas horas, la disciplina de sesión importa tanto como el código.
 - **Tests antes que implementación en dos sitios concretos:** los vectores de derivación de claves
   (bloque 2) y el invariante de firmante único (bloque 3). En el resto, tests después.
 - **La sección 11 es un contrato.** Si Claude Code propone «ya que estamos, añadimos un endpoint
-  para…», la respuesta es no. Ese impulso es lo que convierte 44 horas en 90.
+  para…», la respuesta es no. Ese impulso es lo que convierte 53 horas en 100.
 - **Commits pequeños y frecuentes.** Cuando una sesión se tuerce, revertir sale más barato que
   depurar lo que otro escribió mientras no mirabas.
 

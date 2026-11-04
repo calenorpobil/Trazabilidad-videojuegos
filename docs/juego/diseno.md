@@ -4,6 +4,10 @@
 
 Versión 0.1 — propuesta, 5 de octubre de 2026. Pendiente de revisión.
 
+> **Actualización del 4 de noviembre de 2026.** *Nidada* deja de ser la demostración del hito del PFM
+> (propuesta, sección 7). Este diseño se mantiene para el juego como proyecto aparte; la sección 10, el corte
+> vertical, ya no se construye para el PFM.
+
 ---
 
 ## 0. Estatus de este documento — léelo antes que el resto

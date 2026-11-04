@@ -1,7 +1,7 @@
 # CLAUDE.md — `godot-chain`
 
 Activos de Solana en Godot 4 sin que el jugador vea la cadena.
-Proyecto de fin de máster. Presupuesto: **unas 44 horas** (pendiente de confirmar, Q7), sólo la librería (el juego *Nidada* no cuenta).
+Proyecto de fin de máster. Presupuesto: **unas 53 horas** (pendiente de confirmar, Q7), sólo la librería (ni la demo ni *Nidada* cuentan).
 
 ---
 
@@ -10,7 +10,7 @@ Proyecto de fin de máster. Presupuesto: **unas 44 horas** (pendiente de confirm
 | Documento | Estatus | Cómo usarlo |
 |---|---|---|
 | `docs/especificacion/propuesta-pfm.md` | **ÚNICA FUENTE DE VERDAD** | Es la especificación. Todo lo que se construye sale de aquí, **salvo lo que cambia `docs/especificacion/arquitectura-cliente-rust.md`** |
-| `docs/especificacion/arquitectura-cliente-rust.md` | Decisión del responsable, 6-oct-2026 | Cambia la arquitectura del cliente: Rust + GDExtension en `godot-chain` y `nidada-ext`. Sustituye al invariante 4. La propuesta **ya está actualizada** con esta decisión (revisión del 8-oct-2026); este documento sigue siendo el desarrollo detallado (toolchain, CI, fases A0–A5). La **Q7** (44 h frente a 40) sigue abierta |
+| `docs/especificacion/arquitectura-cliente-rust.md` | Decisión del responsable, 6-oct-2026 | Cambia la arquitectura del cliente: Rust + GDExtension en `godot-chain` y `nidada-ext`. Sustituye al invariante 4. La propuesta **ya está actualizada** con esta decisión (revisión del 8-oct-2026); este documento sigue siendo el desarrollo detallado (toolchain, CI, fases A0–A5). Lo que dice de *Nidada* en el hito y de sus horas queda superado por la revisión de la propuesta del 4-nov-2026. La **Q7** (53 h frente a 40) sigue abierta |
 | `docs/especificacion/http-contract.md` | Congelado en el bloque 1 | Contrato del que cuelga el resto. Cambiarlo exige decisión explícita |
 | `docs/archivo/prompt-documento-implementacion.md` | Referencia | Aspiración, no guía de acción |
 | `docs/archivo/implementacion-v1-descartada.md` | **Histórico, superado** | Describe una arquitectura descartada (Rust + GDExtension + Metaplex). Sólo contexto de a dónde aspira el proyecto |
@@ -27,7 +27,8 @@ múltiples backends): citarlo como justificación es un error.
 ## 1. Invariantes — en imperativo, no negociables
 
 1. **Firmante único.** Toda transacción tiene exactamente una firma requerida: la
-   autoridad del juego, que es también la pagadora. Hay un test que lo verifica.
+   autoridad del juego, que es también la pagadora. Hay un test que lo verifica. Las PDA
+   firman por CPI, y eso no cuenta como firma de la transacción.
 2. **Marcar primero, llamar después.** Ante una escritura, inserta la
    `Idempotency-Key` en SQLite *antes* de tocar Solana. Invertir el orden mintea dos veces.
 3. **Cero vocabulario de cadena en `addon/`.** Ni `solana`, ni `pubkey`, ni `lamport`,
@@ -47,7 +48,11 @@ múltiples backends): citarlo como justificación es un error.
    añadimos…», la respuesta es no.
 7. **Las claves privadas nunca están en el binario del juego.** Las escrituras pasan
    siempre por el servidor de juego.
-8. **Ningún programa on-chain propio.** Sólo programas ya desplegados.
+8. **Un solo programa on-chain propio, `chain-assets`, mínimo y sin lógica de juego.**
+   Decisión del 4-nov-2026 (propuesta, 4.7), que revierte el «ningún programa propio». Tiene
+   los poderes sobre los activos mediante PDA y opera por CPI. Los activos son Token-2022: no
+   reimplementes tokens ni guardes saldos. Sólo las instrucciones de 4.7, cada una con su test
+   negativo. El vocabulario de cadena se queda en `programs/` y `backend/`.
 
 ## 2. Convenciones
 
@@ -64,9 +69,13 @@ múltiples backends): citarlo como justificación es un error.
 | Directorio | Contenido |
 |---|---|
 | `addon/addons/godot_chain/` | Envoltorio de la GDExtension `godot-chain` (`.gdextension`, `bin/`, `plugin.cfg`). Aún no existe |
+| `programs/chain-assets/` | Programa Anchor, con `Anchor.toml` en la raíz. Aún no existe |
 | `backend/` | TypeScript, Node >= 22. El servicio y su suite de tests |
-| `rust/` | Workspace de Cargo: `nidada-rules`, `nidada-ext`, `nidada-server` (hoy) y `godot-chain` (pendiente). Sustituye a `examples/game-server/` |
-| `examples/godot-demo/` | Proyecto Godot de *Nidada* que ejecuta el hito |
+| `rust/` | Workspace de Cargo: `nidada-rules`, `nidada-ext`, `nidada-server` (hoy) y `godot-chain` (pendiente) |
+| `examples/chain-demo/` | Proyecto Godot de la demo sencilla que ejecuta el hito. Aún no existe |
+| `examples/game-server/` | Servidor de juego mínimo del hito, en TypeScript. Aún no existe |
+| `examples/godot-demo/` | Proyecto Godot de *Nidada*, fuera del hito |
+| `examples/Proyecto finalizado/` | Proyecto de ejemplo del curso. Ignorado por git: **nunca lo publiques** |
 | `docs/especificacion/` | Qué se construye: propuesta, arquitectura del cliente, contrato HTTP y maqueta de la consola |
 | `docs/seguimiento/` | Qué falta por resolver: preguntas al tutor y verificaciones |
 | `docs/juego/` | Diseño y plan de *Nidada*, fuera del cómputo de horas |
@@ -76,7 +85,7 @@ múltiples backends): citarlo como justificación es un error.
 
 - **Una sesión por bloque** de la sección 8 de la propuesta. Se empieza pegando el
   bloque. Se termina con CI en verde y commit. No se arrastra trabajo entre bloques.
-- **Antes de tocar Token-2022, lee la documentación oficial vigente.** El orden de
+- **Antes de tocar Token-2022 o Anchor, lee la documentación oficial vigente.** El orden de
   inicialización de extensiones y el cálculo de espacio TLV son exactamente el detalle
   que un modelo reconstruye de memoria y se inventa a medias. Leer, no recordar.
 - **Tests antes que implementación en dos sitios y sólo dos:** los vectores fijos de
@@ -86,13 +95,14 @@ múltiples backends): citarlo como justificación es un error.
 ## 5. Estado actual
 
 - Bloque 1 (esqueleto, contrato, CI): **hecho**.
-- Juego *Nidada* (`rust/`, `examples/godot-demo/`): J1 (cuidado) y J5 (amigos y visitas) hechos,
-  con límites por IP, tokens con hash y decisiones previas a J3/J4 en `docs/juego/plan.md` §9.
-  No habla aún con `godot-chain`.
+- *Nidada* (`rust/`, `examples/godot-demo/`): J1 (cuidado) y J5 (amigos y visitas) hechos, con límites
+  por IP, tokens con hash y decisiones previas a J3/J4 en `docs/juego/plan.md` §9. **Fuera del hito**
+  desde el 4-nov-2026: no se trabaja en ella para el PFM.
 - Siguiente: bloque 2 — configuración, derivación de claves con vectores de test,
-  SQLite, idempotencia, máquina de estados de operaciones.
-- Ver `docs/seguimiento/verificaciones.md` para lo que hay que comprobar contra devnet antes de
-  escribir el bloque 3, y `docs/seguimiento/preguntas-tutor.md` para lo que bloquea el proyecto.
+  SQLite, idempotencia, máquina de estados de operaciones. Después, OC1 y OC2: el programa.
+- Requisitos de entrega del máster: propuesta, 0.1. Revísalos antes de planificar un bloque.
+- Ver `docs/seguimiento/verificaciones.md` para lo que hay que comprobar antes de OC1 y del
+  bloque 3, y `docs/seguimiento/preguntas-tutor.md` para lo que bloquea el proyecto.
 
 ## 6. Comandos
 

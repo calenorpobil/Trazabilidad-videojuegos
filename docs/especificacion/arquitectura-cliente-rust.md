@@ -2,6 +2,11 @@
 
 Versión 0.1 — 6 de octubre de 2026. Pendiente de revisión.
 
+> **Actualización del 4 de noviembre de 2026.** La propuesta, en su revisión de esa fecha, saca a *Nidada*
+> del hito y añade un programa Anchor propio. Sigue vigente lo que aquí se dice del cliente en Rust y de su
+> toolchain. Queda superado lo referido a *Nidada* como demostración del PFM, al presupuesto de 44 h y a
+> las fases A3 y A4. Android pasa a ser recortable (propuesta, 8.1). Si hay contradicción, manda la propuesta.
+
 ---
 
 ## 0. Estatus de este documento — léelo antes que el resto

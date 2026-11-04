@@ -2,6 +2,10 @@
 
 Versión 0.1 — 6 de octubre de 2026.
 
+> **Actualización del 4 de noviembre de 2026.** *Nidada* deja de ser la demostración del hito del PFM, que
+> pasa a una demo sencilla (propuesta, sección 7). Este plan sigue valiendo para *Nidada* como proyecto aparte:
+> J3, J4 y J6 ya no forman parte del PFM.
+
 Desarrolla `docs/especificacion/arquitectura-cliente-rust.md` en fases ejecutables. **Las horas de este plan no
 cuentan en el presupuesto del PFM**: el desarrollo del juego queda fuera del cómputo (sección 11 del
 documento de implementación).

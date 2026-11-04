@@ -58,17 +58,31 @@ Node local: v24.12.0 (el requisito es >= 22).
   comprobar en Linux:** es un paso de la CI, que nunca se ha ejecutado en GitHub (0
   ejecuciones en esa fecha).
 
+### V4 — Base del programa Anchor (4 de noviembre de 2026)
+
+- `SystemInstruction::CreateAccount` declara como `SIGNER` la cuenta pagadora **y la cuenta
+  nueva** (documentación de `solana-system-interface`). Un mint con clave propia es un
+  segundo firmante; por eso el mint de `chain-assets` es una PDA.
+- `anchor-lang`: última estable 1.2.2; existe una 2.0.0-rc.2 que no se usa (crates.io).
+- Anchor admite `extensions::metadata_pointer::…` y `extensions::permanent_delegate::…`,
+  y `token_metadata_initialize` por CPI. Los ejemplos de
+  `solana-developers/program-examples` pagan aparte la renta de los metadatos. Su mint **no
+  es una PDA**, así que esto no demuestra la combinación que necesitamos (P6).
+- La documentación de Anchor avisa de que no todas las instrucciones de extensión están
+  implementadas y de que algunas pueden exigir CPI a mano.
+
 ---
 
 ## Pendiente
 
 | # | Qué hay que verificar | Bloquea | Cómo |
 |---|---|---|---|
-| P1 | Coste real de renta de un activo con puntero de metadatos, metadatos y delegado permanente, y de una cuenta de tenencia asociada. **No usar cifras de memoria** | Bloque 3 | Contra devnet, midiendo |
-| P2 | Si el delegado permanente puede reasignarse tras la creación del activo | Bloque 3, y el paso 3 del procedimiento de rotación (4.3 de la propuesta) | Documentación oficial de Token-2022 + prueba en devnet |
+| P1 | Coste real de renta de un activo con puntero de metadatos, metadatos y delegado permanente, y de una cuenta de tenencia asociada. **No usar cifras de memoria** | OC1 | Contra devnet, midiendo |
+| P2 | Si el delegado permanente puede reasignarse tras la creación del activo. Ya no condiciona la rotación: el delegado es una PDA que no cambia | Nada | Sólo si hace falta |
 | P3 | Si el API de `@solana/kit` 8.2.0 con `@solana-program/token-2022` 0.16.1 difiere de los ejemplos publicados | Bloque 3 | Leer la documentación vigente antes de escribir la primera instrucción |
-| P4 | Texto literal vigente de la regla de onboarding de Steam sobre blockchain, y las políticas actuales de Google Play y App Store | Bloque 10 (aviso del README) | Leer las políticas, citar con fecha |
-| P5 | Versión de Godot que se instala finalmente, y fijarla en el README | Bloque 6 | Instalar y anotar |
-
-**Godot no está instalado en la máquina de desarrollo a 6 de septiembre de 2026.** Hace
-falta antes del bloque 6, y también para el trabajo de Godot en modo headless de la CI.
+| P4 | Texto literal vigente de la regla de onboarding de Steam sobre blockchain, y las políticas actuales de Google Play y App Store | Último bloque (aviso del README) | Leer las políticas, citar con fecha |
+| P5 | Actualizar a la 4.7.2 el Godot de la máquina de desarrollo, que tiene la 4.7.1 | Fase A1 | Instalar y anotar |
+| P6 | Que un mint PDA con estas extensiones se puede crear por CPI, con una sola firma en la transacción | OC1, primera prueba. Sostiene 4.2 y 4.7 de la propuesta | Prueba en devnet |
+| P7 | Que `create_item` más `grant` caben en una transacción con el máximo del contrato (8 pares de 32 y 64 caracteres), en tamaño y en unidades de cómputo | OC1 y bloque 3 | Transacción real con el caso máximo |
+| P8 | Qué toolchain de Solana pide Anchor 1.2.2, y cuánto ocupa. El disco C: está al 99 % | OC1 | Documentación de Anchor y medir |
+| P9 | Qué herramienta genera hoy un cliente sobre `@solana/kit` desde un IDL de Anchor 1.x, y qué arnés de tests conviene usar sin devnet | OC1 y bloque 3 | Documentación vigente |

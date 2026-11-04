@@ -10,7 +10,8 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # nidada-j5 es la rama por defecto en GitHub y la linea de trabajo del PFM.
+    branches: [main, nidada-j5]
   pull_request:
   workflow_dispatch:
 
