@@ -15,10 +15,11 @@ Activos de Solana en Godot 4 sin que el jugador vea la cadena.
 
 ## Qué es
 
-Un **addon de Godot 4**, en GDScript puro y sin dependencias, que permite a un
-desarrollador crear objetos de juego que existen como activos reales en Solana y
-transferirlos entre jugadores, sin escribir código on-chain y sin que el jugador final
-sepa que hay una blockchain debajo.
+Un **addon de Godot 4**, una GDExtension en Rust, que permite a un desarrollador crear
+objetos de juego que existen como activos reales en Solana y transferirlos entre
+jugadores, sin escribir código on-chain y sin que el jugador final sepa que hay una
+blockchain debajo. El addon sólo calcula: no firma ni habla con la cadena, y su HTTP
+pasa por `HTTPRequest` de Godot.
 
 Proyecto de fin de máster. **Sólo devnet.** No apto para producción tal cual: ver
 limitaciones.
@@ -27,10 +28,10 @@ limitaciones.
 
 ```
 Dispositivo del jugador
-    Proyecto Godot 4  +  addon godot-chain (GDScript)
+    Proyecto Godot 4  +  addon godot-chain (GDExtension en Rust)
         | escrituras                          | lecturas
         v                                     |
-    game-server de ejemplo (Node)             |
+    game-server de ejemplo (nidada-server)    |
         | clave de escritura                  |
         v                                     v
     chain-backend  (TypeScript + SQLite)
@@ -49,9 +50,9 @@ token de sólo lectura.
 
 | Directorio | Contenido |
 |---|---|
-| `addon/addons/godot_chain/` | El addon. GDScript puro, cero dependencias |
+| `addon/addons/godot_chain/` | El addon. Hoy, un esqueleto en GDScript; será el envoltorio de la GDExtension |
 | `backend/` | El servicio: TypeScript, Node >= 22, SQLite |
-| `rust/` | Workspace de Cargo del juego, con el servidor de ejemplo (`nidada-server`) |
+| `rust/` | Workspace de Cargo: reglas, GDExtension y servidor de *Nidada*. `godot-chain` irá aquí, aún no existe |
 | `examples/godot-demo/` | Proyecto Godot que ejecuta el hito |
 | `docs/especificacion/propuesta-pfm.md` | **La especificación.** Única fuente de verdad |
 | `docs/especificacion/http-contract.md` | **Contrato HTTP, congelado.** El artefacto del que cuelga todo |
@@ -62,14 +63,18 @@ token de sólo lectura.
 
 ## Estado
 
-Bloque 1 de 10 completado (esqueleto, contrato congelado, CI). El backend y el addon
-todavía no hacen nada. Plan de trabajo en la sección 8 de
+**Librería:** bloque 1 de 10 completado (esqueleto, contrato congelado, CI). El backend
+y el addon todavía no hacen nada. Plan de trabajo en la sección 8 de
 `docs/especificacion/propuesta-pfm.md`.
+
+**Juego de ejemplo, *Nidada*:** fases J1 (cuidado) y J5 (amigos y visitas) hechas, en
+escritorio. Todavía no usa `godot-chain`. Plan en `docs/juego/plan.md`.
 
 ## Requisitos
 
 - Node >= 22 (desarrollado con 24.12.0)
-- Godot 4.7.x — *versión exacta pendiente de fijar al instalarla (bloque 6)*
+- Rust 1.94.0, fijado en `rust/rust-toolchain.toml`. En Windows, ver `rust/README.md`
+- Godot 4.7.1
 
 ## Desarrollo
 
@@ -79,6 +84,11 @@ npm ci
 npm run typecheck
 npm run lint
 npm test
+
+cd ../rust
+cargo test
+cargo clippy --all-targets -- -D warnings
+./build-ext.sh        # compila nidada-ext y la copia al proyecto Godot
 ```
 
 ## Limitaciones aceptadas conscientemente
