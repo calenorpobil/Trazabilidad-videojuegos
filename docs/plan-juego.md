@@ -395,3 +395,46 @@ Es obligatorio en `POST /v1/items` (contrato 4.3). Va a un **tenedor técnico**
 - **Botón de «corregir» una especie ya creada.** No hay operación de edición ni de borrado.
 - **Alta de un tipo distinto de especie** (accesorios como el Cascabel de luna): el mismo flujo
   vale, pero sus `qualities` y su `initial_grant` se decidirán cuando se necesiten.
+
+## 11. Versiones de reglas entre cliente y servidor — 12 de octubre de 2026
+
+Decidido por el responsable. Se implementa en J3 o J4; nada de esto existe todavía. Es cosa de
+*Nidada*: no toca el contrato HTTP de `godot-chain` ni cuenta en sus horas.
+
+### 11.1 El problema
+
+`nidada-rules` se compila en dos sitios: en `nidada-server`, que es la autoridad, y en el cliente a
+través de `nidada-ext`, que sólo predice para dibujar. Una actualización llega al servidor a la vez
+para todos, pero a los móviles cuando cada jugador actualiza. Mientras tanto, un cliente viejo
+predice con reglas viejas (barras y tiempos que se desvían hasta la siguiente respuesta) y no
+conoce las especies nuevas. No hay riesgo para el estado, porque el cliente no decide nada, pero sí
+para lo que se ve.
+
+### 11.2 Decisión
+
+1. **Una constante.** `RULES_VERSION: u32` en `nidada-rules`. Se sube a mano con cada cambio de
+   reglas o de catálogo.
+2. **El servidor la anuncia.** Todas las respuestas de `nidada-server` llevan la cabecera
+   `X-Rules-Version`.
+3. **El cliente compara.** `nidada-ext` expone su propia `RULES_VERSION`. Si la del servidor es
+   distinta:
+   - deja de predecir: muestra sólo los valores de la última respuesta, sin hacer bajar las barras
+     entre respuestas;
+   - muestra un aviso discreto, que no bloquea: «Hay una versión nueva del juego».
+4. **Especie desconocida.** Si el servidor devuelve una especie que el `SpeciesCatalog` del cliente
+   no tiene, se pinta con un marcador genérico («Especie desconocida») en lugar de fallar. Vale
+   también sin desfase de versión, como red de seguridad.
+5. **Test contra el olvido.** Un test de `nidada-rules` guarda una huella del catálogo y de las
+   tablas de reglas junto a la `RULES_VERSION` con la que se tomó. Si la huella cambia y la versión
+   no, falla. Al subir la versión se actualiza la huella.
+
+### 11.3 Queda fuera
+
+- **Versión mínima obligatoria** (`426 Upgrade Required` y pantalla de «Actualiza»). Se descarta
+  por ahora: estorba en la demo y en las pruebas con APK. Si un día hace falta, se añade una
+  `MIN_RULES_VERSION` en el servidor sin cambiar lo anterior.
+- **Catálogo servido por el servidor**, para ver especies nuevas sin actualizar la app. Choca con
+  `SpeciesCatalog` compilado en `nidada-ext` y duplica la fuente de verdad. Trabajo futuro.
+- **Retoques del catálogo en cadena** (edición en el sitio, 10.4): cambian para todos a la vez,
+  sea cual sea la versión de la app. No necesitan nada de esta sección más allá de subir la
+  `RULES_VERSION`, porque el `catalog.json` sale de `nidada-rules`.
