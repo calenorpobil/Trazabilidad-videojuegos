@@ -24,3 +24,13 @@ export_presets.cfg
 # Sistema
 .DS_Store
 Thumbs.db
+
+# Material de referencia del curso: el repositorio es público, no debe publicarse
+examples/Proyecto finalizado/
+
+# Binarios compilados y notas locales
+build/
+recursos/
+
+# Exportaciones de documentos: la fuente es el .md
+docs/**/*.pdf
