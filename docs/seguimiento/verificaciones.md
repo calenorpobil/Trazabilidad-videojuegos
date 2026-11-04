@@ -45,6 +45,19 @@ Node local: v24.12.0 (el requisito es >= 22).
   de actualización redimensiona la cuenta pero **no** le transfiere fondos. Hay que
   enviarlos antes o falla por falta de exención de renta.
 
+### V3 — Versión de Godot (4 de noviembre de 2026)
+
+- La última estable es la **4.7.2-stable**, publicada el 18 de agosto de 2026 (API de
+  *releases* de GitHub). Es la fijada en el README y en la CI. Corrige a V2: la 4.7.1 ya no
+  es la vigente.
+- En Windows, `nidada-ext` compilada con `api-4-7` carga en la 4.7.2 y `tests/test_ext.gd`
+  pasa con código 0. No probado en Linux ni en Android.
+- En Windows, `--headless --import` termina con fallo de segmentación tras cargar el editor,
+  3 de 3 veces en la 4.7.1 y en la 4.7.2. En la 4.7.2 también falla sin `nidada-ext`, y
+  `--script` funciona después. No depende de la versión ni de la extensión. **Sin
+  comprobar en Linux:** es un paso de la CI, que nunca se ha ejecutado en GitHub (0
+  ejecuciones en esa fecha).
+
 ---
 
 ## Pendiente

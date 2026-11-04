@@ -74,7 +74,7 @@ escritorio. Todavía no usa `godot-chain`. Plan en `docs/juego/plan.md`.
 
 - Node >= 22 (desarrollado con 24.12.0)
 - Rust 1.94.0, fijado en `rust/rust-toolchain.toml`. En Windows, ver `rust/README.md`
-- Godot 4.7.1
+- Godot 4.7.2
 
 ## Desarrollo
 
