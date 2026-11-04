@@ -1,9 +1,8 @@
 name: CI
 
-# Un solo runner Linux, sin matriz de compilacion: al no haber GDExtension en la
-# libreria no hay codigo nativo que compilar por plataforma. Ese es precisamente el
-# beneficio de haber descartado Rust en el cliente. El juego de ejemplo, Nidada, si
-# compila Rust, pero solo para Linux y solo para probarlo (trabajos nidada-*).
+# Un solo runner Linux. El cliente es Rust + GDExtension (seccion 9 de la propuesta),
+# pero por ahora solo existe el de Nidada, que se compila para Linux y solo para
+# probarlo (trabajos nidada-*). La libreria aun no tiene codigo nativo que compilar.
 #
 # Los tests que tocan devnet NO entran aqui: dependen de una red externa y de un
 # faucet con limite. Van en `npm run test:devnet`, ejecutado a mano, y su resultado
@@ -31,24 +30,25 @@ jobs:
 
       # Invariante de diseno convertido en test automatico: ningun concepto de cadena
       # cruza al addon. Si esto falla, la costura entre el juego y la infraestructura
-      # esta rota, y es un fallo de diseno, no de estilo.
+      # esta rota, y es un fallo de diseno, no de estilo. Sin bin/: un binario compilado
+      # contiene cadenas como 'split', y su vocabulario se vigila en el codigo fuente.
       - name: Ningun concepto de cadena en addon/
         run: |
-          if grep -rniE '(solana|pubkey|lamport|blockhash|base58|spl|mint)' addon/; then
+          if grep -rniE --exclude-dir=bin '(solana|pubkey|lamport|blockhash|base58|spl|mint)' addon/; then
             echo "::error::Vocabulario de cadena filtrado en addon/. Ver CLAUDE.md, invariante 3."
             exit 1
           fi
           echo "addon/ limpio."
 
-      # El addon es GDScript puro. Un manifiesto de dependencias o un binario ahi
-      # significa que alguien ha metido algo que no deberia.
-      - name: Ninguna dependencia ni binario en addon/
+      # El addon sera el envoltorio de la GDExtension godot-chain: sus binarios van en
+      # bin/ y en ningun otro sitio. Un manifiesto de dependencias no pinta nada ahi.
+      - name: Ninguna dependencia ni binario suelto en addon/
         run: |
-          if find addon/ -type f \( -name 'package.json' -o -name '*.dll' -o -name '*.so' -o -name '*.dylib' -o -name '*.gdextension' \) | grep .; then
-            echo "::error::addon/ debe ser GDScript puro y sin dependencias."
+          if find addon/ -type f -not -path 'addon/addons/godot_chain/bin/*' \( -name 'package.json' -o -name '*.dll' -o -name '*.so' -o -name '*.dylib' \) | grep .; then
+            echo "::error::addon/ no admite dependencias, y sus binarios solo van en addons/godot_chain/bin/."
             exit 1
           fi
-          echo "addon/ sin dependencias ni binarios."
+          echo "addon/ sin dependencias ni binarios sueltos."
 
   backend:
     name: Backend
