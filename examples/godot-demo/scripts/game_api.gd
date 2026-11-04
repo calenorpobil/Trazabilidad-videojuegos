@@ -1,6 +1,6 @@
 class_name GameApi
 extends Node
-## Cliente del servidor de juego de Nidada (docs/plan-juego.md, sección 4).
+## Cliente del servidor de juego de Nidada (docs/juego/plan.md, sección 4).
 ##
 ## Sin lógica de juego: pide y devuelve. Cada petición devuelve un diccionario
 ## { ok = true, data } o { ok = false, code, message }, con el mensaje listo para

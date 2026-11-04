@@ -1,4 +1,4 @@
-//! Servidor de juego de *Nidada*. Fase J1 de `docs/plan-juego.md`: cuentas anónimas y
+//! Servidor de juego de *Nidada*. Fase J1 de `docs/juego/plan.md`: cuentas anónimas y
 //! bucle de cuidado. Es la autoridad sobre el estado de las mascotas; el cliente sólo
 //! dibuja.
 //!

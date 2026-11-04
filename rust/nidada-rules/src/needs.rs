@@ -1,6 +1,6 @@
 //! Necesidades, crecimiento y etapas de vida (diseño 3.4 y 3.5).
 //!
-//! Modelo de instantáneas (`docs/plan-juego.md`, sección 3): el servidor guarda los
+//! Modelo de instantáneas (`docs/juego/plan.md`, sección 3): el servidor guarda los
 //! valores en un instante y todo lo demás se deriva. Ni el servidor ni el cliente
 //! simulan paso a paso.
 

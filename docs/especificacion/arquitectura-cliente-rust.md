@@ -13,7 +13,7 @@ desarrolla; no la reabre.
 
 **Actualización del 8 de octubre de 2026.** `CLAUDE.md` y la propuesta reducida ya recogen esta
 decisión (la propuesta, en su revisión del 8 de octubre). La tabla de abajo se conserva como historial
-de qué cambió. Lo único que sigue abierto de ella es la **Q7**, en `docs/preguntas-tutor.md`.
+de qué cambió. Lo único que sigue abierto de ella es la **Q7**, en `docs/seguimiento/preguntas-tutor.md`.
 
 Originalmente, la propuesta contradecía a este documento en estos puntos:
 
@@ -25,12 +25,12 @@ Originalmente, la propuesta contradecía a este documento en estos puntos:
 | Propuesta, sección 8 | Plan de 40 h, con los bloques 8 y 9 (juego) dentro | Nuevo presupuesto (sección 11): **unas 44 h**, sólo librería; el juego queda fuera del cómputo |
 | Propuesta, sección 9 | «Sin matriz de compilación» | CI con objetivos Android y Linux (sección 10) |
 | Propuesta, sección 11 | «GDExtension y cualquier código nativo» fuera de alcance | Sacarlo de la lista |
-| `docs/preguntas-tutor.md` | Q2 sigue abierta | Añadir Q7 (sección 13) |
+| `docs/seguimiento/preguntas-tutor.md` | Q2 sigue abierta | Añadir Q7 (sección 13) |
 
 Lo que **no** cambia: el backend sigue en TypeScript, el contrato HTTP sigue congelado tal cual, y
 siguen en pie los invariantes 1, 2, 3, 5, 6, 7 y 8 de `CLAUDE.md`.
 
-Respecto a `docs/diseno-juego.md`: este documento implementa **su sección 10** (el corte vertical)
+Respecto a `docs/juego/diseno.md`: este documento implementa **su sección 10** (el corte vertical)
 en Android para el PFM, y deja escrita la arquitectura del resto del juego para después. Igual que
 allí, el juego se adapta a la librería y no al revés: nada de aquí amplía el contrato HTTP.
 
@@ -435,7 +435,7 @@ No las responde quien implementa.
 | # | Pregunta | Por qué importa |
 |---|---|---|
 | Q7 | ¿Se aceptan unas 44 h de librería en lugar de 40 h por usar Rust en el cliente, o se aplica la línea de corte 8.1 desde el principio? | Sin respuesta, el plan de la sección 11 no tiene presupuesto |
-| — | ¿Q2 de `preguntas-tutor.md` (backend en Rust) cambia con esta decisión? | Si el tutor pide también el backend en Rust, son otras 8–12 h y el contrato HTTP seguiría igual, pero `chain-backend` se reescribe |
+| — | ¿Q2 de `docs/seguimiento/preguntas-tutor.md` (backend en Rust) cambia con esta decisión? | Si el tutor pide también el backend en Rust, son otras 8–12 h y el contrato HTTP seguiría igual, pero `chain-backend` se reescribe |
 | — | ¿La demo final se hace en un teléfono, en el emulador, o en escritorio con el APK como prueba aparte? | Decide si A4 incluye grabar la pantalla del teléfono |
 | — | Política vigente de Google Play sobre contenido basado en blockchain (punto 13.8 de la propuesta) | Aunque no se publique, el README tiene que avisar con el texto actual |
 

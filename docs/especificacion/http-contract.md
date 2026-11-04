@@ -319,7 +319,7 @@ Parámetro opcional: `?collection_id=col_...`. Con un identificador que no exist
 - `state` es el de la operación que **creó** el tipo (`pending` | `applied` | `settled` |
   `failed`). Un tipo cuya creación falló **sigue apareciendo**, con `state: "failed"`: es
   lo que permite al administrador verlo y decidir qué hacer (la política de reintento está
-  en `docs/plan-juego.md` 10.5). Nunca aparece en el inventario de un tenedor.
+  en `docs/juego/plan.md` 10.5). Nunca aparece en el inventario de un tenedor.
 - `qualities` no incluye la clave reservada `collection`.
 - Los datos salen de SQLite, no de la cadena: el backend guarda las `qualities` al crear
   el tipo. No refleja existencias; para eso, el inventario de un tenedor (5.2).

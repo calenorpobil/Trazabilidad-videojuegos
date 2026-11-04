@@ -88,7 +88,7 @@ jobs:
   # red. Entra en el bloque 7, que es cuando existe esa suite. Anadir aqui un trabajo
   # que no ejecuta nada solo sirve para tener una casilla verde que no comprueba nada.
 
-  # Nidada: el juego que sirve de banco de pruebas (docs/plan-juego.md). Su Rust vive
+  # Nidada: el juego que sirve de banco de pruebas (docs/juego/plan.md). Su Rust vive
   # en rust/ y su GDExtension en examples/godot-demo, nunca en addon/: las guardias de
   # arriba siguen valiendo tal cual para la libreria.
   nidada-rust:
@@ -111,7 +111,7 @@ jobs:
       - name: Tests
         run: cargo test --locked
 
-      # Invariantes 2-4 de docs/implementacion-android.md, convertidos en test.
+      # Invariantes 2-4 de docs/especificacion/arquitectura-cliente-rust.md, convertidos en test.
       - name: Reglas sin dependencias
         run: |
           deps=$(cargo tree -p nidada-rules -e normal --prefix none --depth 1 | tail -n +2)

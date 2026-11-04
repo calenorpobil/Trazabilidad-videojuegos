@@ -1,5 +1,5 @@
 /**
- * El contrato HTTP congelado (`docs/http-contract.md`), escrito una sola vez como
+ * El contrato HTTP congelado (`docs/especificacion/http-contract.md`), escrito una sola vez como
  * codigo. Todo lo demas del backend depende de este modulo; nada de lo que hay aqui
  * se redefine en otro sitio.
  *

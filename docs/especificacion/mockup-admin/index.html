@@ -173,7 +173,7 @@ const ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz
 const rid = (prefix, n = 16) => prefix + Array.from({ length: n }, () => ALPHABET[Math.floor(Math.random() * ALPHABET.length)]).join("");
 const now = () => new Date().toLocaleTimeString("es-ES");
 
-/* ---------- Servidor simulado (reglas de docs/http-contract.md) ---------- */
+/* ---------- Servidor simulado (reglas de docs/especificacion/http-contract.md) ---------- */
 const sim = { speed: 3000, failNext: false, failCode: "EXPIRED" };
 const db = { collections: new Map(), items: new Map(), holders: new Map(), ops: new Map(), idem: new Map(), session: [], catalog: new Map() };
 

@@ -1,4 +1,4 @@
-//! Amigos y visitas (fase J5 de `docs/plan-juego.md`, diseño 5).
+//! Amigos y visitas (fase J5 de `docs/juego/plan.md`, diseño 5).
 //!
 //! La amistad va en un sentido: añadir a alguien es guardar su código en tu lista, con
 //! un alias que sólo ves tú. No hay solicitudes ni aceptación.

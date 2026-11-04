@@ -1,6 +1,6 @@
 # Nidada — proyecto Godot
 
-Fase J1 de [`docs/plan-juego.md`](../../docs/plan-juego.md): el bucle de cuidado. Un corral con
+Fase J1 de [`docs/juego/plan.md`](../../docs/juego/plan.md): el bucle de cuidado. Un corral con
 dos mascotas, sus necesidades bajando en tiempo real y botones para alimentar, jugar y dormir.
 Todavía no usa `godot-chain`.
 

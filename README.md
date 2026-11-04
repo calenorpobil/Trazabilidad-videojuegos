@@ -9,7 +9,7 @@ Activos de Solana en Godot 4 sin que el jugador vea la cadena.
 > la razón más común por la que un juego con activos on-chain no llega a la tienda.
 >
 > *Pendiente de contrastar con el texto literal actual de las tres políticas
-> (`docs/verificaciones.md`, P4) antes de la entrega.*
+> (`docs/seguimiento/verificaciones.md`, P4) antes de la entrega.*
 
 ---
 
@@ -51,17 +51,20 @@ token de sólo lectura.
 |---|---|
 | `addon/addons/godot_chain/` | El addon. GDScript puro, cero dependencias |
 | `backend/` | El servicio: TypeScript, Node >= 22, SQLite |
-| `examples/game-server/` | Servidor de juego mínimo. Ejemplo, no producto |
+| `rust/` | Workspace de Cargo del juego, con el servidor de ejemplo (`nidada-server`) |
 | `examples/godot-demo/` | Proyecto Godot que ejecuta el hito |
-| `docs/http-contract.md` | **Contrato HTTP, congelado.** El artefacto del que cuelga todo |
-| `docs/verificaciones.md` | Hechos comprobados, con fecha, y lo que falta por comprobar |
-| `docs/preguntas-tutor.md` | Lo que bloquea el proyecto y no decide quien implementa |
+| `docs/especificacion/propuesta-pfm.md` | **La especificación.** Única fuente de verdad |
+| `docs/especificacion/http-contract.md` | **Contrato HTTP, congelado.** El artefacto del que cuelga todo |
+| `docs/seguimiento/verificaciones.md` | Hechos comprobados, con fecha, y lo que falta por comprobar |
+| `docs/seguimiento/preguntas-tutor.md` | Lo que bloquea el proyecto y no decide quien implementa |
+| `docs/juego/` | Diseño y plan del juego de ejemplo, *Nidada* |
+| `docs/archivo/` | Documentos superados. Sólo contexto |
 
 ## Estado
 
 Bloque 1 de 10 completado (esqueleto, contrato congelado, CI). El backend y el addon
 todavía no hacen nada. Plan de trabajo en la sección 8 de
-`Propuesta_PFM_godot-chain_v1_reducida.md`.
+`docs/especificacion/propuesta-pfm.md`.
 
 ## Requisitos
 
@@ -113,7 +116,7 @@ Escrito, no implementado:
 5. Destruir la semilla comprometida.
 
 El paso 3 depende de si el delegado permanente puede reasignarse tras la creación del
-activo: pendiente de verificar (`docs/verificaciones.md`, P2).
+activo: pendiente de verificar (`docs/seguimiento/verificaciones.md`, P2).
 
 ## Licencia
 

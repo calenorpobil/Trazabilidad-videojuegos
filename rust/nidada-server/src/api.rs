@@ -1,4 +1,4 @@
-//! API HTTP del servidor de juego (`docs/plan-juego.md`, sección 4).
+//! API HTTP del servidor de juego (`docs/juego/plan.md`, sección 4).
 //!
 //! Es interna del juego, no el contrato de `godot-chain`. Los mensajes de error van en
 //! español y sin tecnicismos: el cliente los enseña tal cual.

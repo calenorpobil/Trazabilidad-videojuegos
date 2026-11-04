@@ -1,11 +1,11 @@
 //! Reglas de *Nidada*, compartidas por el servidor de juego y el cliente.
 //!
-//! Puras por diseño (invariante 4 de `docs/implementacion-android.md`): sin Godot, sin red,
+//! Puras por diseño (invariante 4 de `docs/especificacion/arquitectura-cliente-rust.md`): sin Godot, sin red,
 //! sin reloj del sistema y sin aleatoriedad propia. El instante actual y las semillas
 //! entran como argumentos. Así la misma fórmula da el mismo resultado en los dos lados.
 //!
 //! Los tiempos se miden en segundos Unix reales. Las reglas del diseño se expresan en
-//! horas *de juego*; `time_scale` convierte unas en otras (`docs/diseno-juego.md`, 3.4).
+//! horas *de juego*; `time_scale` convierte unas en otras (`docs/juego/diseno.md`, 3.4).
 
 pub mod breeding;
 pub mod friend_code;

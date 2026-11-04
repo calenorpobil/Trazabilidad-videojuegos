@@ -2,7 +2,7 @@
 
 Versión 0.1 — 6 de octubre de 2026.
 
-Desarrolla `docs/implementacion-android.md` en fases ejecutables. **Las horas de este plan no
+Desarrolla `docs/especificacion/arquitectura-cliente-rust.md` en fases ejecutables. **Las horas de este plan no
 cuentan en el presupuesto del PFM**: el desarrollo del juego queda fuera del cómputo (sección 11 del
 documento de implementación).
 
@@ -240,7 +240,7 @@ implementa todavía: aquí quedan decididas para que J3 y J4 no las reinventen.
 ### 9.1 El cliente necesita su `holder_id`
 
 Las lecturas van directas del cliente al backend (`GET /v1/holders/{holder_id}/items`), pero
-el contrato (§4.1 y §9.1 de `docs/http-contract.md`) sólo devuelve el `holder_id` en las
+el contrato (§4.1 y §9.1 de `docs/especificacion/http-contract.md`) sólo devuelve el `holder_id` en las
 respuestas de escritura.
 
 - `players.holder_id`, nullable. El servidor de juego lo guarda en cuanto recibe la primera
@@ -301,7 +301,7 @@ producto.
 
 La **consola de administración** no es parte de *Nidada*: la trae el `chain-backend` (propuesta 3),
 porque el servicio es autoalojado y cada estudio la recibe al desplegarlo. Maqueta en
-`docs/mockup-admin/index.html`. Además de importar el catálogo, sirve para ver el resultado (listado
+`docs/especificacion/mockup-admin/index.html`. Además de importar el catálogo, sirve para ver el resultado (listado
 de tipos, estado de cada operación, inventarios) y para operaciones sueltas.
 
 Qué queda del lado del juego:

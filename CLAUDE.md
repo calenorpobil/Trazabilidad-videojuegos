@@ -9,11 +9,11 @@ Proyecto de fin de máster. Presupuesto: **unas 44 horas** (pendiente de confirm
 
 | Documento | Estatus | Cómo usarlo |
 |---|---|---|
-| `Propuesta_PFM_godot-chain_v1_reducida.md` | **ÚNICA FUENTE DE VERDAD** | Es la especificación. Todo lo que se construye sale de aquí, **salvo lo que cambia `docs/implementacion-android.md`** |
-| `docs/implementacion-android.md` | Decisión del responsable, 6-oct-2026 | Cambia la arquitectura del cliente: Rust + GDExtension en `godot-chain` y `nidada-ext`. Sustituye al invariante 4. La propuesta **ya está actualizada** con esta decisión (revisión del 8-oct-2026); este documento sigue siendo el desarrollo detallado (toolchain, CI, fases A0–A5). La **Q7** (44 h frente a 40) sigue abierta |
-| `docs/http-contract.md` | Congelado en el bloque 1 | Contrato del que cuelga el resto. Cambiarlo exige decisión explícita |
-| `Documento de implementación.md` | Referencia | Aspiración, no guía de acción |
-| `Viejo Documento de implementación.md` | **Histórico, superado** | Describe una arquitectura descartada (Rust + GDExtension + Metaplex). Sólo contexto de a dónde aspira el proyecto |
+| `docs/especificacion/propuesta-pfm.md` | **ÚNICA FUENTE DE VERDAD** | Es la especificación. Todo lo que se construye sale de aquí, **salvo lo que cambia `docs/especificacion/arquitectura-cliente-rust.md`** |
+| `docs/especificacion/arquitectura-cliente-rust.md` | Decisión del responsable, 6-oct-2026 | Cambia la arquitectura del cliente: Rust + GDExtension en `godot-chain` y `nidada-ext`. Sustituye al invariante 4. La propuesta **ya está actualizada** con esta decisión (revisión del 8-oct-2026); este documento sigue siendo el desarrollo detallado (toolchain, CI, fases A0–A5). La **Q7** (44 h frente a 40) sigue abierta |
+| `docs/especificacion/http-contract.md` | Congelado en el bloque 1 | Contrato del que cuelga el resto. Cambiarlo exige decisión explícita |
+| `docs/archivo/prompt-documento-implementacion.md` | Referencia | Aspiración, no guía de acción |
+| `docs/archivo/implementacion-v1-descartada.md` | **Histórico, superado** | Describe una arquitectura descartada (Rust + GDExtension + Metaplex). Sólo contexto de a dónde aspira el proyecto |
 
 **Regla:** los documentos marcados como referencia describen *a lo que aspira* el
 proyecto, **no lo que hay que hacer**. No se implementa nada porque aparezca en ellos.
@@ -34,7 +34,7 @@ múltiples backends): citarlo como justificación es un error.
    ni `blockhash`, ni `base58`, ni `spl`, ni la palabra que designa la cuenta de acuñación.
    La CI lo comprueba con `grep`. Si aparece, la costura está rota.
 4. **Rust en el cliente sólo para calcular, nunca para firmar ni para hablar con la cadena.**
-   Sustituye al antiguo «GDScript puro» (decisión del 6-oct-2026, `docs/implementacion-android.md`
+   Sustituye al antiguo «GDScript puro» (decisión del 6-oct-2026, `docs/especificacion/arquitectura-cliente-rust.md`
    §3). Cinco reglas, comprobadas en la CI:
    - Cero vocabulario de cadena en `godot-chain` y `nidada-ext` (`src/` y API registrada en Godot).
    - Cero crates `solana-*` ni `spl-*` en el dispositivo (`cargo tree`).
@@ -67,7 +67,10 @@ múltiples backends): citarlo como justificación es un error.
 | `backend/` | TypeScript, Node >= 22. El servicio y su suite de tests |
 | `rust/` | Workspace de Cargo: `nidada-rules`, `nidada-ext`, `nidada-server` (hoy) y `godot-chain` (pendiente). Sustituye a `examples/game-server/` |
 | `examples/godot-demo/` | Proyecto Godot de *Nidada* que ejecuta el hito |
-| `docs/` | Contrato HTTP y notas de verificación |
+| `docs/especificacion/` | Qué se construye: propuesta, arquitectura del cliente, contrato HTTP y maqueta de la consola |
+| `docs/seguimiento/` | Qué falta por resolver: preguntas al tutor y verificaciones |
+| `docs/juego/` | Diseño y plan de *Nidada*, fuera del cómputo de horas |
+| `docs/archivo/` | Lo que ya no se sigue. Sólo contexto, nunca justificación |
 
 ## 4. Disciplina de sesión
 
@@ -84,12 +87,12 @@ múltiples backends): citarlo como justificación es un error.
 
 - Bloque 1 (esqueleto, contrato, CI): **hecho**.
 - Juego *Nidada* (`rust/`, `examples/godot-demo/`): J1 (cuidado) y J5 (amigos y visitas) hechos,
-  con límites por IP, tokens con hash y decisiones previas a J3/J4 en `docs/plan-juego.md` §9.
+  con límites por IP, tokens con hash y decisiones previas a J3/J4 en `docs/juego/plan.md` §9.
   No habla aún con `godot-chain`.
 - Siguiente: bloque 2 — configuración, derivación de claves con vectores de test,
   SQLite, idempotencia, máquina de estados de operaciones.
-- Ver `docs/verificaciones.md` para lo que hay que comprobar contra devnet antes de
-  escribir el bloque 3, y `docs/preguntas-tutor.md` para lo que bloquea el proyecto.
+- Ver `docs/seguimiento/verificaciones.md` para lo que hay que comprobar contra devnet antes de
+  escribir el bloque 3, y `docs/seguimiento/preguntas-tutor.md` para lo que bloquea el proyecto.
 
 ## 6. Comandos
 

@@ -22,7 +22,7 @@ marcha.
 El responsable del proyecto decidió el 6 de octubre **volver a escribir el cliente en Rust como
 GDExtension** (`godot-chain`), revirtiendo el recorte más grande de la sección 2. El desarrollo
 detallado de esa decisión —toolchain de Android, estructura, CI, presupuesto— está en
-`docs/implementacion-android.md`, que no la reabre. Esta revisión traslada a la propuesta lo que
+`docs/especificacion/arquitectura-cliente-rust.md`, que no la reabre. Esta revisión traslada a la propuesta lo que
 cambia: secciones 2, 3, 4.6, 6, 8, 9, 10, 11, 12, 13, 14 y 15. **No cambia:** el backend (TypeScript),
 el contrato HTTP (congelado), el hito de la sección 7, y los invariantes 1, 2, 3, 5, 6, 7 y 8 de
 `CLAUDE.md`. Lo que queda abierto es la **Q7** (sección 14): las horas extra.
@@ -155,7 +155,7 @@ Navegador (consola) ──cookie de sesión──▶ chain-backend (rutas /admin
 - **No es parte del contrato HTTP.** Las rutas `/admin` son internas del backend y no las usa el addon
   ni el servidor de juego.
 - **Qué hace:** crear colecciones y tipos, importar un catálogo, entregar, transferir, consultar
-  operaciones e inventarios y listar el catálogo. Maqueta en `docs/mockup-admin/index.html`.
+  operaciones e inventarios y listar el catálogo. Maqueta en `docs/especificacion/mockup-admin/index.html`.
 - **Fuera del hito.** Se recorta junto a los listados (8.1). Cuando exista, el servidor de juego sigue
   siendo quien decide qué gana cada jugador; la consola es para el equipo del estudio.
 
@@ -408,7 +408,7 @@ Monorepo, licencia **MIT OR Apache-2.0**, estos directorios:
 
 El servidor de juego de ejemplo ya no es `examples/game-server/` (Node) sino `rust/nidada-server`.
 `godot-chain` y las reglas del juego van en **dos bibliotecas** separadas, para que la librería se
-pueda usar sin el juego (`docs/implementacion-android.md`, sección 4).
+pueda usar sin el juego (`docs/especificacion/arquitectura-cliente-rust.md`, sección 4).
 
 **Stack del backend, fijado a versión exacta en `package.json`:**
 
@@ -435,7 +435,7 @@ Android (NDK, JDK) la dicta la versión de Godot. Rust 1.94.0, fijado en `rust-t
 
 ## 5. Contrato HTTP
 
-**Escríbelo primero. Es el artefacto del que cuelga todo lo demás.** Va en `docs/http-contract.md`,
+**Escríbelo primero. Es el artefacto del que cuelga todo lo demás.** Va en `docs/especificacion/http-contract.md`,
 versionado, y se congela antes de implementar nada.
 
 Vocabulario **sin cadena**. Si un endpoint necesita decir «blockhash», la costura está rota.
