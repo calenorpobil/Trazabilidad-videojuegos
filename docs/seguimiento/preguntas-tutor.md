@@ -10,7 +10,6 @@ resuelven.
 | # | Pregunta | Por qué se pregunta | Si la respuesta es la que no esperamos |
 |---|---|---|---|
 | Q4 | ¿Hay memoria escrita o defensa, además del vídeo? | «Memoria» sólo aparece en dos sitios: el paso 9 de «Próximos pasos» del enunciado (70, línea 790) y los flujos de estudio del índice (10, líneas 223, 280, 308, 336 y 364: «Escribir memoria TFM (4-6 horas)»). Las instrucciones de entrega (20) no la nombran: ni en los entregables obligatorios, ni en la rúbrica, ni en el checklist final. La defensa no aparece en ninguno. **Por eso el plan no la incluye** | Unas 4-6 h sin presupuestar, ya sin margen |
-| Q10 | ¿Se admite entregar sin wallet conectada, justificándolo en el README? | Las instrucciones la dan por hecha: Phantom en los requisitos del README y «wallet conectada a Devnet» en el checklist del vídeo. Aquí el jugador no tiene wallet por diseño y firma sólo la autoridad. La rúbrica no puntúa la wallet, y las instrucciones dicen «usa una arquitectura diferente si tiene sentido» y «justifica tu arquitectura» | Habría que añadir conexión de wallet al dashboard, para la autoridad; el jugador seguiría sin ella |
 | Q11 | ¿Los avances intermedios son obligatorios, y con qué fechas? | Las instrucciones citan el avance 1 (diseño y programa inicial) y el avance 2 (MVP y código en GitHub), sin fechas reales. La entrega final, sí: 30 de noviembre de 2026 | Habría que adelantar el programa, que hoy se termina a mediados de noviembre |
 
 ## Resueltas por la documentación
@@ -30,4 +29,5 @@ resuelven.
 |---|---|---|
 | Q8 | ¿Valen capturas de la demo como «dashboard»? | Deja de hacer falta: **habrá un dashboard web** (propuesta, sección 3) |
 | Q9 | ¿Se admite un tema propio, fuera de los cinco TFM? | **Sí** |
+| Q10 | ¿Se entrega sin wallet conectada? | **No: se usará Phantom, con ngrok.** Falta decidir qué firma Phantom y para qué hace falta ngrok; hasta entonces la propuesta no cambia |
 | Q11 (fecha) | ¿Cuándo es la entrega? | **30 de noviembre de 2026.** Sigue abierto lo de los avances |
