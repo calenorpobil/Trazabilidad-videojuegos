@@ -2,13 +2,10 @@
 
 Versión 0.1 — 6 de octubre de 2026. Pendiente de revisión.
 
-> **Actualización del 4 de noviembre de 2026.** La propuesta, en su revisión de esa fecha, saca a *Nidada*
-> del hito y añade un programa Anchor propio. Sigue vigente lo que aquí se dice del cliente en Rust y de su
-> toolchain. Queda superado lo referido a *Nidada* como demostración del PFM, al presupuesto de 44 h y a
-> las fases A3 y A4. Si hay contradicción, manda la propuesta.
->
-> **Actualización del 5 de noviembre de 2026.** Android sale del PFM: la toolchain de Android, la fase A0 y
-> `android-build` de este documento sólo valen ya para *Nidada* como proyecto aparte.
+> **Actualización del 5 de noviembre de 2026.** Este documento ya no aplica al PFM: la librería vuelve a un
+> addon en GDScript puro, y *Nidada* y Android salen del hito (propuesta, revisión de esa fecha). Sólo vale
+> para *Nidada* como proyecto aparte, y por eso está en `docs/juego/`. Lo que dice de `godot-chain`, del
+> presupuesto y de la CI del PFM queda superado.
 
 ---
 

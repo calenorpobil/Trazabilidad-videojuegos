@@ -1,8 +1,8 @@
 name: CI
 
-# Un solo runner Linux. El cliente es Rust + GDExtension (seccion 9 de la propuesta),
-# pero por ahora solo existe el de Nidada, que se compila para Linux y solo para
-# probarlo (trabajos nidada-*). La libreria aun no tiene codigo nativo que compilar.
+# Un solo runner Linux, sin matriz de compilacion: el addon es GDScript puro y no hay
+# codigo nativo que compilar por plataforma. El juego de ejemplo, Nidada, si compila
+# Rust, pero solo para Linux y solo para probarlo (trabajos nidada-*).
 #
 # Los tests que tocan devnet NO entran aqui: dependen de una red externa y de un
 # faucet con limite. Van en `npm run test:devnet`, ejecutado a mano, y su resultado
@@ -31,25 +31,24 @@ jobs:
 
       # Invariante de diseno convertido en test automatico: ningun concepto de cadena
       # cruza al addon. Si esto falla, la costura entre el juego y la infraestructura
-      # esta rota, y es un fallo de diseno, no de estilo. Sin bin/: un binario compilado
-      # contiene cadenas como 'split', y su vocabulario se vigila en el codigo fuente.
+      # esta rota, y es un fallo de diseno, no de estilo.
       - name: Ningun concepto de cadena en addon/
         run: |
-          if grep -rniE --exclude-dir=bin '(solana|pubkey|lamport|blockhash|base58|spl|mint)' addon/; then
+          if grep -rniE '(solana|pubkey|lamport|blockhash|base58|spl|mint)' addon/; then
             echo "::error::Vocabulario de cadena filtrado en addon/. Ver CLAUDE.md, invariante 3."
             exit 1
           fi
           echo "addon/ limpio."
 
-      # El addon sera el envoltorio de la GDExtension godot-chain: sus binarios van en
-      # bin/ y en ningun otro sitio. Un manifiesto de dependencias no pinta nada ahi.
-      - name: Ninguna dependencia ni binario suelto en addon/
+      # El addon es GDScript puro. Un manifiesto de dependencias o un binario ahi
+      # significa que alguien ha metido algo que no deberia.
+      - name: Ninguna dependencia ni binario en addon/
         run: |
-          if find addon/ -type f -not -path 'addon/addons/godot_chain/bin/*' \( -name 'package.json' -o -name '*.dll' -o -name '*.so' -o -name '*.dylib' \) | grep .; then
-            echo "::error::addon/ no admite dependencias, y sus binarios solo van en addons/godot_chain/bin/."
+          if find addon/ -type f \( -name 'package.json' -o -name '*.dll' -o -name '*.so' -o -name '*.dylib' -o -name '*.gdextension' \) | grep .; then
+            echo "::error::addon/ debe ser GDScript puro y sin dependencias."
             exit 1
           fi
-          echo "addon/ sin dependencias ni binarios sueltos."
+          echo "addon/ sin dependencias ni binarios."
 
   backend:
     name: Backend
@@ -86,7 +85,7 @@ jobs:
         run: npm run licenses
 
   # Pendiente: Godot en modo headless ejecutando la suite del addon en modo mock, sin
-  # red. Entra en el bloque 7, que es cuando existe esa suite. Anadir aqui un trabajo
+  # red. Entra en la fase A2, que es cuando existe esa suite. Anadir aqui un trabajo
   # que no ejecuta nada solo sirve para tener una casilla verde que no comprueba nada.
 
   # Nidada: el juego que sirve de banco de pruebas (docs/juego/plan.md). Su Rust vive
@@ -112,7 +111,7 @@ jobs:
       - name: Tests
         run: cargo test --locked
 
-      # Invariantes 2-4 de docs/especificacion/arquitectura-cliente-rust.md, convertidos en test.
+      # Invariantes 2-4 de docs/juego/arquitectura-cliente-rust.md, convertidos en test.
       - name: Reglas sin dependencias
         run: |
           deps=$(cargo tree -p nidada-rules -e normal --prefix none --depth 1 | tail -n +2)
@@ -129,7 +128,6 @@ jobs:
           fi
 
       # cargo tree no ve los hilos de la biblioteca estandar: se buscan en el codigo.
-      # Cuando exista rust/godot-chain, anadirlo a esta lista y al cargo tree de arriba.
       - name: Sin hilos propios en el dispositivo
         working-directory: .
         run: |

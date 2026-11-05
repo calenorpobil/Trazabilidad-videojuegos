@@ -6,7 +6,7 @@
 | `nidada-ext` | GDExtension que expone las reglas a GDScript para dibujar |
 | `nidada-server` | Servidor de juego. Autoridad sobre el estado de las mascotas |
 
-Diseño en [`docs/especificacion/arquitectura-cliente-rust.md`](../docs/especificacion/arquitectura-cliente-rust.md); fases en
+Diseño en [`docs/juego/arquitectura-cliente-rust.md`](../docs/juego/arquitectura-cliente-rust.md); fases en
 [`docs/juego/plan.md`](../docs/juego/plan.md).
 
 ## Comandos

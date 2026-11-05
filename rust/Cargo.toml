@@ -1,4 +1,4 @@
-# Workspace de Rust de Nidada. Ver docs/especificacion/arquitectura-cliente-rust.md y docs/juego/plan.md.
+# Workspace de Rust de Nidada. Ver docs/juego/arquitectura-cliente-rust.md y docs/juego/plan.md.
 # Versiones exactas (`=x.y.z`), igual que en package.json: gdext rompe la API a menudo.
 [workspace]
 resolver = "3"

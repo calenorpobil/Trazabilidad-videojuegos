@@ -15,11 +15,10 @@ Activos de Solana en Godot 4 sin que el jugador vea la cadena.
 
 ## Qué es
 
-Un **addon de Godot 4**, una GDExtension en Rust, que permite a un desarrollador crear
-objetos de juego que existen como activos reales en Solana y transferirlos entre
-jugadores, sin escribir código on-chain y sin que el jugador final sepa que hay una
-blockchain debajo. El addon sólo calcula: no firma ni habla con la cadena, y su HTTP
-pasa por `HTTPRequest` de Godot.
+Un **addon de Godot 4**, en GDScript puro y sin dependencias, que permite a un
+desarrollador crear objetos de juego que existen como activos reales en Solana y
+transferirlos entre jugadores, sin escribir código on-chain y sin que el jugador final
+sepa que hay una blockchain debajo.
 
 Proyecto de fin de máster. **Sólo devnet.** No apto para producción tal cual: ver
 limitaciones.
@@ -28,7 +27,7 @@ limitaciones.
 
 ```
 Dispositivo del jugador
-    Proyecto Godot 4  +  addon godot-chain (GDExtension en Rust)
+    Proyecto Godot 4  +  addon godot-chain (GDScript)
         | escrituras                          | lecturas
         v                                     |
     game-server de ejemplo                    |
@@ -50,10 +49,10 @@ token de sólo lectura.
 
 | Directorio | Contenido |
 |---|---|
-| `addon/addons/godot_chain/` | El addon. Hoy, un esqueleto en GDScript; será el envoltorio de la GDExtension |
+| `addon/addons/godot_chain/` | El addon. GDScript puro, cero dependencias. Hoy, un esqueleto |
 | `programs/chain-assets/` | El programa Anchor, que controla los activos Token-2022 mediante PDA. Aún no existe |
 | `backend/` | El servicio: TypeScript, Node >= 22, SQLite |
-| `rust/` | Workspace de Cargo: reglas, GDExtension y servidor de *Nidada*. `godot-chain` irá aquí, aún no existe |
+| `rust/` | Workspace de Cargo de *Nidada*: reglas, GDExtension y servidor |
 | `frontend/` | Dashboard web, servido por el backend. Aún no existe |
 | `examples/chain-demo/` | Proyecto Godot de la demo sencilla que ejecuta el hito. Aún no existe |
 | `examples/game-server/` | Servidor de juego mínimo del hito. Aún no existe |
@@ -76,8 +75,9 @@ proyecto aparte, fuera del hito, y no usa `godot-chain`. Plan en `docs/juego/pla
 ## Requisitos
 
 - Node >= 22 (desarrollado con 24.12.0)
-- Rust 1.94.0, fijado en `rust/rust-toolchain.toml`. En Windows, ver `rust/README.md`
 - Godot 4.7.2
+- Sólo para *Nidada*: Rust 1.94.0, fijado en `rust/rust-toolchain.toml`. En Windows, ver
+  `rust/README.md`
 
 ## Desarrollo
 
@@ -88,6 +88,7 @@ npm run typecheck
 npm run lint
 npm test
 
+# Sólo Nidada
 cd ../rust
 cargo test
 cargo clippy --all-targets -- -D warnings

@@ -1,7 +1,7 @@
 //! GDExtension de *Nidada*: una capa fina sobre `nidada-rules` para que el cliente dibuje
 //! sin preguntar al servidor cada segundo.
 //!
-//! No llama a la red, no guarda nada y no decide nada (`docs/especificacion/arquitectura-cliente-rust.md`,
+//! No llama a la red, no guarda nada y no decide nada (`docs/juego/arquitectura-cliente-rust.md`,
 //! sección 8). Lo que calcula aquí es una predicción; cuando el servidor responde, manda
 //! el servidor.
 

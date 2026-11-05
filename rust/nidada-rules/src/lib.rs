@@ -1,6 +1,6 @@
 //! Reglas de *Nidada*, compartidas por el servidor de juego y el cliente.
 //!
-//! Puras por diseño (invariante 4 de `docs/especificacion/arquitectura-cliente-rust.md`): sin Godot, sin red,
+//! Puras por diseño (invariante 4 de `docs/juego/arquitectura-cliente-rust.md`): sin Godot, sin red,
 //! sin reloj del sistema y sin aleatoriedad propia. El instante actual y las semillas
 //! entran como argumentos. Así la misma fórmula da el mismo resultado en los dos lados.
 //!

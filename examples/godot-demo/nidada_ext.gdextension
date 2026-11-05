@@ -1,4 +1,4 @@
-; Reglas de Nidada compiladas en Rust (rust/nidada-ext). Ver docs/especificacion/arquitectura-cliente-rust.md, 5.1.
+; Reglas de Nidada compiladas en Rust (rust/nidada-ext). Ver docs/juego/arquitectura-cliente-rust.md, 5.1.
 ; Los binarios no se versionan: los deja aquí rust/build-ext.sh.
 ; Las entradas de Android se compilan en la fase J2.
 [configuration]
