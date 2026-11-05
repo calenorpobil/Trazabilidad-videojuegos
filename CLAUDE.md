@@ -1,7 +1,7 @@
 # CLAUDE.md — `godot-chain`
 
 Activos de Solana en Godot 4 sin que el jugador vea la cadena.
-Proyecto de fin de máster. Presupuesto: **unas 48 horas** (pendiente de confirmar, Q7), sólo la librería (ni la demo ni *Nidada* cuentan).
+Proyecto de fin de máster. Presupuesto: **unas 48 horas**, sólo la librería (ni la demo ni *Nidada* cuentan). La documentación del máster orienta entre 30 y 50 h.
 
 ---
 
@@ -10,7 +10,7 @@ Proyecto de fin de máster. Presupuesto: **unas 48 horas** (pendiente de confirm
 | Documento | Estatus | Cómo usarlo |
 |---|---|---|
 | `docs/especificacion/propuesta-pfm.md` | **ÚNICA FUENTE DE VERDAD** | Es la especificación. Todo lo que se construye sale de aquí, **salvo lo que cambia `docs/especificacion/arquitectura-cliente-rust.md`** |
-| `docs/especificacion/arquitectura-cliente-rust.md` | Decisión del responsable, 6-oct-2026 | Cambia la arquitectura del cliente: Rust + GDExtension en `godot-chain` y `nidada-ext`. Sustituye al invariante 4. La propuesta **ya está actualizada** con esta decisión (revisión del 8-oct-2026); este documento sigue siendo el desarrollo detallado (toolchain, CI, fases A0–A5). Lo que dice de *Nidada* en el hito, de Android y de sus horas queda superado por las revisiones de la propuesta del 4 y el 5-nov-2026. La **Q7** (48 h frente a 40) sigue abierta |
+| `docs/especificacion/arquitectura-cliente-rust.md` | Decisión del responsable, 6-oct-2026 | Cambia la arquitectura del cliente: Rust + GDExtension en `godot-chain` y `nidada-ext`. Sustituye al invariante 4. La propuesta **ya está actualizada** con esta decisión (revisión del 8-oct-2026); este documento sigue siendo el desarrollo detallado (toolchain, CI, fases A0–A5). Lo que dice de *Nidada* en el hito, de Android y de sus horas queda superado por las revisiones de la propuesta del 4 y el 5-nov-2026 |
 | `docs/especificacion/http-contract.md` | Congelado en el bloque 1 | Contrato del que cuelga el resto. Cambiarlo exige decisión explícita |
 | `docs/archivo/` | **Superado, sólo en local** | Ignorado por git. Contiene decisiones **revertidas** (`core` sans-io, Metaplex Token Metadata, `SigningContext`, múltiples backends): citarlo como justificación es un error |
 

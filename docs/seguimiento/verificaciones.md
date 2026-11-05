@@ -54,9 +54,10 @@ Node local: v24.12.0 (el requisito es >= 22).
   pasa con código 0. No probado en Linux ni en Android.
 - En Windows, `--headless --import` termina con fallo de segmentación tras cargar el editor,
   3 de 3 veces en la 4.7.1 y en la 4.7.2. En la 4.7.2 también falla sin `nidada-ext`, y
-  `--script` funciona después. No depende de la versión ni de la extensión. **Sin
-  comprobar en Linux:** es un paso de la CI, que nunca se ha ejecutado en GitHub (0
-  ejecuciones en esa fecha).
+  `--script` funciona después. No depende de la versión ni de la extensión.
+- En Linux, en la CI, `--import` termina con código 134 y `test_ext.gd` pasa después (5 de
+  noviembre, ejecución 42093209225). La causa del error no está investigada: la CI lo
+  deja como aviso y es el test quien decide.
 
 ### V4 — Base del programa Anchor (4 de noviembre de 2026)
 

@@ -53,11 +53,14 @@ en escritorio. Desaparecen la fase A0, el trabajo `android-build` y sus riesgos,
 **unas 48 h**. Android sigue siendo el objetivo de *Nidada* como proyecto aparte. Cambian las secciones 2, 3,
 4.6, 6, 8, 9, 10, 11, 12, 13, 14 y 15.
 
+También se revisan las preguntas de la sección 14 contra la documentación del máster: Q1, Q2, Q3, Q5, Q6 y
+Q7 quedan resueltas. Lo que dicen de ellas las revisiones anteriores de esta sección es historia.
+
 ### 0.1 Requisitos de entrega del máster
 
 Hasta el 4 de noviembre eran supuestos. Ahora salen de las instrucciones generales de entrega del TFM,
-que el repositorio no incluye porque son material del curso. **Falta que el tutor confirme que aplican
-tal cual a este proyecto** (sección 14).
+que el repositorio no incluye porque son material del curso. **Son las que definen qué se valora y qué se
+exige.** Lo que no resuelven está en la sección 14.
 
 | Criterio | Peso | Qué pide | Cómo lo cumple este proyecto |
 |---|---|---|---|
@@ -680,8 +683,9 @@ sin ella no hay hito que enseñar.
 
 **Comparación justa con la redacción original.** Sus 40 h incluían los bloques 8 y 9 (5 h), que eran
 trabajo de juego. Quitándolos, la librería costaba 35 h en GDScript. Rust en el cliente añade 4 h, el
-programa Anchor unas 7 h y los entregables de 0.1 otras 2 h: **48 h**. Contra el límite de 40 h se pasa
-en 8 h; hay que confirmar con el tutor que se aceptan o aplicar la línea de corte 8.1 (**Q7**, sección 14).
+programa Anchor unas 7 h y los entregables de 0.1 otras 2 h: **48 h**. La documentación del máster no fija
+un límite: orienta entre 30 y 50 h para un TFM (35 y 55 según el tema), y 48 h cae dentro. Esa cifra incluye
+la memoria, 4-6 h, que este plan no presupuesta (**Q4**, sección 14).
 
 ### 8.1 Línea de corte
 
@@ -693,7 +697,7 @@ documenta cada recorte en el README:
 2. `POST /grants` — el hito no lo necesita; `POST /items` ya emite la cantidad inicial. La instrucción
    `grant` se conserva, porque `POST /items` la usa.
 3. `mock_force` y la parte del modo mock que prueba reversiones; conserva el mock básico.
-4. Si la Q7 se responde que no a las 48 h: se aplica esta línea entera desde el principio.
+4. Si las fechas de entrega (**Q11**, sección 14) no dan para 48 h: se aplica esta línea entera desde el principio.
 
 Los dos listados de catálogo (`GET /v1/collections` y `GET /v1/items`, 11-oct-2026) y la consola de
 administración (3) no entran en el hito: sirven sólo a esa consola. Se recortan **antes** que el punto 1. No cuentan en el
@@ -713,8 +717,8 @@ menos alcance bien documentado.
 | 2 | OC1, OC2 | 12 |
 | 3 | 3, 4, 5 | 8 |
 
-El resto (A1, A2, A5 y la documentación: 20 h) **se reparte cuando se responda la Q7**, porque
-depende de cuántas horas se aceptan.
+El resto (A1, A2, A5 y la documentación: 20 h) **se reparte cuando se conozcan las fechas de entrega**
+(**Q11**, sección 14).
 
 La semana 2 es la de mayor riesgo: es donde viven Anchor y Token-2022. Si algo se va a torcer, se tuerce
 ahí, y por eso el plan B de la sección 10 se decide como muy tarde al final de OC1.
@@ -930,28 +934,15 @@ Solana sobre la extensión de metadatos y el código de la interfaz `token-metad
 
 ## 14. Preguntas para el tutor, que no debes responder tú
 
-**Conviene resolverlas cuanto antes.** Las instrucciones de entrega (0.1) ya orientan la Q1 y la Q3.
+La lista viva, con lo que ya han resuelto las instrucciones de entrega, está en
+`docs/seguimiento/preguntas-tutor.md`. Siguen abiertas:
 
-1. **¿Se confirma que el PFM exige un programa Anchor propio, con cinco instrucciones como mínimo, y que
-   `chain-assets` (4.7) lo cumple aunque los activos sean Token-2022?** Las instrucciones de entrega
-   lo piden y el proyecto ya lo incorpora (4-nov-2026). Lo que falta es la confirmación.
-2. **¿Se exige que el backend esté en Rust?** Si la respuesta es sí, hay que añadir entre 8 y 12
-   horas al presupuesto y aplicar la línea de corte 8.1 desde el principio.
-3. **¿Basta con devnet o hay que demostrar algo en mainnet?** Las instrucciones de entrega dicen que
-   devnet es suficiente. Sólo falta confirmar que aplican.
-4. **¿La memoria escrita y la presentación cuentan dentro de las horas del proyecto o van aparte?** El plan de
-   la sección 8 asume que van aparte, salvo el último bloque.
-5. **¿Hay que desplegar el backend en un servidor público o basta con ejecutarlo en local durante la
-   defensa?**
-6. **¿El proyecto debe ser original respecto a la propuesta de la que deriva, o se admite
-   explícitamente como versión reducida de ella?**
-7. **Q7: ¿se aceptan unas 48 h de librería en lugar de 40 h, por Rust en el cliente y por el programa
-   Anchor, o se aplica la línea de corte 8.1 desde el principio?** Sin respuesta, el plan de la sección 8
-   no tiene presupuesto. Si además la Q2 se responde que el backend ha de estar en Rust, son otras
-   8–12 h y `chain-backend` se reescribe (el contrato HTTP seguiría igual).
-8. **Q8: ¿las capturas «del dashboard» pueden ser de la demo de Godot y de un explorador?** Las
-   instrucciones piden un dashboard, y la consola de administración está bajo la línea de corte (8.1). Si
-   hace falta una web, la consola deja de ser recortable y hay que presupuestarla.
+- **Q9:** si se admite un tema propio, fuera de los cinco TFM que lista el máster. **Puede invalidar el
+  proyecto entero: se pregunta la primera.**
+- **Q11:** las fechas reales de entrega y si los avances intermedios son obligatorios.
+- **Q4:** si hay memoria escrita o defensa, además del vídeo.
+- **Q8:** si las capturas «del dashboard» pueden ser de la demo de Godot y de un explorador.
+- **Q10:** si se admite adaptar la estructura y el flujo con wallet a esta arquitectura.
 
 ---
 
