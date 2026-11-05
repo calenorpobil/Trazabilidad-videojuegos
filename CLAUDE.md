@@ -1,7 +1,7 @@
 # CLAUDE.md — `godot-chain`
 
 Activos de Solana en Godot 4 sin que el jugador vea la cadena.
-Proyecto de fin de máster. Presupuesto: **unas 48 horas**, sólo la librería (ni la demo ni *Nidada* cuentan). La documentación del máster orienta entre 30 y 50 h.
+Proyecto de fin de máster. **Entrega: 30 de noviembre de 2026.** Presupuesto: **unas 54 horas**, sólo la librería (ni la demo ni *Nidada* cuentan), sin margen; calendario en la propuesta, 8.2.
 
 ---
 
@@ -66,6 +66,7 @@ la propuesta; si no está en ella, no entra.
 | `addon/addons/godot_chain/` | Envoltorio de la GDExtension `godot-chain` (`.gdextension`, `bin/`, `plugin.cfg`). Aún no existe |
 | `programs/chain-assets/` | Programa Anchor, con `Anchor.toml` en la raíz. Aún no existe |
 | `backend/` | TypeScript, Node >= 22. El servicio y su suite de tests |
+| `frontend/` | Dashboard web: consola de administración que sirve el backend, sin compilación. Aún no existe |
 | `rust/` | Workspace de Cargo: `nidada-rules`, `nidada-ext`, `nidada-server` (hoy) y `godot-chain` (pendiente) |
 | `examples/chain-demo/` | Proyecto Godot de la demo sencilla que ejecuta el hito. Aún no existe |
 | `examples/game-server/` | Servidor de juego mínimo del hito, en TypeScript. Aún no existe |

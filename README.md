@@ -54,6 +54,7 @@ token de sólo lectura.
 | `programs/chain-assets/` | El programa Anchor, que controla los activos Token-2022 mediante PDA. Aún no existe |
 | `backend/` | El servicio: TypeScript, Node >= 22, SQLite |
 | `rust/` | Workspace de Cargo: reglas, GDExtension y servidor de *Nidada*. `godot-chain` irá aquí, aún no existe |
+| `frontend/` | Dashboard web, servido por el backend. Aún no existe |
 | `examples/chain-demo/` | Proyecto Godot de la demo sencilla que ejecuta el hito. Aún no existe |
 | `examples/game-server/` | Servidor de juego mínimo del hito. Aún no existe |
 | `examples/godot-demo/` | Proyecto Godot de *Nidada*, un juego de mascotas aparte del hito |

@@ -1,7 +1,7 @@
 # Propuesta PFM — `godot-chain`
 
 **Activos de Solana en Godot 4 sin que el jugador vea la cadena.**
-Versión reducida, dimensionada en **unas 48 horas reales** de desarrollo asistido con Claude Code
+Versión reducida, dimensionada en **unas 54 horas reales** de desarrollo asistido con Claude Code
 (40 en la redacción original; ver las revisiones de abajo).
 
 Fecha de redacción: 25 de agosto de 2026. **Revisada el 8 de octubre de 2026** (cliente en Rust, sección 2),
@@ -56,6 +56,10 @@ en escritorio. Desaparecen la fase A0, el trabajo `android-build` y sus riesgos,
 También se revisan las preguntas de la sección 14 contra la documentación del máster: Q1, Q2, Q3, Q5, Q6 y
 Q7 quedan resueltas. Lo que dicen de ellas las revisiones anteriores de esta sección es historia.
 
+El responsable fija además que **la entrega es el 30 de noviembre de 2026**, que el tema propio se admite, y
+que **habrá un dashboard web**: la consola de administración de la sección 3 entra en el hito en una versión
+reducida. El presupuesto pasa a **unas 54 h**, y el plan de la sección 8 se ordena por esa fecha.
+
 ### 0.1 Requisitos de entrega del máster
 
 Hasta el 4 de noviembre eran supuestos. Ahora salen de las instrucciones generales de entrega del TFM,
@@ -67,7 +71,7 @@ exige.** Lo que no resuelven está en la sección 14.
 | Código fuente | 30 % | MVP funcional, código limpio, 5 tests o más, README completo | Hito de la sección 7, secciones 8 y 9 |
 | Programa Solana (Anchor) | 25 % | 5 instrucciones o más, PDAs, validaciones, seguridad, comentarios, desplegado en devnet con Program ID visible | `chain-assets` (4.7) |
 | Vídeo | 15 % | 5 minutos como máximo, 720p, voz, demostración práctica con transacción en un explorador, enlace público | Guion: el hito de la sección 7 |
-| Documentación | 10 % | Diagramas de arquitectura y de flujo de datos (Mermaid preferido, `docs/diagramas.md`), comentarios, 5 capturas o más en `screenshots/` | Último bloque de la sección 8. Si las capturas de la demo valen como «dashboard» es la **Q8** |
+| Documentación | 10 % | Diagramas de arquitectura y de flujo de datos (Mermaid preferido, `docs/diagramas.md`), comentarios, 5 capturas o más en `screenshots/` | Último bloque de la sección 8. Las capturas salen del dashboard web (sección 3) |
 | Innovación | 15 % | Diferenciarse del esqueleto base y documentar qué se añade | Activos Token-2022 reales, jugador sin wallet, firmante único, idempotencia, `applied`/`settled`, cliente Godot |
 | IA y MCP | 5 % | Documentar el uso de IA; MCP es opcional | Sección del README sobre el uso de Claude Code |
 
@@ -192,10 +196,13 @@ Navegador (consola) ──cookie de sesión──▶ chain-backend (rutas /admin
   Por defecto escucha sólo en `127.0.0.1`; exponerla es una decisión explícita de quien despliega.
 - **No es parte del contrato HTTP.** Las rutas `/admin` son internas del backend y no las usa el addon
   ni el servidor de juego.
-- **Qué hace:** crear colecciones y tipos, importar un catálogo, entregar, transferir, consultar
-  operaciones e inventarios y listar el catálogo. Maqueta en `docs/especificacion/mockup-admin/index.html`.
-- **Fuera del hito.** Se recorta junto a los listados (8.1). Cuando exista, el servidor de juego sigue
-  siendo quien decide qué gana cada jugador; la consola es para el equipo del estudio.
+- **Qué hace en el hito (5-nov-2026):** es el dashboard web de la entrega. Crear colecciones y tipos,
+  entregar, transferir, consultar operaciones e inventarios y listar el catálogo, con enlace de cada
+  operación a su transacción en un explorador. Sale de la maqueta `docs/especificacion/mockup-admin/index.html`,
+  que hoy simula el servidor. Su código vive en `frontend/`, como HTML y JavaScript sin paso de compilación,
+  y lo sirve el backend.
+- **Fuera del hito:** importar un catálogo y editar un tipo (8.1). El servidor de juego sigue siendo quien
+  decide qué gana cada jugador; la consola es para el equipo del estudio.
 
 **Catálogo declarativo (11-oct-2026).** Un estudio no programa nada para dar de alta sus objetos: los
 describe en un fichero de datos, `catalog.json`, que versiona junto a su juego, y el backend lo aplica.
@@ -291,7 +298,7 @@ Cómo se sostiene, operación por operación:
 | Entregar unidades a un jugador | `grant` | `MintTo` | Autoridad. La PDA del juego actúa como *mint authority* |
 | Transferir entre jugadores | `transfer` | `TransferChecked` | Autoridad. La PDA del juego actúa como **permanent delegate** |
 | Cambiar la autoridad del juego | `rotate_authority` | Ninguno | Autoridad actual |
-| Editar un tipo (fuera del hito) | `update_item`, sólo si se construye la consola (4.7) | Transferencia de lamports si crece + `UpdateField` y `RemoveKey` (13, puntos 5 a 8) | Autoridad, como pagadora. La PDA del juego actúa como autoridad de actualización |
+| Editar un tipo (fuera del hito) | `update_item`, sólo si se decide editar tipos (4.7) | Transferencia de lamports si crece + `UpdateField` y `RemoveKey` (13, puntos 5 a 8) | Autoridad, como pagadora. La PDA del juego actúa como autoridad de actualización |
 
 La firma de una PDA por CPI (`invoke_signed`) no es una firma de la transacción: el invariante se
 refiere a las firmas requeridas de la transacción, y ésas siguen siendo una.
@@ -452,6 +459,7 @@ Monorepo, licencia **MIT OR Apache-2.0**, estos directorios:
 | `programs/chain-assets/` | El programa Anchor (4.7), con `Anchor.toml` en la raíz |
 | `rust/` | Workspace de Cargo: `godot-chain` (la librería), y `nidada-rules`, `nidada-ext` y `nidada-server` (*Nidada*) |
 | `backend/` | TypeScript, Node ≥ 22, el servicio y su suite de tests |
+| `frontend/` | El dashboard web: la consola de administración que sirve el backend (sección 3) |
 | `examples/chain-demo/` | Proyecto Godot de la demo sencilla, que ejecuta el hito |
 | `examples/game-server/` | Servidor de juego mínimo del hito: TypeScript, `fastify` y `better-sqlite3`, las mismas dependencias que el backend |
 | `examples/godot-demo/` | Proyecto Godot de *Nidada*, fuera del hito |
@@ -505,7 +513,7 @@ estable a 4 de noviembre de 2026.
 | `transfer` | Mueve unidades entre jugadores mediante el delegado | Firma la autoridad de `Game`; `amount > 0`; emisor y receptor distintos; el saldo lo rechaza Token-2022 |
 | `rotate_authority` | Cambia la autoridad de `Game` | Firma la autoridad actual; la nueva es distinta |
 
-**Sólo estas cinco**, salvo `update_item`, que se añade únicamente si se construye la consola (8.1),
+**Sólo estas cinco**, salvo `update_item`, que se añade únicamente si se decide editar tipos (8.1),
 porque editar un tipo necesita que la PDA actúe como autoridad de actualización. Cada instrucción emite
 un evento con `emit!` y lleva comentarios de documentación. Cada una tiene al menos un test negativo:
 otro firmante, cantidad cero, tipo de otro juego.
@@ -538,11 +546,11 @@ Vocabulario **sin cadena**. Si un endpoint necesita decir «blockhash», la cost
 | `POST` | `/v1/items` | escritura | `{ operation_id, item_id }` — crea el tipo y emite la cantidad inicial |
 | `POST` | `/v1/items/{item_id}/grants` | escritura | `{ operation_id }` — entrega unidades a un tenedor |
 | `POST` | `/v1/items/{item_id}/transfer` | escritura | `{ operation_id }` |
-| `PATCH` | `/v1/items/{item_id}` | escritura | `{ operation_id }` — edita `name`, `uri` y `qualities` del tipo **en el sitio**. **Bajo la línea de corte**; se construye con la consola |
+| `PATCH` | `/v1/items/{item_id}` | escritura | `{ operation_id }` — edita `name`, `uri` y `qualities` del tipo **en el sitio**. **Bajo la línea de corte** |
 | `GET` | `/v1/operations/{operation_id}` | lectura | `{ state, error }` |
 | `GET` | `/v1/holders/{holder_id}/items` | lectura | `[ { item_id, name, qualities, amount } ]` |
-| `GET` | `/v1/collections` | lectura | `{ collections: [...] }` — para la web de administración. **Bajo la línea de corte** |
-| `GET` | `/v1/items` | lectura | `{ items: [...] }`, filtrable por `collection_id` — para la web de administración. **Bajo la línea de corte** |
+| `GET` | `/v1/collections` | lectura | `{ collections: [...] }` — para la web de administración |
+| `GET` | `/v1/items` | lectura | `{ items: [...] }`, filtrable por `collection_id` — para la web de administración |
 
 Las escrituras exigen `write_key` + `Idempotency-Key`. Las lecturas, `read_token`.
 
@@ -636,20 +644,21 @@ real, y no hay tests de conformidad que lo impidan. Queda anotado en 12.6.
 
 > En devnet, desde un proyecto Godot 4 y **pasando por un servidor de juego de ejemplo**: crear una
 > colección, crear un objeto con cualidades de tipo, entregarlo al jugador A, transferir una unidad
-> del jugador A al jugador B, y ver el inventario de ambos actualizado en pantalla.
+> del jugador A al jugador B, y ver el inventario de ambos actualizado en pantalla. Lo mismo se puede
+> consultar y operar desde el **dashboard web**, con enlace de cada operación a su transacción en un explorador.
 
 **Se demuestra con una demo sencilla** (`examples/chain-demo/`): una sola escena de Godot, con un botón
 por operación, los inventarios de A y B, y el estado `applied`/`settled` de cada operación. Sin arte, sin
-reglas de juego y sin *Nidada*: su único fin es probar con facilidad las funciones de la cadena, y sus
-pantallas sirven para el vídeo y las capturas. Las transacciones se enseñan en un explorador con las
-firmas que registra el backend, nunca desde `addon/`.
+reglas de juego y sin *Nidada*: su único fin es probar con facilidad las funciones de la cadena. Las
+transacciones se enseñan en un explorador desde el dashboard, con las firmas que registra el backend, nunca
+desde `addon/`.
 
 Nada más entra en el proyecto hasta que esto funcione de extremo a extremo. Es también el guion del
 vídeo de demostración.
 
 ---
 
-## 8. Plan de trabajo: unas 48 horas
+## 8. Plan de trabajo: unas 54 horas
 
 Orden estricto. Cada bloque termina con la CI en verde y un commit. No se empieza el siguiente con el
 anterior a medias. **Las horas de los bloques nuevos son una estimación, a medir.**
@@ -666,12 +675,13 @@ cubre la librería: programa, backend, `godot-chain`, su CI y su documentación.
 | 3 | Backend: cliente del programa y crear item, con el **test del invariante de firmante único** | 3 | 23 |
 | 4 | Backend: entregar, transferir e inventario con parseo de metadatos | 3 | 26 |
 | 5 | Backend: seguimiento de confirmación `applied → settled`, categorías de error, `INSUFFICIENT_FUNDS` | 2 | 28 |
-| A1 | `godot-chain` en Rust: `ChainConfig`, `Chain`, `ChainHandle`, pool de `HTTPRequest`, backoff, errores (sustituye al antiguo bloque 6, de 7 h) | 10 | 38 |
-| A2 | Modo mock, `mock_force` y suite *headless* en Rust (sustituye al antiguo bloque 7, de 3 h) | 4 | 42 |
-| A5 | CI de la sección 9 | 1 | 43 |
-| — | Entregables de 0.1: README completo con aviso de Steam, diagramas Mermaid, capturas, documentación de integración y vídeo (antiguo bloque 10) | 5 | 48 |
+| W1 | Dashboard web: rutas `/admin`, sesión, listados de catálogo, y `frontend/` a partir de la maqueta | 6 | 34 |
+| A1 | `godot-chain` en Rust: `ChainConfig`, `Chain`, `ChainHandle`, pool de `HTTPRequest`, backoff, errores (sustituye al antiguo bloque 6, de 7 h) | 10 | 44 |
+| A2 | Modo mock, `mock_force` y suite *headless* en Rust (sustituye al antiguo bloque 7, de 3 h) | 4 | 48 |
+| A5 | CI de la sección 9 | 1 | 49 |
+| — | Entregables de 0.1: README completo con aviso de Steam, diagramas Mermaid, capturas, documentación de integración y vídeo (antiguo bloque 10) | 5 | 54 |
 
-**Sin buffer.** Con 48 h no queda colchón: por eso existe la línea de corte.
+**Sin buffer.** Con 54 h no queda colchón: por eso existe la línea de corte.
 
 **Fuera del cómputo — la demo**, estimada sólo para planificar el calendario. Sigue siendo necesaria:
 sin ella no hay hito que enseñar.
@@ -683,45 +693,46 @@ sin ella no hay hito que enseñar.
 
 **Comparación justa con la redacción original.** Sus 40 h incluían los bloques 8 y 9 (5 h), que eran
 trabajo de juego. Quitándolos, la librería costaba 35 h en GDScript. Rust en el cliente añade 4 h, el
-programa Anchor unas 7 h y los entregables de 0.1 otras 2 h: **48 h**. La documentación del máster no fija
-un límite: orienta entre 30 y 50 h para un TFM (35 y 55 según el tema), y 48 h cae dentro. Esa cifra incluye
-la memoria, 4-6 h, que este plan no presupuesta (**Q4**, sección 14).
+programa Anchor unas 7 h, el dashboard unas 6 h y los entregables de 0.1 otras 2 h: **54 h**. La documentación
+del máster no fija un límite: orienta entre 30 y 55 h según el TFM, así que 54 h está en lo alto de ese
+margen. Esa cifra incluye la memoria, 4-6 h, que este plan no presupuesta (**Q4**, sección 14).
 
 ### 8.1 Línea de corte
 
 Si a mitad de A1 el acumulado se ha ido más de un 20%, se recorta **en este orden**, y se
 documenta cada recorte en el README:
 
-1. `PATCH /v1/items/{id}` (edición en el sitio) y `update_item` — ya están fuera; no los metas «porque
-   es rápido». Se construyen con la consola, que es quien los necesita (3). Estimación, a medir: 3–5 h.
-2. `POST /grants` — el hito no lo necesita; `POST /items` ya emite la cantidad inicial. La instrucción
-   `grant` se conserva, porque `POST /items` la usa.
-3. `mock_force` y la parte del modo mock que prueba reversiones; conserva el mock básico.
-4. Si las fechas de entrega (**Q11**, sección 14) no dan para 48 h: se aplica esta línea entera desde el principio.
+1. `PATCH /v1/items/{id}` (edición en el sitio), `update_item` e importar un catálogo — ya están fuera; no
+   los metas «porque es rápido». Estimación, a medir: 3–5 h.
+2. `mock_force` y la parte del modo mock que prueba reversiones; conserva el mock básico.
+3. Pantallas del dashboard que no salgan en el vídeo ni en las capturas.
+4. `POST /grants` — `POST /items` ya emite la cantidad inicial. La instrucción `grant` se conserva, porque
+   `POST /items` la usa.
 
-Los dos listados de catálogo (`GET /v1/collections` y `GET /v1/items`, 11-oct-2026) y la consola de
-administración (3) no entran en el hito: sirven sólo a esa consola. Se recortan **antes** que el punto 1. No cuentan en el
-presupuesto de 48 h hasta que se decida lo contrario, y quien los implemente debe apuntar las horas
-aparte para que esa decisión se tome con datos.
-
-**El programa no se recorta por debajo de cinco instrucciones**, porque es lo que pide la entrega (0.1).
+**El programa no se recorta por debajo de cinco instrucciones**, porque es lo que pide la entrega (0.1). **El
+dashboard no se recorta por debajo de lo que necesitan las 5 capturas.**
 
 **Nunca se recorta el último bloque (README, documentación, vídeo).** Un proyecto funcionando sin documentar puntúa peor que uno con
 menos alcance bien documentado.
 
-### 8.2 Reparto por semanas
+### 8.2 Calendario hasta la entrega, el 30 de noviembre de 2026
 
-| Semana | Bloques | h |
+Quedan 51 h de librería (el bloque 1 está hecho) y unas 4 h de demo. Son unas **2,2 h diarias**, todos los
+días, sin margen.
+
+| Fechas | Bloques | h |
 |---|---|---|
-| 1 | 1, 2 | 8 |
-| 2 | OC1, OC2 | 12 |
-| 3 | 3, 4, 5 | 8 |
+| 6–12 de noviembre | 2, OC1 | 13 |
+| 13–19 de noviembre | OC2, 3, 4, 5, W1 | 18 |
+| 20–26 de noviembre | A1, A2, A3, A4 | 18 |
+| 27–28 de noviembre | A5, README, capturas, diagramas y vídeo | 6 |
+| 29–30 de noviembre | Colchón y entrega | — |
 
-El resto (A1, A2, A5 y la documentación: 20 h) **se reparte cuando se conozcan las fechas de entrega**
-(**Q11**, sección 14).
+La primera semana es la de mayor riesgo: es donde viven Anchor y Token-2022. Si algo se va a torcer, se
+tuerce ahí, y por eso el plan B de la sección 10 se decide como muy tarde al final de OC1.
 
-La semana 2 es la de mayor riesgo: es donde viven Anchor y Token-2022. Si algo se va a torcer, se tuerce
-ahí, y por eso el plan B de la sección 10 se decide como muy tarde al final de OC1.
+**Revisión obligatoria el 19 de noviembre.** Si los bloques hasta W1 no están hechos, se aplica la línea de
+corte 8.1 entera de una vez. Un día de retraso cuesta un 10 % de la nota.
 
 ---
 
@@ -759,7 +770,7 @@ Un plan B sin disparador es una excusa. Cada uno tiene condición de activación
 | El faucet de devnet se agota | Dos peticiones de airdrop rechazadas seguidas | Validador local (`solana-test-validator`) con `--clone` del programa Token-2022 para desarrollo; devnet sólo para la demo final |
 | El sondeo en `_process` resulta inestable | A1 supera 12 h (el margen de 2 h que tenía el antiguo bloque 6) | Reducir a sondeo con `Timer` a intervalo fijo, sin backoff, y documentar la pérdida |
 | Rupturas de API de `gdext` | Un ejemplo de la documentación no compila con la versión fijada | Leer el *changelog* de esa versión; no subir de versión a mitad del proyecto |
-| El vídeo o la memoria se comen el desarrollo | Fin de la semana 3 sin hito completo | Aplicar la línea de corte 8.1 entera de una vez, no gradualmente |
+| El vídeo o la memoria se comen el desarrollo | 26 de noviembre sin hito completo | Aplicar la línea de corte 8.1 entera de una vez, no gradualmente |
 
 ---
 
@@ -781,8 +792,7 @@ No implementar, no diseñar, no dejar hooks especulativos:
   estudio despliega el suyo (ver 1). Un servicio alojado que sirva a varios estudios exigiría
   credenciales por estudio, aislamiento de datos, custodia de varias semillas y facturación
 - Alta disponibilidad, réplicas, métricas
-- Panel de administración **dentro del hito**: la consola de 3 existe, pero se recorta antes que
-  nada (8.1) y no cuenta en las 48 h. Si la Q8 exige un «dashboard», se reconsidera con el tutor
+- En el dashboard: importar un catálogo y editar tipos (8.1)
 - Android e iOS: la arquitectura no lo impide, pero no se compilan, no se prueban y no se prometen
 - Publicación en tiendas de aplicaciones
 - Cualquier código nativo en el dispositivo que no sea `godot-chain`, o las reglas del juego de ejemplo
@@ -937,12 +947,9 @@ Solana sobre la extensión de metadatos y el código de la interfaz `token-metad
 La lista viva, con lo que ya han resuelto las instrucciones de entrega, está en
 `docs/seguimiento/preguntas-tutor.md`. Siguen abiertas:
 
-- **Q9:** si se admite un tema propio, fuera de los cinco TFM que lista el máster. **Puede invalidar el
-  proyecto entero: se pregunta la primera.**
-- **Q11:** las fechas reales de entrega y si los avances intermedios son obligatorios.
 - **Q4:** si hay memoria escrita o defensa, además del vídeo.
-- **Q8:** si las capturas «del dashboard» pueden ser de la demo de Godot y de un explorador.
-- **Q10:** si se admite adaptar la estructura y el flujo con wallet a esta arquitectura.
+- **Q10:** si se admite entregar sin wallet conectada, justificándolo en el README.
+- **Q11:** si los avances intermedios son obligatorios. La entrega final es el 30 de noviembre.
 
 ---
 
@@ -961,7 +968,7 @@ Con tan pocas horas, la disciplina de sesión importa tanto como el código.
 - **Tests antes que implementación en dos sitios concretos:** los vectores de derivación de claves
   (bloque 2) y el invariante de firmante único (bloque 3). En el resto, tests después.
 - **La sección 11 es un contrato.** Si Claude Code propone «ya que estamos, añadimos un endpoint
-  para…», la respuesta es no. Ese impulso es lo que convierte 48 horas en 100.
+  para…», la respuesta es no. Ese impulso es lo que convierte 54 horas en 100.
 - **Commits pequeños y frecuentes.** Cuando una sesión se tuerce, revertir sale más barato que
   depurar lo que otro escribió mientras no mirabas.
 

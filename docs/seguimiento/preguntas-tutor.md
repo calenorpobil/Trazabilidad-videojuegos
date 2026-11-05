@@ -9,11 +9,9 @@ resuelven.
 
 | # | Pregunta | Por qué se pregunta | Si la respuesta es la que no esperamos |
 |---|---|---|---|
-| Q9 | ¿Se admite un tema propio, una librería de activos para Godot, fuera de los cinco TFM que lista el máster? | El índice lista cinco, todos de trazabilidad o certificación, con su proyecto de referencia. Ningún documento menciona videojuegos ni dice si la lista es cerrada. El vídeo debe citar un «proyecto de referencia» de esa lista | **Puede invalidar el proyecto entero.** Habría que reorientarlo a uno de los cinco temas |
-| Q11 | ¿Cuáles son las fechas reales de entrega? ¿Los avances intermedios son obligatorios? | El calendario es incoherente: avance 1 en la semana 1, avance 2 en la semana 3 y entrega final en la «semana 1». El retraso penaliza: −10 % a 1 día, −20 % a 2-3 días, y más de 3 días no se acepta | El plan de la sección 8 de la propuesta podría no caber. Hay que aplicar la línea de corte 8.1 |
-| Q4 | ¿Hay memoria escrita o defensa, además del vídeo? | Las instrucciones no las incluyen entre los entregables obligatorios ni en la rúbrica, pero el enunciado y el índice dicen «escribir la memoria» (4-6 h) | Unas 4-6 h sin presupuestar |
-| Q8 | ¿Las capturas «del dashboard» pueden ser de la demo de Godot y de un explorador? | Se piden al menos 5: dashboard, formulario, visualización de datos, transacción y verificación. La demo no es una web, y la consola de administración está bajo la línea de corte | La consola deja de ser recortable y hay que presupuestarla |
-| Q10 | ¿Se admite adaptar la «estructura obligatoria» y el flujo con wallet a esta arquitectura, justificándolo en el README? | Las instrucciones piden `frontend/` y una wallet conectada, y el jugador de este proyecto no tiene wallet por diseño. También dicen «usa una arquitectura diferente si tiene sentido» y «justifica tu arquitectura» | Habría que añadir un frontend web con wallet, lo que contradice la premisa 1 de la propuesta |
+| Q4 | ¿Hay memoria escrita o defensa, además del vídeo? | «Memoria» sólo aparece en dos sitios: el paso 9 de «Próximos pasos» del enunciado (70, línea 790) y los flujos de estudio del índice (10, líneas 223, 280, 308, 336 y 364: «Escribir memoria TFM (4-6 horas)»). Las instrucciones de entrega (20) no la nombran: ni en los entregables obligatorios, ni en la rúbrica, ni en el checklist final. La defensa no aparece en ninguno. **Por eso el plan no la incluye** | Unas 4-6 h sin presupuestar, ya sin margen |
+| Q10 | ¿Se admite entregar sin wallet conectada, justificándolo en el README? | Las instrucciones la dan por hecha: Phantom en los requisitos del README y «wallet conectada a Devnet» en el checklist del vídeo. Aquí el jugador no tiene wallet por diseño y firma sólo la autoridad. La rúbrica no puntúa la wallet, y las instrucciones dicen «usa una arquitectura diferente si tiene sentido» y «justifica tu arquitectura» | Habría que añadir conexión de wallet al dashboard, para la autoridad; el jugador seguiría sin ella |
+| Q11 | ¿Los avances intermedios son obligatorios, y con qué fechas? | Las instrucciones citan el avance 1 (diseño y programa inicial) y el avance 2 (MVP y código en GitHub), sin fechas reales. La entrega final, sí: 30 de noviembre de 2026 | Habría que adelantar el programa, que hoy se termina a mediados de noviembre |
 
 ## Resueltas por la documentación
 
@@ -24,4 +22,12 @@ resuelven.
 | Q3 | ¿Basta con devnet? | **Sí.** «Devnet es suficiente»; mainnet es opcional | Instrucciones, 10 |
 | Q5 | ¿Hay que desplegar el backend en un servidor público? | **No se pide.** Lo único que debe estar desplegado es el programa. Es una deducción: los documentos no lo niegan de forma expresa | Instrucciones, 5.2 y 11 |
 | Q6 | ¿Debe ser original? | **Sí, respecto al esqueleto base.** Se premia la diferenciación (15 %) y usar el esqueleto no es obligatorio. Hay que documentar las innovaciones y mencionarlas en el vídeo | Instrucciones, 7.2 y 8 |
-| Q7 | ¿Se aceptan 48 h en lugar de 40 h? | **No hay límite de horas.** El índice orienta entre 30 y 55 h según el TFM. La cifra de 40 h no aparece en ningún documento del máster | Índice de documentación, flujos de estudio |
+| Q7 | ¿Se aceptan más de 40 h? | **No hay límite de horas.** El índice orienta entre 30 y 55 h según el TFM. La cifra de 40 h no aparece en ningún documento del máster. El plan está en 54 h | Índice de documentación, flujos de estudio |
+
+## Resueltas por el responsable, 5 de noviembre de 2026
+
+| # | Pregunta | Respuesta |
+|---|---|---|
+| Q8 | ¿Valen capturas de la demo como «dashboard»? | Deja de hacer falta: **habrá un dashboard web** (propuesta, sección 3) |
+| Q9 | ¿Se admite un tema propio, fuera de los cinco TFM? | **Sí** |
+| Q11 (fecha) | ¿Cuándo es la entrega? | **30 de noviembre de 2026.** Sigue abierto lo de los avances |
