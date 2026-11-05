@@ -715,9 +715,10 @@ menos alcance bien documentado.
 
 ### 8.2 Calendario hasta la entrega, el 30 de noviembre de 2026
 
-Dedicación del responsable: **2 h diarias, 6 días a la semana**, con el domingo de descanso (supuesto, a
-confirmar). Son 20 días y **40 h** del 6 al 28 de noviembre. Quedan 41 h de librería (el bloque 1 está hecho) y
-3 h de demo: **44 h**. **Faltan 4 h, sin decidir de dónde salen.**
+Dedicación del responsable: **2 h diarias, 6 días a la semana**, con el domingo de descanso. Son 20 días y
+**40 h** del 6 al 28 de noviembre. Quedan 41 h de librería (el bloque 1 está hecho) y 3 h de demo: **44 h**.
+**Las 4 h que faltan se cubren con algún día de mayor esfuerzo**, que el responsable planificará cuando queden
+pocos días.
 
 | Fechas | Bloques | h |
 |---|---|---|
@@ -725,7 +726,7 @@ confirmar). Son 20 días y **40 h** del 6 al 28 de noviembre. Quedan 41 h de lib
 | 9–14 de noviembre | 2 (resto), OC1, OC2 (3 de 4 h) | 12 |
 | 16–21 de noviembre | OC2 (resto), 3, 4, 5, W1 | 12 |
 | 23–28 de noviembre | A1, A2, A3 + A4, A5, entregables (1 de 5 h) | 12 |
-| Sin asignar | Entregables (4 h): README, capturas, diagramas y vídeo | 4 |
+| Días de mayor esfuerzo, por fijar | Entregables (4 h): README, capturas, diagramas y vídeo | 4 |
 | 30 de noviembre | Entrega | — |
 
 La semana del 9 de noviembre es la de mayor riesgo: es donde viven Anchor y Token-2022. Si algo se va a torcer,
