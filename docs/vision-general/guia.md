@@ -1,15 +1,15 @@
-# Roles del proyecto
+# Visión general de `godot-chain`
 
 ## Índice
 
-- [Descripción](#descripción)
-- [Roles](#roles)
+- [Qué es](#qué-es)
+- [Quién participa](#quién-participa)
 
-## Descripción
+## Qué es
 
-Quién participa en `godot-chain`, con qué credencial y qué puede hacer. Nadie usa una wallet.
+`godot-chain` permite a un juego de Godot 4 crear objetos que existen como activos reales en Solana y transferirlos entre jugadores, sin que el jugador vea la cadena: nadie usa una wallet y las transacciones las firma el backend.
 
-## Roles
+## Quién participa
 
 Cada actor tiene su propia credencial. El programa `chain-assets` sólo conoce a la autoridad del juego; el resto de permisos los aplica el backend, salvo los del jugador, que no tiene ninguno.
 
