@@ -29,5 +29,5 @@ resuelven.
 |---|---|---|
 | Q8 | ¿Valen capturas de la demo como «dashboard»? | Deja de hacer falta: **habrá un dashboard web** (propuesta, sección 3) |
 | Q9 | ¿Se admite un tema propio, fuera de los cinco TFM? | **Sí** |
-| Q10 | ¿Se entrega sin wallet conectada? | **No: se usará Phantom, con ngrok.** Falta decidir qué firma Phantom y para qué hace falta ngrok; hasta entonces la propuesta no cambia |
+| Q10 | ¿Se usa una wallet? | **No: el usuario no usará wallet.** Firma sólo la autoridad, desde el backend. Las instrucciones la dan por hecha (Phantom en los requisitos del README y en el checklist del vídeo), pero la rúbrica no la puntúa y admiten «una arquitectura diferente si tiene sentido». Se justifica en el README y se presenta como innovación |
 | Q11 (fecha) | ¿Cuándo es la entrega? | **30 de noviembre de 2026.** Sigue abierto lo de los avances |

@@ -948,7 +948,6 @@ La lista viva, con lo que ya han resuelto las instrucciones de entrega, está en
 `docs/seguimiento/preguntas-tutor.md`. Siguen abiertas:
 
 - **Q4:** si hay memoria escrita o defensa, además del vídeo.
-- **Q10:** si se admite entregar sin wallet conectada, justificándolo en el README.
 - **Q11:** si los avances intermedios son obligatorios. La entrega final es el 30 de noviembre.
 
 ---
