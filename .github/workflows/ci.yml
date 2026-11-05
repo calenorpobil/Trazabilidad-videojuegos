@@ -168,8 +168,11 @@ jobs:
           mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" godot
 
       # La importacion registra la GDExtension; sin ella el primer arranque no la carga.
+      # Godot termina con error en --import sin pantalla (134 en Linux, 139 en Windows,
+      # con o sin extension). No se detiene aqui: lo decide el test siguiente, que falla
+      # si la extension no ha quedado cargada.
       - name: Importar el proyecto
-        run: ./godot --headless --path examples/godot-demo --import
+        run: ./godot --headless --path examples/godot-demo --import || echo "::warning::godot --import termino con codigo $?"
 
       - name: Test de la GDExtension
         run: ./godot --headless --path examples/godot-demo --script res://tests/test_ext.gd
