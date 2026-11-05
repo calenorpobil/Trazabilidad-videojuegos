@@ -74,6 +74,7 @@ la propuesta; si no está en ella, no entra.
 | `examples/Proyecto finalizado/` | Proyecto de ejemplo del curso. Ignorado por git: **nunca lo publiques** |
 | `docs/especificacion/` | Qué se construye: propuesta, arquitectura del cliente, contrato HTTP y maqueta de la consola |
 | `docs/seguimiento/` | Qué falta por resolver: preguntas al tutor y verificaciones |
+| `docs/guia/` | Guías breves de consulta, como los roles del proyecto |
 | `docs/juego/` | Diseño y plan de *Nidada*, fuera del cómputo de horas |
 | `docs/archivo/` | Lo que ya no se sigue. Ignorado por git; sólo contexto, nunca justificación |
 
