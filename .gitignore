@@ -34,3 +34,6 @@ recursos/
 
 # Exportaciones de documentos: la fuente es el .md
 docs/**/*.pdf
+
+# Documentos superados: sólo contexto local
+docs/archivo/

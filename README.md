@@ -62,7 +62,6 @@ token de sólo lectura.
 | `docs/seguimiento/verificaciones.md` | Hechos comprobados, con fecha, y lo que falta por comprobar |
 | `docs/seguimiento/preguntas-tutor.md` | Lo que bloquea el proyecto y no decide quien implementa |
 | `docs/juego/` | Diseño y plan de *Nidada* |
-| `docs/archivo/` | Documentos superados. Sólo contexto |
 
 ## Estado
 

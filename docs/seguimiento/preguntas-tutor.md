@@ -15,7 +15,7 @@ decidido no esperar en la Q1: el proyecto incorpora el programa Anchor.
 | Q4 | ¿La memoria escrita y la presentación cuentan dentro de las horas del PFM o van aparte? | El plan de la sección 8 asume que van aparte, salvo el último bloque | Sin responder |
 | Q5 | ¿Hay que desplegar el backend en un servidor público o basta con ejecutarlo en local durante la defensa? | Un despliegue público añade trabajo no presupuestado | Sin responder |
 | Q6 | ¿El proyecto debe ser original respecto a la propuesta de la que deriva, o se admite explícitamente como versión reducida de ella? | — | Sin responder |
-| Q7 | ¿Se aceptan unas 53 h de librería en lugar de 40 h, por Rust en el cliente y por el programa Anchor, o se aplica la línea de corte 8.1 desde el principio? | Sin respuesta, la sección 8 de la propuesta no tiene presupuesto | Sin responder |
+| Q7 | ¿Se aceptan unas 48 h de librería en lugar de 40 h, por Rust en el cliente y por el programa Anchor, o se aplica la línea de corte 8.1 desde el principio? | Sin respuesta, la sección 8 de la propuesta no tiene presupuesto | Sin responder |
 | Q8 | ¿Las capturas «del dashboard» pueden ser de la demo de Godot y de un explorador? | Si hace falta una web, la consola de administración deja de ser recortable y hay que presupuestarla | Sin responder |
 
 ## De paso

@@ -13,8 +13,7 @@ Versión 0.1 — propuesta, 5 de octubre de 2026. Pendiente de revisión.
 ## 0. Estatus de este documento — léelo antes que el resto
 
 Este documento describe **el juego completo al que aspira la demo**, no lo que se construye para
-el PFM. Tiene el mismo estatus que el `docs/archivo/prompt-documento-implementacion.md`:
-**referencia, no guía de acción**.
+el PFM. Es **referencia, no guía de acción**.
 
 | Qué | Dónde se decide |
 |---|---|

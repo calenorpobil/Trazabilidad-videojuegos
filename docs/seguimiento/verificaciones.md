@@ -18,10 +18,10 @@ Consultadas contra el registro de npm ese día. Van fijadas sin `^` ni `~` en
 | `@solana/kit` | 8.2.0 |
 | `@solana-program/token-2022` | 0.16.1 |
 | `@solana-program/token` | 0.16.1 |
-| `fastify` | 5.12.3 |
+| `fastify` | 5.12.8 (subido el 5 de noviembre, por avisos de seguridad) |
 | `better-sqlite3` | 13.0.3 |
-| `zod` | 4.5.4 |
-| `vitest` | 5.0.0 |
+| `zod` | 4.6.7 (subido el 5 de noviembre, por un aviso alto) |
+| `vitest` | 5.1.0 (subido el 5 de noviembre, por avisos de seguridad) |
 | `typescript` | 6.0.3 |
 | `eslint` | 10.10.0 |
 | `typescript-eslint` | 8.69.0 |

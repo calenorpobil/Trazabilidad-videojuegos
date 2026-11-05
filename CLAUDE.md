@@ -1,7 +1,7 @@
 # CLAUDE.md — `godot-chain`
 
 Activos de Solana en Godot 4 sin que el jugador vea la cadena.
-Proyecto de fin de máster. Presupuesto: **unas 53 horas** (pendiente de confirmar, Q7), sólo la librería (ni la demo ni *Nidada* cuentan).
+Proyecto de fin de máster. Presupuesto: **unas 48 horas** (pendiente de confirmar, Q7), sólo la librería (ni la demo ni *Nidada* cuentan).
 
 ---
 
@@ -10,17 +10,12 @@ Proyecto de fin de máster. Presupuesto: **unas 53 horas** (pendiente de confirm
 | Documento | Estatus | Cómo usarlo |
 |---|---|---|
 | `docs/especificacion/propuesta-pfm.md` | **ÚNICA FUENTE DE VERDAD** | Es la especificación. Todo lo que se construye sale de aquí, **salvo lo que cambia `docs/especificacion/arquitectura-cliente-rust.md`** |
-| `docs/especificacion/arquitectura-cliente-rust.md` | Decisión del responsable, 6-oct-2026 | Cambia la arquitectura del cliente: Rust + GDExtension en `godot-chain` y `nidada-ext`. Sustituye al invariante 4. La propuesta **ya está actualizada** con esta decisión (revisión del 8-oct-2026); este documento sigue siendo el desarrollo detallado (toolchain, CI, fases A0–A5). Lo que dice de *Nidada* en el hito y de sus horas queda superado por la revisión de la propuesta del 4-nov-2026. La **Q7** (53 h frente a 40) sigue abierta |
+| `docs/especificacion/arquitectura-cliente-rust.md` | Decisión del responsable, 6-oct-2026 | Cambia la arquitectura del cliente: Rust + GDExtension en `godot-chain` y `nidada-ext`. Sustituye al invariante 4. La propuesta **ya está actualizada** con esta decisión (revisión del 8-oct-2026); este documento sigue siendo el desarrollo detallado (toolchain, CI, fases A0–A5). Lo que dice de *Nidada* en el hito, de Android y de sus horas queda superado por las revisiones de la propuesta del 4 y el 5-nov-2026. La **Q7** (48 h frente a 40) sigue abierta |
 | `docs/especificacion/http-contract.md` | Congelado en el bloque 1 | Contrato del que cuelga el resto. Cambiarlo exige decisión explícita |
-| `docs/archivo/prompt-documento-implementacion.md` | Referencia | Aspiración, no guía de acción |
-| `docs/archivo/implementacion-v1-descartada.md` | **Histórico, superado** | Describe una arquitectura descartada (Rust + GDExtension + Metaplex). Sólo contexto de a dónde aspira el proyecto |
+| `docs/archivo/` | **Superado, sólo en local** | Ignorado por git. Contiene decisiones **revertidas** (`core` sans-io, Metaplex Token Metadata, `SigningContext`, múltiples backends): citarlo como justificación es un error |
 
-**Regla:** los documentos marcados como referencia describen *a lo que aspira* el
-proyecto, **no lo que hay que hacer**. No se implementa nada porque aparezca en ellos.
-Si algo de ahí parece necesario, se contrasta con la propuesta reducida; si no está en
-ella, no entra. En particular, el documento viejo contiene decisiones **revertidas**
-(GDExtension en Rust, `core` sans-io, Metaplex Token Metadata, `SigningContext`,
-múltiples backends): citarlo como justificación es un error.
+**Regla:** si algo de `docs/archivo/` o de los documentos de *Nidada* parece necesario, se contrasta con
+la propuesta; si no está en ella, no entra.
 
 ---
 
@@ -79,7 +74,7 @@ múltiples backends): citarlo como justificación es un error.
 | `docs/especificacion/` | Qué se construye: propuesta, arquitectura del cliente, contrato HTTP y maqueta de la consola |
 | `docs/seguimiento/` | Qué falta por resolver: preguntas al tutor y verificaciones |
 | `docs/juego/` | Diseño y plan de *Nidada*, fuera del cómputo de horas |
-| `docs/archivo/` | Lo que ya no se sigue. Sólo contexto, nunca justificación |
+| `docs/archivo/` | Lo que ya no se sigue. Ignorado por git; sólo contexto, nunca justificación |
 
 ## 4. Disciplina de sesión
 
@@ -97,7 +92,7 @@ múltiples backends): citarlo como justificación es un error.
 - Bloque 1 (esqueleto, contrato, CI): **hecho**.
 - *Nidada* (`rust/`, `examples/godot-demo/`): J1 (cuidado) y J5 (amigos y visitas) hechos, con límites
   por IP, tokens con hash y decisiones previas a J3/J4 en `docs/juego/plan.md` §9. **Fuera del hito**
-  desde el 4-nov-2026: no se trabaja en ella para el PFM.
+  desde el 4-nov-2026: no se trabaja en ella para el PFM. Android, tampoco (5-nov-2026).
 - Siguiente: bloque 2 — configuración, derivación de claves con vectores de test,
   SQLite, idempotencia, máquina de estados de operaciones. Después, OC1 y OC2: el programa.
 - Requisitos de entrega del máster: propuesta, 0.1. Revísalos antes de planificar un bloque.
