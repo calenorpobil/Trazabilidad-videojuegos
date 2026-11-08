@@ -17,7 +17,7 @@
   "dependencies": {
     "@solana-program/token": "0.16.1",
     "@solana-program/token-2022": "0.16.1",
-    "@solana/kit": "8.2.0",
+    "@solana/kit": "8.6.0",
     "better-sqlite3": "13.0.3",
     "fastify": "5.12.8",
     "zod": "4.6.7"
