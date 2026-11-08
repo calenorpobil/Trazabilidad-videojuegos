@@ -1,0 +1,63 @@
+/**
+ * Derivacion de claves desde la semilla maestra del juego (propuesta, 4.3). Esquema concreto,
+ * no se reinventa:
+ *
+ *   authority_seed := HKDF-SHA512(ikm = master_seed, salt = game_id, info = "authority")
+ *   keypair(x)     := ed25519_from_seed(primeros 32 bytes de x)
+ *
+ * Los vectores fijos estan en `tests/keys.test.ts`. Cambiar cualquier detalle de este modulo
+ * cambia la autoridad de todo juego ya desplegado.
+ *
+ * Las claves de jugador (`info = "player:" || external_id`) esperan a la respuesta del tutor
+ * (Q12, preguntas-tutor.md).
+ */
+import { createPrivateKey, createPublicKey, hkdfSync } from 'node:crypto';
+import { getAddressDecoder } from '@solana/kit';
+
+export const MASTER_SEED_BYTES = 32;
+
+/** Semilla de la PDA `Game` (4.7) y `salt` de la derivacion: debe caber en 32 bytes. */
+export const GAME_ID_PATTERN = /^[a-z0-9-]{1,32}$/;
+
+export interface AuthorityKey {
+  /** Semilla ed25519 de 32 bytes. Nunca sale del backend ni se registra en logs. */
+  readonly secret: Uint8Array;
+  readonly publicKey: Uint8Array;
+  /** Direccion en la cadena. Nunca cruza la API publica. */
+  readonly address: string;
+}
+
+/** Prefijo DER de PKCS#8 para una clave privada Ed25519 de 32 bytes (RFC 8410). */
+const PKCS8_ED25519_PREFIX = Buffer.from('302e020100300506032b657004220420', 'hex');
+const ED25519_KEY_BYTES = 32;
+
+export function publicKeyFromSeed(seed: Uint8Array): Uint8Array {
+  if (seed.length !== ED25519_KEY_BYTES) {
+    throw new Error(`la semilla ed25519 debe tener ${ED25519_KEY_BYTES} bytes`);
+  }
+  const privateKey = createPrivateKey({
+    key: Buffer.concat([PKCS8_ED25519_PREFIX, seed]),
+    format: 'der',
+    type: 'pkcs8',
+  });
+  const spki = createPublicKey(privateKey).export({ format: 'der', type: 'spki' });
+  // La SPKI de Ed25519 termina en los 32 bytes de la clave publica.
+  return Uint8Array.from(spki.subarray(spki.length - ED25519_KEY_BYTES));
+}
+
+function hkdf(masterSeed: Uint8Array, gameId: string, info: string): Uint8Array {
+  if (masterSeed.length !== MASTER_SEED_BYTES) {
+    throw new Error(`la semilla maestra debe tener ${MASTER_SEED_BYTES} bytes`);
+  }
+  if (!GAME_ID_PATTERN.test(gameId)) {
+    throw new Error('game_id debe cumplir [a-z0-9-]{1,32}');
+  }
+  const out = hkdfSync('sha512', masterSeed, Buffer.from(gameId, 'utf8'), Buffer.from(info, 'utf8'), 64);
+  return new Uint8Array(out).slice(0, ED25519_KEY_BYTES);
+}
+
+export function deriveAuthority(masterSeed: Uint8Array, gameId: string): AuthorityKey {
+  const secret = hkdf(masterSeed, gameId, 'authority');
+  const publicKey = publicKeyFromSeed(secret);
+  return { secret, publicKey, address: getAddressDecoder().decode(publicKey) };
+}
