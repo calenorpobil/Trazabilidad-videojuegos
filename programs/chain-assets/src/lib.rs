@@ -46,4 +46,19 @@ pub mod chain_assets {
     pub fn create_item(ctx: Context<CreateItem>, args: CreateItemArgs) -> Result<()> {
         instructions::create_item::create_item_handler(ctx, args)
     }
+
+    /// Entrega `amount` unidades de un tipo a un tenedor: crea su cuenta de token asociada si
+    /// hace falta, pagada por la autoridad, y emite con `MintTo` firmando la PDA del juego. El
+    /// tenedor no firma. `amount` es mayor que cero y el tipo debe ser de este juego.
+    pub fn grant(ctx: Context<Grant>, amount: u64) -> Result<()> {
+        instructions::grant::grant_handler(ctx, amount)
+    }
+
+    /// Mueve `amount` unidades entre dos tenedores con `TransferChecked`, firmando la PDA del
+    /// juego como delegado permanente: el emisor no firma. Crea la cuenta del receptor si hace
+    /// falta. `amount` es mayor que cero, emisor y receptor son distintos, y el saldo
+    /// insuficiente lo rechaza Token-2022.
+    pub fn transfer(ctx: Context<TransferItem>, amount: u64) -> Result<()> {
+        instructions::transfer::transfer_handler(ctx, amount)
+    }
 }

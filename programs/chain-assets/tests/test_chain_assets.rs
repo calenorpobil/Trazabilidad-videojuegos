@@ -1,22 +1,24 @@
 //! Tests de `chain-assets` con LiteSVM, sin red. Cargan el `.so` de `anchor build`.
 //!
 //! Cada instrucción tiene al menos un test negativo: otro firmante, valores fuera de límite y
-//! tipo de otro juego (propuesta, 4.7). Toda transacción que construyen comprueba el invariante 1:
+//! tipo de otro juego (propuesta, 4.7). `grant` y `transfer` añaden cantidad cero, emisor igual a
+//! receptor y saldo insuficiente. Toda transacción que construyen comprueba el invariante 1:
 //! una sola firma requerida.
 
 use {
     anchor_lang::{
-        prelude::Pubkey, solana_program::instruction::Instruction, system_program,
-        AccountDeserialize, InstructionData, ToAccountMetas,
+        error::ErrorCode, prelude::Pubkey, solana_program::instruction::Instruction,
+        system_program, AccountDeserialize, InstructionData, ToAccountMetas,
     },
     anchor_spl::{
+        associated_token::{self, get_associated_token_address_with_program_id},
         token_2022::spl_token_2022::{
             self,
             extension::{
                 metadata_pointer::MetadataPointer, permanent_delegate::PermanentDelegate,
                 BaseStateWithExtensions, StateWithExtensions,
             },
-            state::Mint,
+            state::{Account as TokenAccountState, Mint},
         },
         token_2022_extensions::spl_token_metadata_interface::state::TokenMetadata,
     },
@@ -36,6 +38,8 @@ use {
 const ANCHOR_ERROR_OFFSET: u32 = 6000;
 /// `ConstraintHasOne`: la cuenta firmante no es la autoridad del juego.
 const CONSTRAINT_HAS_ONE: u32 = 2001;
+/// `TokenError::InsufficientFunds` de Token-2022.
+const TOKEN_INSUFFICIENT_FUNDS: u32 = 1;
 /// Tamaño máximo de una transacción de Solana (paquete IPv6 menos cabeceras).
 const PACKET_DATA_SIZE: usize = 1232;
 
@@ -67,8 +71,13 @@ impl Env {
 
     /// Firma con `payer` y nadie más: si la instrucción pidiera otra firma, falla.
     fn send(&mut self, ix: Instruction, payer: &Keypair) -> Result<Sent, String> {
+        self.send_all(&[ix], payer)
+    }
+
+    /// Varias instrucciones en una sola transacción, con la misma comprobación del invariante 1.
+    fn send_all(&mut self, ixs: &[Instruction], payer: &Keypair) -> Result<Sent, String> {
         let msg =
-            Message::new_with_blockhash(&[ix], Some(&payer.pubkey()), &self.svm.latest_blockhash());
+            Message::new_with_blockhash(ixs, Some(&payer.pubkey()), &self.svm.latest_blockhash());
         let msg = VersionedMessage::Legacy(msg);
         // Invariante 1: exactamente una firma requerida.
         assert_eq!(
@@ -93,6 +102,30 @@ impl Env {
         let account = self.svm.get_account(game).unwrap();
         Game::try_deserialize(&mut account.data.as_slice()).unwrap()
     }
+
+    fn token(&self, holder: &Pubkey, mint: &Pubkey) -> TokenAccountState {
+        let account = self.svm.get_account(&ata(holder, mint)).unwrap();
+        assert_eq!(account.owner, spl_token_2022::ID);
+        StateWithExtensions::<TokenAccountState>::unpack(&account.data)
+            .unwrap()
+            .base
+    }
+
+    fn balance(&self, holder: &Pubkey, mint: &Pubkey) -> u64 {
+        self.token(holder, mint).amount
+    }
+
+    fn supply(&self, mint: &Pubkey) -> u64 {
+        let account = self.svm.get_account(mint).unwrap();
+        StateWithExtensions::<Mint>::unpack(&account.data)
+            .unwrap()
+            .base
+            .supply
+    }
+}
+
+fn ata(holder: &Pubkey, mint: &Pubkey) -> Pubkey {
+    get_associated_token_address_with_program_id(holder, mint, &spl_token_2022::ID)
 }
 
 fn game_pda(game_id: &str) -> Pubkey {
@@ -150,6 +183,56 @@ fn create_item_ix(authority: &Pubkey, game: &Pubkey, args: CreateItemArgs) -> In
     )
 }
 
+fn grant_ix(
+    authority: &Pubkey,
+    game: &Pubkey,
+    mint: &Pubkey,
+    holder: &Pubkey,
+    amount: u64,
+) -> Instruction {
+    Instruction::new_with_bytes(
+        chain_assets::id(),
+        &chain_assets::instruction::Grant { amount }.data(),
+        chain_assets::accounts::Grant {
+            authority: *authority,
+            game: *game,
+            mint: *mint,
+            holder: *holder,
+            holder_token: ata(holder, mint),
+            token_program: spl_token_2022::ID,
+            associated_token_program: associated_token::ID,
+            system_program: system_program::ID,
+        }
+        .to_account_metas(None),
+    )
+}
+
+fn transfer_ix(
+    authority: &Pubkey,
+    game: &Pubkey,
+    mint: &Pubkey,
+    from: &Pubkey,
+    to: &Pubkey,
+    amount: u64,
+) -> Instruction {
+    Instruction::new_with_bytes(
+        chain_assets::id(),
+        &chain_assets::instruction::Transfer { amount }.data(),
+        chain_assets::accounts::TransferItem {
+            authority: *authority,
+            game: *game,
+            mint: *mint,
+            from_token: ata(from, mint),
+            to_holder: *to,
+            to_token: ata(to, mint),
+            token_program: spl_token_2022::ID,
+            associated_token_program: associated_token::ID,
+            system_program: system_program::ID,
+        }
+        .to_account_metas(None),
+    )
+}
+
 fn sword(seed: u8) -> CreateItemArgs {
     CreateItemArgs {
         item_seed: [seed; 32],
@@ -191,11 +274,20 @@ fn custom(err: ChainAssetsError) -> String {
     format!("Custom({})", ANCHOR_ERROR_OFFSET + err as u32)
 }
 
+fn anchor(err: ErrorCode) -> String {
+    format!("Custom({})", err as u32)
+}
+
 fn assert_fails_with(result: Result<Sent, String>, code: &str) {
     match result {
         Ok(_) => panic!("se esperaba un fallo con {code}"),
         Err(e) => assert!(e.contains(code), "se esperaba {code}, llegó: {e}"),
     }
+}
+
+/// Un tenedor: una clave cualquiera que no firma ni tiene fondos (propuesta, 4.2).
+fn holder() -> Pubkey {
+    Keypair::new().pubkey()
 }
 
 /// Juego listo para usar: devuelve el entorno, la autoridad y la PDA.
@@ -527,7 +619,7 @@ fn create_item_counts_characters_not_bytes() {
 }
 
 /// P7, medido sin red: tamaño y unidades de cómputo de `create_item` en el caso máximo.
-/// `grant` es de OC2: falta medir los dos juntos.
+/// Con `grant` en la misma transacción, ver `create_item_and_grant_size_and_compute`.
 #[test]
 fn create_item_max_case_size_and_compute() {
     let (mut env, authority, game) = setup("demo");
@@ -553,4 +645,359 @@ fn create_item_max_case_size_and_compute() {
     // LiteSVM no aplica el límite de paquete: se ejecuta igualmente para medir el cómputo.
     let max = env.send(ix, &authority).unwrap();
     println!("create_item máximo: {} CU", max.compute_units);
+}
+
+// --- grant -------------------------------------------------------------------------------
+
+/// Crea el tipo `sword(seed)` en `game` y devuelve su mint.
+fn new_item(env: &mut Env, authority: &Keypair, game: &Pubkey, seed: u8) -> Pubkey {
+    env.send(
+        create_item_ix(&authority.pubkey(), game, sword(seed)),
+        authority,
+    )
+    .unwrap();
+    item_pda(game, &[seed; 32])
+}
+
+/// Juego con un tipo creado: entorno, autoridad, PDA del juego y mint.
+fn setup_item(game_id: &str) -> (Env, Keypair, Pubkey, Pubkey) {
+    let (mut env, authority, game) = setup(game_id);
+    let mint = new_item(&mut env, &authority, &game, 1);
+    (env, authority, game, mint)
+}
+
+#[test]
+fn grant_creates_holder_account_and_mints() {
+    let (mut env, authority, game, mint) = setup_item("demo");
+    let player = holder();
+    let before = env.svm.get_balance(&authority.pubkey()).unwrap();
+    // `send` comprueba que la única firma es la de la autoridad: el tenedor no firma.
+    env.send(
+        grant_ix(&authority.pubkey(), &game, &mint, &player, 3),
+        &authority,
+    )
+    .unwrap();
+
+    let token = env.token(&player, &mint);
+    assert_eq!(token.owner, player);
+    assert_eq!(token.mint, mint);
+    assert_eq!(token.amount, 3);
+    assert_eq!(env.supply(&mint), 3);
+    // La renta de la cuenta nueva la paga la autoridad, que es también la pagadora.
+    let account = env.svm.get_account(&ata(&player, &mint)).unwrap();
+    assert!(before - env.svm.get_balance(&authority.pubkey()).unwrap() >= account.lamports);
+    println!(
+        "cuenta de token asociada: {} bytes, {} lamports",
+        account.data.len(),
+        account.lamports
+    );
+}
+
+#[test]
+fn grant_to_existing_account_adds_units() {
+    let (mut env, authority, game, mint) = setup_item("demo");
+    let player = holder();
+    for amount in [2, 5] {
+        env.send(
+            grant_ix(&authority.pubkey(), &game, &mint, &player, amount),
+            &authority,
+        )
+        .unwrap();
+    }
+    assert_eq!(env.balance(&player, &mint), 7);
+    assert_eq!(env.supply(&mint), 7);
+}
+
+#[test]
+fn grant_rejects_other_signer() {
+    let (mut env, _, game, mint) = setup_item("demo");
+    let stranger = env.funded();
+    assert_fails_with(
+        env.send(
+            grant_ix(&stranger.pubkey(), &game, &mint, &holder(), 1),
+            &stranger,
+        ),
+        &anchor(ErrorCode::ConstraintHasOne),
+    );
+}
+
+#[test]
+fn grant_rejects_zero_amount() {
+    let (mut env, authority, game, mint) = setup_item("demo");
+    assert_fails_with(
+        env.send(
+            grant_ix(&authority.pubkey(), &game, &mint, &holder(), 0),
+            &authority,
+        ),
+        &custom(ChainAssetsError::InvalidAmount),
+    );
+}
+
+#[test]
+fn grant_rejects_item_of_other_game() {
+    // Un tipo creado por el juego A no se puede emitir con el `Game` B, ni siquiera por la
+    // autoridad legítima de B.
+    let (mut env, _, _, mint_a) = setup_item("game-a");
+    let authority_b = env.funded();
+    env.send(
+        initialize_game_ix(&authority_b.pubkey(), "game-b"),
+        &authority_b,
+    )
+    .unwrap();
+    assert_fails_with(
+        env.send(
+            grant_ix(
+                &authority_b.pubkey(),
+                &game_pda("game-b"),
+                &mint_a,
+                &holder(),
+                1,
+            ),
+            &authority_b,
+        ),
+        &anchor(ErrorCode::ConstraintMintMintAuthority),
+    );
+    assert_eq!(env.supply(&mint_a), 0);
+}
+
+#[test]
+fn grant_rejects_account_of_another_holder() {
+    // La cuenta de token existe pero es de otro tenedor: no se puede emitir en ella.
+    let (mut env, authority, game, mint) = setup_item("demo");
+    let (alice, bob) = (holder(), holder());
+    env.send(
+        grant_ix(&authority.pubkey(), &game, &mint, &alice, 1),
+        &authority,
+    )
+    .unwrap();
+    let mut ix = grant_ix(&authority.pubkey(), &game, &mint, &bob, 1);
+    ix.accounts[4].pubkey = ata(&alice, &mint);
+    assert_fails_with(
+        env.send(ix, &authority),
+        &anchor(ErrorCode::ConstraintTokenOwner),
+    );
+}
+
+// --- transfer ----------------------------------------------------------------------------
+
+/// Juego con un tipo y `amount` unidades en manos de un tenedor.
+fn setup_holding(game_id: &str, amount: u64) -> (Env, Keypair, Pubkey, Pubkey, Pubkey) {
+    let (mut env, authority, game, mint) = setup_item(game_id);
+    let player = holder();
+    env.send(
+        grant_ix(&authority.pubkey(), &game, &mint, &player, amount),
+        &authority,
+    )
+    .unwrap();
+    (env, authority, game, mint, player)
+}
+
+#[test]
+fn transfer_moves_units_without_sender_signature() {
+    let (mut env, authority, game, mint, alice) = setup_holding("demo", 5);
+    let bob = holder();
+    // La cuenta del receptor no existe: la crea `transfer`. Sólo firma la autoridad.
+    env.send(
+        transfer_ix(&authority.pubkey(), &game, &mint, &alice, &bob, 2),
+        &authority,
+    )
+    .unwrap();
+    assert_eq!(env.balance(&alice, &mint), 3);
+    assert_eq!(env.balance(&bob, &mint), 2);
+    assert_eq!(env.token(&bob, &mint).owner, bob);
+    assert_eq!(env.supply(&mint), 5);
+
+    // Con la cuenta ya creada, y moviendo el saldo entero.
+    env.send(
+        transfer_ix(&authority.pubkey(), &game, &mint, &alice, &bob, 3),
+        &authority,
+    )
+    .unwrap();
+    assert_eq!(env.balance(&alice, &mint), 0);
+    assert_eq!(env.balance(&bob, &mint), 5);
+}
+
+#[test]
+fn transfer_rejects_other_signer() {
+    let (mut env, _, game, mint, alice) = setup_holding("demo", 5);
+    let stranger = env.funded();
+    assert_fails_with(
+        env.send(
+            transfer_ix(&stranger.pubkey(), &game, &mint, &alice, &holder(), 1),
+            &stranger,
+        ),
+        &anchor(ErrorCode::ConstraintHasOne),
+    );
+}
+
+#[test]
+fn transfer_rejects_zero_amount() {
+    let (mut env, authority, game, mint, alice) = setup_holding("demo", 5);
+    assert_fails_with(
+        env.send(
+            transfer_ix(&authority.pubkey(), &game, &mint, &alice, &holder(), 0),
+            &authority,
+        ),
+        &custom(ChainAssetsError::InvalidAmount),
+    );
+}
+
+#[test]
+fn transfer_rejects_same_holder() {
+    // Con la misma cuenta asociada en origen y destino, Anchor lo rechaza antes del handler:
+    // es la misma cuenta mutable dos veces.
+    let (mut env, authority, game, mint, alice) = setup_holding("demo", 5);
+    assert_fails_with(
+        env.send(
+            transfer_ix(&authority.pubkey(), &game, &mint, &alice, &alice, 1),
+            &authority,
+        ),
+        &anchor(ErrorCode::ConstraintDuplicateMutableAccount),
+    );
+    assert_eq!(env.balance(&alice, &mint), 5);
+}
+
+#[test]
+fn transfer_rejects_same_holder_from_other_account() {
+    // El origen es otra cuenta de token del mismo tenedor, no la asociada: lo para `SameHolder`.
+    // Se copia la cuenta asociada a otra dirección, porque crearla con su propia clave pediría
+    // una segunda firma, y `send` no lo admite.
+    let (mut env, authority, game, mint, alice) = setup_holding("demo", 5);
+    let other = Keypair::new().pubkey();
+    let copy = env.svm.get_account(&ata(&alice, &mint)).unwrap();
+    env.svm.set_account(other, copy).unwrap();
+    let mut ix = transfer_ix(&authority.pubkey(), &game, &mint, &alice, &alice, 1);
+    ix.accounts[3].pubkey = other;
+    assert_fails_with(
+        env.send(ix, &authority),
+        &custom(ChainAssetsError::SameHolder),
+    );
+}
+
+#[test]
+fn transfer_rejects_insufficient_balance() {
+    // El programa no lleva saldos: lo rechaza Token-2022, y no se mueve nada.
+    let (mut env, authority, game, mint, alice) = setup_holding("demo", 2);
+    let bob = holder();
+    assert_fails_with(
+        env.send(
+            transfer_ix(&authority.pubkey(), &game, &mint, &alice, &bob, 3),
+            &authority,
+        ),
+        &format!("Custom({TOKEN_INSUFFICIENT_FUNDS})"),
+    );
+    assert_eq!(env.balance(&alice, &mint), 2);
+    assert!(env.svm.get_account(&ata(&bob, &mint)).is_none());
+}
+
+#[test]
+fn transfer_rejects_item_of_other_game() {
+    // Unidades de un tipo del juego A: el `Game` B no puede moverlas, ni con su autoridad.
+    let (mut env, _, _, mint_a, alice) = setup_holding("game-a", 5);
+    let authority_b = env.funded();
+    env.send(
+        initialize_game_ix(&authority_b.pubkey(), "game-b"),
+        &authority_b,
+    )
+    .unwrap();
+    assert_fails_with(
+        env.send(
+            transfer_ix(
+                &authority_b.pubkey(),
+                &game_pda("game-b"),
+                &mint_a,
+                &alice,
+                &holder(),
+                1,
+            ),
+            &authority_b,
+        ),
+        &anchor(ErrorCode::ConstraintMintMintAuthority),
+    );
+    assert_eq!(env.balance(&alice, &mint_a), 5);
+}
+
+// --- create_item + grant en una transacción (P7) -----------------------------------------
+
+/// Envía `create_item` y `grant` de una unidad en una sola transacción, como hará el backend
+/// cuando quepan (propuesta, revisión del 8 de noviembre).
+fn create_and_grant(
+    env: &mut Env,
+    authority: &Keypair,
+    game: &Pubkey,
+    args: CreateItemArgs,
+) -> Sent {
+    let mint = item_pda(game, &args.item_seed);
+    let player = holder();
+    let sent = env
+        .send_all(
+            &[
+                create_item_ix(&authority.pubkey(), game, args),
+                grant_ix(&authority.pubkey(), game, &mint, &player, 1),
+            ],
+            authority,
+        )
+        .unwrap();
+    assert_eq!(env.balance(&player, &mint), 1);
+    sent
+}
+
+/// `n` pares de 32/64 y el resto de campos al mínimo: sin `uri`, `name` y `symbol` de 1.
+fn minimal_with_max_pairs(seed: u8, n: usize) -> CreateItemArgs {
+    CreateItemArgs {
+        item_seed: [seed; 32],
+        name: "n".into(),
+        symbol: "s".into(),
+        uri: String::new(),
+        collection: "col_7Hs2aaaaaaaaaaaa".into(),
+        qualities: (0..n)
+            .map(|i| Quality {
+                key: format!("{i}").repeat(32),
+                value: "v".repeat(64),
+            })
+            .collect(),
+    }
+}
+
+/// P7, medido sin red: `create_item` y `grant` juntos. Caso típico, cuántos pares máximos
+/// caben y el máximo del contrato.
+#[test]
+fn create_item_and_grant_size_and_compute() {
+    let (mut env, authority, game) = setup("demo");
+
+    let typical = create_and_grant(&mut env, &authority, &game, sword(1));
+    println!(
+        "create_item + grant típico: {} bytes, {} CU",
+        typical.size, typical.compute_units
+    );
+    assert!(typical.size <= PACKET_DATA_SIZE);
+
+    let mut fits = 0;
+    for n in 0..=8 {
+        let sent = create_and_grant(
+            &mut env,
+            &authority,
+            &game,
+            minimal_with_max_pairs(10 + n as u8, n),
+        );
+        let ok = sent.size <= PACKET_DATA_SIZE;
+        println!(
+            "create_item + grant, {n} pares de 32/64 y resto mínimo: {} bytes, {} CU{}",
+            sent.size,
+            sent.compute_units,
+            if ok { "" } else { " (no cabe)" }
+        );
+        if ok {
+            fits = n;
+        }
+    }
+    println!("juntos caben como máximo {fits} pares de 32/64 con el resto de campos mínimos");
+
+    // LiteSVM no aplica el límite de paquete: se ejecuta igualmente para medir el cómputo.
+    let max = create_and_grant(&mut env, &authority, &game, max_item(2));
+    println!(
+        "create_item + grant máximo del contrato: {} bytes (límite {PACKET_DATA_SIZE}), {} CU",
+        max.size, max.compute_units
+    );
+    assert!(max.size > PACKET_DATA_SIZE);
 }

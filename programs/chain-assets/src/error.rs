@@ -24,4 +24,8 @@ pub enum ChainAssetsError {
     ReservedQualityKey,
     #[msg("Clave de cualidad repetida")]
     DuplicateQualityKey,
+    #[msg("amount debe ser mayor que cero")]
+    InvalidAmount,
+    #[msg("El emisor y el receptor son el mismo tenedor")]
+    SameHolder,
 }
