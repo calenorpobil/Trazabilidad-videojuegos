@@ -37,3 +37,8 @@ docs/**/*.pdf
 
 # Documentos superados: sólo contexto local
 docs/archivo/
+
+# Anchor: target/ es un enlace a ext4 dentro de WSL (disco C: casi lleno)
+/target
+.anchor/
+test-ledger/

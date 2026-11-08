@@ -1,0 +1,16 @@
+# Workspace del programa on-chain `chain-assets` (propuesta, 4.7). El Rust de Nidada vive
+# aparte, en rust/, con su propio workspace.
+[workspace]
+members = ["programs/*"]
+exclude = ["rust", "examples"]
+resolver = "2"
+
+[profile.release]
+overflow-checks = true
+lto = "fat"
+codegen-units = 1
+
+[profile.release.build-override]
+opt-level = 3
+incremental = false
+codegen-units = 1

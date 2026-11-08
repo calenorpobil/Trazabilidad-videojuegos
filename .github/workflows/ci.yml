@@ -84,6 +84,54 @@ jobs:
       - name: Licencias
         run: npm run licenses
 
+  # Programa on-chain chain-assets (propuesta, 4.7): anchor build y los tests con LiteSVM,
+  # sin red. El despliegue en devnet es manual y no entra aqui.
+  program:
+    name: Programa (Anchor)
+    runs-on: ubuntu-latest
+    env:
+      SOLANA_VERSION: 4.1.2
+      ANCHOR_VERSION: 1.2.2
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/solana
+            ~/.local/share/solana
+            ~/.avm
+            ~/.cargo/bin/avm
+            ~/.cargo/registry
+            target
+          key: program-${{ env.SOLANA_VERSION }}-${{ env.ANCHOR_VERSION }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: program-${{ env.SOLANA_VERSION }}-${{ env.ANCHOR_VERSION }}-
+
+      - name: Instalar Solana y Anchor
+        run: |
+          if [ ! -x "$HOME/.local/share/solana/install/active_release/bin/solana" ]; then
+            sh -c "$(curl -sSfL https://release.anza.xyz/v${SOLANA_VERSION}/install)"
+          fi
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.avm/bin" >> "$GITHUB_PATH"
+          if ! command -v avm >/dev/null; then
+            cargo install --git https://github.com/otter-sec/anchor --tag "v${ANCHOR_VERSION}" avm --locked
+          fi
+          avm install "${ANCHOR_VERSION}" || true
+          avm use "${ANCHOR_VERSION}"
+
+      # Una clave de programa efimera para que anchor build no falle; el id real esta en
+      # declare_id! y en Anchor.toml.
+      - name: Compilar
+        run: |
+          mkdir -p target/deploy
+          [ -f target/deploy/chain_assets-keypair.json ] || solana-keygen new --no-bip39-passphrase -s -o target/deploy/chain_assets-keypair.json
+          anchor --version
+          anchor build
+
+      - name: Tests (LiteSVM, sin red)
+        run: cargo test -p chain-assets --locked
+
   # Pendiente: Godot en modo headless ejecutando la suite del addon en modo mock, sin
   # red. Entra en la fase A2, que es cuando existe esa suite. Anadir aqui un trabajo
   # que no ejecuta nada solo sirve para tener una casilla verde que no comprueba nada.
