@@ -24,6 +24,9 @@ const ALLOWED = new Set([
   // Copyleft debil, y solo en dependencias de desarrollo (lightningcss, via vitest).
   // No se enlaza en nada que se distribuya.
   'MPL-2.0',
+  // Dominio publico, sin condiciones. Solo `jsonify` (via @codama/renderers-js), en desarrollo:
+  // lo usa el generador del cliente, no el codigo que se ejecuta (8-nov-2026).
+  'Public Domain',
 ]);
 
 /** @param {string} dir */
