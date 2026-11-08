@@ -167,8 +167,13 @@ que se crea en `grant` (OC2).
   solo**: se pasa en 225 bytes. Con 8 pares máximos, sólo cabe si los demás campos son casi
   vacíos, y queda un margen de 15 bytes. Con `grant` en la misma transacción (OC2) cabe todavía
   menos. Es el caso que la propuesta prevé en la sección 13 (punto 10): el backend rechaza o
-  limita, y no parte la operación sin una decisión explícita. **Decisión pendiente del
-  responsable.**
+  limita, y no parte la operación sin una decisión explícita. **Decidido el 8 de noviembre**
+  (propuesta, revisión del 8 de noviembre): se mantienen los límites; el backend mide la
+  transacción, separa `create_item` y `grant` en dos si juntos no caben, y rechaza con
+  `400` / `REJECTED` sólo si `create_item` no cabe ni solo.
+- Fórmula aproximada, que cuadra con las dos medidas: 363 bytes fijos + `name` + `symbol` +
+  `uri` + `collection` + Σ(clave + valor + 8) por cualidad. Quedan unos 850 bytes para los
+  campos.
 - **Falta** medir `create_item` + `grant` juntos, en OC2.
 
 ---

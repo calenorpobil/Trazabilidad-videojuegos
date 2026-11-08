@@ -81,6 +81,18 @@ Al empezar el bloque 2, el responsable cierra tres huecos de 4.3, 4.4 y 4.5:
 Queda abierta la **Q12** (sección 14): el tutor objeta que el backend custodie las claves. Mientras no
 responda, el bloque 2 deriva sólo la clave de la autoridad; la de los jugadores espera.
 
+Al cerrar OC1, el responsable decide **qué pasa cuando un tipo no cabe en una transacción**. Medido en OC1
+(`verificaciones.md`, V10): con todos los campos al máximo del contrato, `create_item` ocupa 1.457 bytes, y
+el límite de Solana son 1.232. Los casos normales caben de sobra (el típico ocupa 472). Se mantienen el
+contrato y los límites del programa, y el backend, antes de enviar, mide la transacción serializada:
+
+1. Si `create_item` y `grant` caben juntos, van en **una** transacción.
+2. Si no caben juntos pero `create_item` sí, van en **dos**: primero `create_item` y después `grant`, dentro
+   de la misma operación. La operación no pasa a `settled` hasta que las dos lo están.
+3. Si `create_item` no cabe ni solo, `POST /v1/items` responde `400` / `REJECTED` y no toca Solana.
+
+Se implementa en el bloque 3.
+
 ### 0.1 Requisitos de entrega del máster
 
 Hasta el 4 de noviembre eran supuestos. Ahora salen de las instrucciones generales de entrega del TFM,

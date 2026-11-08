@@ -94,8 +94,8 @@ la propuesta; si no está en ella, no entra.
 - OC1 (8-nov-2026, rama `oc1`, sobre `bloque-2`): `initialize_game`, `rotate_authority` y
   `create_item` con mint PDA y sus tres extensiones, una sola firma, 16 tests con LiteSVM y
   desplegado en devnet (`4SUNiKmyk4QtXhU2oNGn6uiXiSUevRdmXpZdRFXPeLNz`): **hecho**. Se compila
-  en WSL (V5). **Decisión pendiente:** el máximo del contrato no cabe en una transacción
-  (verificaciones, V10).
+  en WSL (V5). El máximo del contrato no cabe en una transacción (verificaciones, V10): el
+  backend separa `create_item` y `grant` o rechaza (propuesta, revisión del 8 de noviembre).
 - Siguiente: OC2, `grant` y `transfer`, con la medida de P1 y P7 que falta.
 - Requisitos de entrega del máster: propuesta, 0.1. Revísalos antes de planificar un bloque.
 - Ver `docs/seguimiento/verificaciones.md` para lo que hay que comprobar antes de OC1 y del

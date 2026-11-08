@@ -136,6 +136,10 @@ Crea el tipo y emite la cantidad inicial. Dos efectos, una operación.
 | `qualities` | no | Mapa texto→texto, máximo 8 pares, claves 1..32, valores 1..64. La clave `collection` está **reservada**: la escribe el backend |
 | `initial_grant` | sí | `amount` entero >= 1. El tipo nace con existencias porque un tipo sin ejemplares no es demostrable |
 
+Un tipo que, aun cumpliendo estos límites, no cabe en una sola transacción se rechaza: `400` /
+`REJECTED`. Con valores de tamaño normal no ocurre; sólo con casi todos los campos al máximo de
+longitud (propuesta, revisión del 8 de noviembre de 2026).
+
 → `202`
 ```json
 { "operation_id": "opr_3Kd9...", "item_id": "itm_a1b2...", "holder_id": "hld_9fK2..." }
@@ -421,3 +425,4 @@ cerrado con la opción más simple, y quedan listados para que el cambio sea vis
 | 2026-10-09 | Sección 3: se documenta que la clave de idempotencia la construye el plugin a partir de un `call_id` del juego. Sin cambio de forma en ningún endpoint ni cabecera. |
 | 2026-10-11 | Sección 4.6: la edición de un tipo pasa a ser `PATCH /v1/items/{item_id}` (antes `…/qualities`), con `name`, `uri` y `qualities` como conjunto completo; `symbol` y `collection_id` no se editan. Sigue fuera del hito. Sección 5.4: se añaden `revision` y `edit` a cada tipo. Una edición a la vez por tipo; `revision` sube al aceptarla. |
 | 2026-10-11 | Secciones 5.3 y 5.4: `GET /v1/collections` y `GET /v1/items` (listados de catálogo para la web de administración). Sólo lecturas nuevas; ninguna ruta existente cambia. Fuera del hito: bajo la línea de corte. Sección 2: se aclara que las rutas `/admin` de la consola no son parte del contrato. |
+| 2026-11-08 | Sección 4.3: `POST /v1/items` rechaza con `400` / `REJECTED` un tipo que no cabe en una transacción aunque cumpla los límites. Medido en OC1: sólo ocurre con casi todos los campos al máximo. Sin cambio de forma en ningún endpoint. |
