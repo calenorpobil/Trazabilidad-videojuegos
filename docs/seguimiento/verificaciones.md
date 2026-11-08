@@ -72,18 +72,115 @@ Node local: v24.12.0 (el requisito es >= 22).
 - La documentación de Anchor avisa de que no todas las instrucciones de extensión están
   implementadas y de que algunas pueden exigir CPI a mano.
 
+### V5 — Toolchain del programa (P8, 8 de noviembre de 2026)
+
+- Notas de la versión 1.2.2 de Anchor (anchor-lang.com, *release notes*): Solana recomendada
+  **4.1.2**, platform-tools **v1.57**, SBPF v3. AVM instala la CLI de Solana y las
+  platform-tools que tocan. La plantilla de tests por defecto es LiteSVM en Rust.
+- Página de instalación de Anchor: en Windows **exige WSL**. No hay instalación nativa.
+- Instalado en el Debian de WSL: Solana 4.1.2, `anchor-cli` 1.2.2 (con avm 1.1.2) y Rust
+  stable **1.99.1**. Hace falta rustc >= 1.98.1: las crates de agave 4.4.1 que arrastra
+  `litesvm` lo exigen, y la 1.96 falla al generar el IDL.
+- Espacio: lo nuevo ocupa unos 2-3 GB dentro de WSL (Solana 4.1.2 unos 0,4 GB, platform-tools
+  v1.57, `target/` de unos 2 GB). El disco virtual de WSL vive en C:, así que antes se
+  borraron, dentro de WSL, dos ledgers de prueba, dos releases viejas de Solana y tres
+  platform-tools antiguas: 13 GB de hueco interno, que se reutiliza sin hacer crecer el
+  fichero. `target/` es un enlace a `~/build/chain-assets-target`, en ext4.
+- Dependencias del programa, versiones exactas: `anchor-lang` y `anchor-spl` `=1.2.2`;
+  en desarrollo `litesvm` `=0.18.2` (la 0.18.1 no compila contra agave 4.4.1: dos versiones de
+  `solana-account`), y `solana-keypair`, `-message`, `-signer` y `-transaction` en las
+  versiones del ejemplo oficial. Licencias de las 420 crates del `Cargo.lock`: todas
+  permisivas (Apache-2.0, MIT, BSD, Zlib, 0BSD, CC0, Unicode-3.0); ninguna copyleft
+  obligatoria.
+
+### V6 — Cliente generado y arnés de tests (P9, 8 de noviembre de 2026)
+
+- **Cliente:** Codama. `@codama/nodes-from-anchor` 1.5.6 convierte el IDL de Anchor
+  (`target/idl/chain_assets.json`) y `@codama/renderers-js` 2.8.0 genera un cliente para
+  `@solana/kit` (documentación de Solana, «Codama: clients»; registro de npm). Ambos MIT,
+  publicados el 20 de octubre de 2026. Dependen de `@solana/codecs ^8.3.0` y de
+  `@solana/codecs-strings ^8.0.0`: encajan con la línea 8 de kit. **Sin probar** con kit
+  8.2.0: `nodes-from-anchor` pide `^8.3.0`, más que el 8.2.0 fijado en el backend. Se
+  comprueba en el bloque 3 (P3).
+- **Arnés:** LiteSVM en Rust (`litesvm` 0.18.2), que es lo que recomienda la documentación de
+  Anchor («use `litesvm` wherever possible») y la plantilla por defecto de Anchor 1.2.2. Trae
+  Token-2022 cargado. No hacen falta Mollusk ni bankrun (bankrun está en desuso).
+
+### V7 — Token-2022 por CPI desde Anchor (8 de noviembre de 2026)
+
+Leído en el ejemplo oficial `solana-foundation/program-examples`
+(`tokens/token-2022/metadata/anchor` y `permanent-delegate/anchor`, Anchor 1.2.1) y en el
+código de `anchor-spl` 1.2.2:
+
+- La restricción `init` con `extensions::metadata_pointer::…` y
+  `extensions::permanent_delegate::…` reserva sólo el espacio de las extensiones de tamaño
+  fijo e inicializa las extensiones antes que el mint, en la misma instrucción. Con
+  `seeds` y `bump`, el mint PDA firma su `CreateAccount` por CPI.
+- `TokenMetadata` no entra en esa reserva. Se calcula con `TokenMetadata::tlv_size_of()`; el
+  programa transfiere la diferencia de renta y después llama a `token_metadata_initialize`,
+  que redimensiona la cuenta. `chain-assets` calcula el tamaño **final**, con todas las claves
+  de `additional_metadata`, y paga una sola vez antes del `initialize` y de los `UpdateField`.
+
+### V8 — Mint PDA con tres extensiones y una sola firma (P6, 8 de noviembre de 2026)
+
+**Hecho, en LiteSVM y en devnet.** `create_item` crea por CPI un mint Token-2022 PDA con
+`MetadataPointer` (que apunta al propio mint), `PermanentDelegate` y `TokenMetadata`, y la
+transacción lleva **una sola firma**. Los tests comprueban `num_required_signatures == 1` en
+cada transacción; en devnet, `getTransaction` devuelve una firma.
+
+- Programa: `4SUNiKmyk4QtXhU2oNGn6uiXiSUevRdmXpZdRFXPeLNz`, desplegado en devnet en el slot
+  520005780. Firma del despliegue:
+  `5bx7kWKs6g7E7qE1a1rcmLAPCXwTvx5WfvrFrGeogPp2cFEVEYu9cxf51tgVT8FUMyd2vjz8UxgUXmCqM4bXgUFW`.
+  Autoridad de actualización: `E4eHhXeqQvNvSoNhEVx7rk9Z88uo9CfjySigra2q7P1z`, el monedero de
+  desarrollo de WSL. La clave del programa está en `target/deploy/` dentro de WSL, **fuera
+  del repositorio**: sin ella no se puede redesplegar en el mismo id.
+- Prueba de humo (`programs/chain-assets/scripts/devnet-smoke.sh`), juego `oc1-1794137367`:
+  `initialize_game`
+  `5Z1L8SZCfJFFBEg21UWCMNbGxZZYP3fxFjkFnkHShKtveferurxYbU7pxB4LWigqJkD9FqWtoVDx2x4oFb4Y7nBu`;
+  `create_item` típico
+  `gZPmwFcGbFxvmE2EFKDj2ynn1rngETXbertPKDmU5ZoorLdDAHTAHsenyta8q19ZEbYU8vDGHsYHQBPtxmRfXRr`;
+  `create_item` con 8 pares máximos
+  `3AY6BZjmKUMcaucVDo1T8yqKhkwcP91ruErq1DVPgCWAQGUh4w2CDHoZ5aR3Gcoy9LTmfexmtzeTDSZgn16gMbPE`.
+
+### V9 — Renta medida en devnet (P1, en parte; 8 de noviembre de 2026)
+
+| Cuenta | Bytes | Lamports | SOL |
+|---|---|---|---|
+| Programa (`ProgramData`) | 233.520 + cabecera | 1.187.160.440 | 1,187 |
+| `Game` | 77 | 1.041.400 | 0,00104 |
+| Mint típico (2 cualidades, `uri` de 32) | 481 | 3.134.360 | 0,00313 |
+| Mint con 8 pares de 32/64, sin `uri` | 1.226 | 6.918.960 | 0,00692 |
+
+Comisión por transacción: 5.000 lamports (una firma). **Falta** la cuenta de token asociada,
+que se crea en `grant` (OC2).
+
+### V10 — Tamaño y cómputo de `create_item` (P7, en parte; 8 de noviembre de 2026)
+
+| Caso | Bytes | Cómputo |
+|---|---|---|
+| Típico | 472 | 56.608 CU (LiteSVM), 63.062 CU (devnet) |
+| 8 pares de 32/64, `uri` vacía, `name` y `symbol` de 1 | 1.217 | 148.332 CU (devnet) |
+| **Máximo del contrato**: además `uri` de 200, `name` de 32, `symbol` de 10 | **1.457** | 143.340 CU (LiteSVM) |
+
+- El cómputo cabe de sobra en el límite por defecto (200.000 CU por instrucción).
+- **El máximo del contrato no cabe en una transacción (1.232 bytes) ni con `create_item`
+  solo**: se pasa en 225 bytes. Con 8 pares máximos, sólo cabe si los demás campos son casi
+  vacíos, y queda un margen de 15 bytes. Con `grant` en la misma transacción (OC2) cabe todavía
+  menos. Es el caso que la propuesta prevé en la sección 13 (punto 10): el backend rechaza o
+  limita, y no parte la operación sin una decisión explícita. **Decisión pendiente del
+  responsable.**
+- **Falta** medir `create_item` + `grant` juntos, en OC2.
+
 ---
 
 ## Pendiente
 
 | # | Qué hay que verificar | Bloquea | Cómo |
 |---|---|---|---|
-| P1 | Coste real de renta de un activo con puntero de metadatos, metadatos y delegado permanente, y de una cuenta de tenencia asociada. **No usar cifras de memoria** | OC1 | Contra devnet, midiendo |
+| P1 | Renta de la cuenta de tenencia asociada. La del activo ya está medida (V9) | OC2 | Contra devnet, midiendo |
 | P2 | Si el delegado permanente puede reasignarse tras la creación del activo. Ya no condiciona la rotación: el delegado es una PDA que no cambia | Nada | Sólo si hace falta |
 | P3 | Si el API de `@solana/kit` 8.2.0 con `@solana-program/token-2022` 0.16.1 difiere de los ejemplos publicados | Bloque 3 | Leer la documentación vigente antes de escribir la primera instrucción |
 | P4 | Texto literal vigente de la regla de onboarding de Steam sobre blockchain, y las políticas actuales de Google Play y App Store | Último bloque (aviso del README) | Leer las políticas, citar con fecha |
 | P5 | Actualizar a la 4.7.2 el Godot de la máquina de desarrollo, que tiene la 4.7.1 | Fase A1 | Instalar y anotar |
-| P6 | Que un mint PDA con estas extensiones se puede crear por CPI, con una sola firma en la transacción | OC1, primera prueba. Sostiene 4.2 y 4.7 de la propuesta | Prueba en devnet |
-| P7 | Que `create_item` más `grant` caben en una transacción con el máximo del contrato (8 pares de 32 y 64 caracteres), en tamaño y en unidades de cómputo | OC1 y bloque 3 | Transacción real con el caso máximo |
-| P8 | Qué toolchain de Solana pide Anchor 1.2.2, y cuánto ocupa. El disco C: está al 99 % | OC1 | Documentación de Anchor y medir |
-| P9 | Qué herramienta genera hoy un cliente sobre `@solana/kit` desde un IDL de Anchor 1.x, y qué arnés de tests conviene usar sin devnet | OC1 y bloque 3 | Documentación vigente |
+| P7 | `create_item` más `grant` juntos, en tamaño y cómputo. `create_item` solo ya está medido (V10): el máximo del contrato no cabe ni así | OC2 y bloque 3 | Transacción real con el caso máximo |
+| P10 | Que el cliente de Codama (V6) funciona con `@solana/kit` 8.2.0, o si hay que subir kit a 8.3 | Bloque 3 | Generar el cliente y compilar |

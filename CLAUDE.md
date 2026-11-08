@@ -57,7 +57,7 @@ la propuesta; si no está en ella, no entra.
 | Directorio | Contenido |
 |---|---|
 | `addon/addons/godot_chain/` | El addon `godot-chain`, en GDScript puro. Hoy, un esqueleto |
-| `programs/chain-assets/` | Programa Anchor, con `Anchor.toml` en la raíz. Aún no existe |
+| `programs/chain-assets/` | Programa Anchor, con `Anchor.toml` y el workspace de Cargo en la raíz del repositorio |
 | `backend/` | TypeScript, Node >= 22. El servicio y su suite de tests |
 | `frontend/` | Dashboard web: consola de administración que sirve el backend, sin compilación. Aún no existe |
 | `rust/` | Workspace de Cargo de *Nidada*: `nidada-rules`, `nidada-ext` y `nidada-server` |
@@ -91,7 +91,12 @@ la propuesta; si no está en ella, no entra.
 - Bloque 2 (8-nov-2026, rama `bloque-2`): configuración, clave de autoridad con vectores fijos,
   esquema SQLite (con `holders` y la respuesta en `idempotency`), idempotencia y máquina de estados:
   **hecho**. **Falta** la derivación de claves de jugador y `holder_id`, que espera a la Q12 del tutor.
-- Siguiente: OC1 y OC2, el programa. Antes, P8 de `verificaciones.md`: el disco C: está al 99 %.
+- OC1 (8-nov-2026, rama `oc1`, sobre `bloque-2`): `initialize_game`, `rotate_authority` y
+  `create_item` con mint PDA y sus tres extensiones, una sola firma, 16 tests con LiteSVM y
+  desplegado en devnet (`4SUNiKmyk4QtXhU2oNGn6uiXiSUevRdmXpZdRFXPeLNz`): **hecho**. Se compila
+  en WSL (V5). **Decisión pendiente:** el máximo del contrato no cabe en una transacción
+  (verificaciones, V10).
+- Siguiente: OC2, `grant` y `transfer`, con la medida de P1 y P7 que falta.
 - Requisitos de entrega del máster: propuesta, 0.1. Revísalos antes de planificar un bloque.
 - Ver `docs/seguimiento/verificaciones.md` para lo que hay que comprobar antes de OC1 y del
   bloque 3, y `docs/seguimiento/preguntas-tutor.md` para lo que bloquea el proyecto.
@@ -105,6 +110,13 @@ npm run typecheck     # tsc --noEmit
 npm run lint          # eslint
 npm test              # vitest run
 npm run test:devnet   # tests contra devnet, FUERA de la CI (aún no existe)
+
+# Programa: en WSL (Debian), desde la raíz. Anchor no funciona nativo en Windows (V5).
+# target/ es un enlace a ~/build/chain-assets-target, en ext4: no lo borres, ahí está la
+# clave del programa (target/deploy/chain_assets-keypair.json), que no va al repositorio.
+anchor build                                       # .so e IDL
+cargo test -p chain-assets                         # LiteSVM, sin red
+programs/chain-assets/scripts/devnet-smoke.sh      # devnet, a mano, fuera de la CI
 
 cd ../rust            # Sólo Nidada. Git Bash o PowerShell, no WSL; ver rust/README.md
 cargo test
