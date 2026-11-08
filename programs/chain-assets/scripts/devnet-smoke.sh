@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Prueba manual contra devnet (fuera de la CI, propuesta, 9): crea un juego y dos tipos
-# (típico y máximo que cabe) y mide renta (P1), firmas (P6), tamaño y cómputo (P7).
+# (típico y máximo que cabe), emite y transfiere unidades del típico, y crea y emite un
+# tercero en una sola transacción. Mide renta (P1), firmas (P6), tamaño y cómputo (P7).
 # Uso, desde la raíz del repositorio: programs/chain-assets/scripts/devnet-smoke.sh [keypair]
 set -euo pipefail
 
 RPC="${RPC:-https://api.devnet.solana.com}"
 KEYPAIR="${1:-$HOME/.config/solana/id.json}"
-GAME_ID="oc1-$(date +%s)"
+GAME_ID="oc2-$(date +%s)"
 
 rpc() { curl -sS "$RPC" -H 'Content-Type: application/json' -d "$1"; }
 json() { python3 -c "import json,sys; d=json.load(sys.stdin); print($1)"; }
@@ -47,3 +48,39 @@ for kind in typical max; do
   mint=$(sed -n 's/^mint=//p' /tmp/devnet_tx.err)
   echo "Mint: $(account "$mint")"
 done
+
+# Tenedores: claves cualquiera que no firman ni tienen fondos (propuesta, 4.2).
+HOLDERS=$(mktemp -d)
+for h in alice bob carol; do
+  solana-keygen new --no-bip39-passphrase --silent --force -o "$HOLDERS/$h.json" >/dev/null
+done
+alice=$(solana-keygen pubkey "$HOLDERS/alice.json")
+bob=$(solana-keygen pubkey "$HOLDERS/bob.json")
+carol=$(solana-keygen pubkey "$HOLDERS/carol.json")
+
+balance() {
+  rpc "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getTokenAccountBalance\",\"params\":[\"$1\",{\"commitment\":\"confirmed\"}]}"     | json 'd["result"]["value"]["amount"]'
+}
+
+echo "== grant 5 a alice (crea su cuenta)"
+send grant "$GAME_ID" 1 "$alice" 5
+alice_token=$(sed -n 's/^holder_token=//p' /tmp/devnet_tx.err)
+echo "Cuenta de alice: $(account "$alice_token")"
+
+echo "== grant 2 a alice (cuenta existente)"
+send grant "$GAME_ID" 1 "$alice" 2
+
+echo "== transfer 3 de alice a bob (crea la cuenta de bob)"
+send transfer "$GAME_ID" 1 "$alice" "$bob" 3
+bob_token=$(sed -n 's/^to_token=//p' /tmp/devnet_tx.err)
+echo "Cuenta de bob: $(account "$bob_token")"
+
+echo "== transfer 1 de alice a bob (cuenta existente)"
+send transfer "$GAME_ID" 1 "$alice" "$bob" 1
+echo "Saldos: alice=$(balance "$alice_token") bob=$(balance "$bob_token")"
+
+echo "== create_item + grant típico en una transacción"
+send create-grant "$GAME_ID" 3 "$carol" 1
+carol_token=$(sed -n 's/^holder_token=//p' /tmp/devnet_tx.err)
+echo "Saldo de carol: $(balance "$carol_token")"
+rm -rf "$HOLDERS"

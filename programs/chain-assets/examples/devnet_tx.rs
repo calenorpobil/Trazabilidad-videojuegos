@@ -6,6 +6,11 @@
 //! Uso:
 //!   devnet_tx <keypair.json> <blockhash> init <game_id>
 //!   devnet_tx <keypair.json> <blockhash> create <game_id> <seed_byte> typical|max
+//!   devnet_tx <keypair.json> <blockhash> grant <game_id> <seed_byte> <holder> <amount>
+//!   devnet_tx <keypair.json> <blockhash> transfer <game_id> <seed_byte> <from> <to> <amount>
+//!   devnet_tx <keypair.json> <blockhash> create-grant <game_id> <seed_byte> <holder> <amount>
+//!
+//! `create-grant` envía el tipo típico y su primera emisión en una sola transacción (P7).
 
 use std::str::FromStr;
 
@@ -13,7 +18,10 @@ use anchor_lang::{
     prelude::Pubkey, solana_program::instruction::Instruction, system_program, InstructionData,
     ToAccountMetas,
 };
-use anchor_spl::token_2022::spl_token_2022;
+use anchor_spl::{
+    associated_token::{self, get_associated_token_address_with_program_id},
+    token_2022::spl_token_2022,
+};
 use chain_assets::{
     instructions::{CreateItemArgs, Quality},
     state::{GAME_SEED, ITEM_SEED},
@@ -33,8 +41,18 @@ fn main() {
         Pubkey::find_program_address(&[GAME_SEED, game_id.as_bytes()], &chain_assets::id()).0;
     eprintln!("game={game}");
 
-    let ix = match args[3].as_str() {
-        "init" => Instruction::new_with_bytes(
+    let mint_of = |arg: &str| {
+        let seed = [arg.parse::<u8>().expect("seed_byte"); 32];
+        let mint =
+            Pubkey::find_program_address(&[ITEM_SEED, game.as_ref(), &seed], &chain_assets::id()).0;
+        eprintln!("mint={mint}");
+        (seed, mint)
+    };
+    let key = |arg: &str| Pubkey::from_str(arg).expect("clave");
+    let amount = |arg: &str| arg.parse::<u64>().expect("amount");
+
+    let ixs = match args[3].as_str() {
+        "init" => vec![Instruction::new_with_bytes(
             chain_assets::id(),
             &chain_assets::instruction::InitializeGame {
                 game_id: game_id.clone(),
@@ -46,38 +64,62 @@ fn main() {
                 system_program: system_program::ID,
             }
             .to_account_metas(None),
-        ),
+        )],
         "create" => {
-            let seed = [args[5].parse::<u8>().expect("seed_byte"); 32];
+            let (seed, mint) = mint_of(&args[5]);
             let item = if args[6] == "max" {
                 max_item(seed)
             } else {
                 typical_item(seed)
             };
-            let mint = Pubkey::find_program_address(
-                &[ITEM_SEED, game.as_ref(), &seed],
-                &chain_assets::id(),
-            )
-            .0;
-            eprintln!("mint={mint}");
-            Instruction::new_with_bytes(
+            vec![create_ix(authority, game, mint, item)]
+        }
+        "grant" => {
+            let (_, mint) = mint_of(&args[5]);
+            vec![grant_ix(
+                authority,
+                game,
+                mint,
+                key(&args[6]),
+                amount(&args[7]),
+            )]
+        }
+        "transfer" => {
+            let (_, mint) = mint_of(&args[5]);
+            let (from, to) = (key(&args[6]), key(&args[7]));
+            eprintln!("to_token={}", ata(&to, &mint));
+            vec![Instruction::new_with_bytes(
                 chain_assets::id(),
-                &chain_assets::instruction::CreateItem { args: item }.data(),
-                chain_assets::accounts::CreateItem {
+                &chain_assets::instruction::Transfer {
+                    amount: amount(&args[8]),
+                }
+                .data(),
+                chain_assets::accounts::TransferItem {
                     authority,
                     game,
                     mint,
+                    from_token: ata(&from, &mint),
+                    to_holder: to,
+                    to_token: ata(&to, &mint),
                     token_program: spl_token_2022::ID,
+                    associated_token_program: associated_token::ID,
                     system_program: system_program::ID,
                 }
                 .to_account_metas(None),
-            )
+            )]
+        }
+        "create-grant" => {
+            let (seed, mint) = mint_of(&args[5]);
+            vec![
+                create_ix(authority, game, mint, typical_item(seed)),
+                grant_ix(authority, game, mint, key(&args[6]), amount(&args[7])),
+            ]
         }
         other => panic!("orden desconocida: {other}"),
     };
 
     let msg = VersionedMessage::Legacy(Message::new_with_blockhash(
-        &[ix],
+        &ixs,
         Some(&authority),
         &blockhash,
     ));
@@ -95,6 +137,52 @@ fn main() {
     .concat();
     eprintln!("size={}", bytes.len());
     println!("{}", base64(&bytes));
+}
+
+fn ata(holder: &Pubkey, mint: &Pubkey) -> Pubkey {
+    get_associated_token_address_with_program_id(holder, mint, &spl_token_2022::ID)
+}
+
+fn create_ix(authority: Pubkey, game: Pubkey, mint: Pubkey, item: CreateItemArgs) -> Instruction {
+    Instruction::new_with_bytes(
+        chain_assets::id(),
+        &chain_assets::instruction::CreateItem { args: item }.data(),
+        chain_assets::accounts::CreateItem {
+            authority,
+            game,
+            mint,
+            token_program: spl_token_2022::ID,
+            system_program: system_program::ID,
+        }
+        .to_account_metas(None),
+    )
+}
+
+/// Imprime la cuenta de token del tenedor para que el script mida su renta (P1).
+fn grant_ix(
+    authority: Pubkey,
+    game: Pubkey,
+    mint: Pubkey,
+    holder: Pubkey,
+    amount: u64,
+) -> Instruction {
+    let holder_token = ata(&holder, &mint);
+    eprintln!("holder_token={holder_token}");
+    Instruction::new_with_bytes(
+        chain_assets::id(),
+        &chain_assets::instruction::Grant { amount }.data(),
+        chain_assets::accounts::Grant {
+            authority,
+            game,
+            mint,
+            holder,
+            holder_token,
+            token_program: spl_token_2022::ID,
+            associated_token_program: associated_token::ID,
+            system_program: system_program::ID,
+        }
+        .to_account_metas(None),
+    )
 }
 
 fn typical_item(seed: [u8; 32]) -> CreateItemArgs {
