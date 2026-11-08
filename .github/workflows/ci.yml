@@ -107,8 +107,11 @@ jobs:
           key: program-${{ env.SOLANA_VERSION }}-${{ env.ANCHOR_VERSION }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: program-${{ env.SOLANA_VERSION }}-${{ env.ANCHOR_VERSION }}-
 
+      # Las crates de agave que arrastra litesvm piden rustc >= 1.98.1 (verificaciones, V5).
       - name: Instalar Solana y Anchor
         run: |
+          rustup update stable --no-self-update
+          rustc --version
           if [ ! -x "$HOME/.local/share/solana/install/active_release/bin/solana" ]; then
             sh -c "$(curl -sSfL https://release.anza.xyz/v${SOLANA_VERSION}/install)"
           fi
@@ -120,14 +123,12 @@ jobs:
           avm install "${ANCHOR_VERSION}" || true
           avm use "${ANCHOR_VERSION}"
 
-      # Una clave de programa efimera para que anchor build no falle; el id real esta en
-      # declare_id! y en Anchor.toml.
+      # La clave del programa no esta en el repositorio: anchor build genera una efimera y
+      # --ignore-keys evita que la compare con declare_id!, que es el id real de devnet.
       - name: Compilar
         run: |
-          mkdir -p target/deploy
-          [ -f target/deploy/chain_assets-keypair.json ] || solana-keygen new --no-bip39-passphrase -s -o target/deploy/chain_assets-keypair.json
           anchor --version
-          anchor build
+          anchor build --ignore-keys
 
       - name: Tests (LiteSVM, sin red)
         run: cargo test -p chain-assets --locked
