@@ -93,6 +93,11 @@ contrato y los límites del programa, y el backend, antes de enviar, mide la tra
 
 Se implementa en el bloque 3.
 
+Al empezar el bloque 3, el responsable fija la semilla del mint de cada tipo: **`item_seed := SHA-256(item_id
+en UTF-8)`**, con el `item_id` completo (4.7). Cabe exacto en los 32 bytes de la semilla y hace el mint
+determinista. Para generar el cliente del programa, `@solana/kit` sube de 8.2.0 a 8.6.0
+(`verificaciones.md`, V14).
+
 ### 0.1 Requisitos de entrega del máster
 
 Hasta el 4 de noviembre eran supuestos. Ahora salen de las instrucciones generales de entrega del TFM,
@@ -536,7 +541,7 @@ estable a 4 de noviembre de 2026.
 | Cuenta | Semillas | Qué es |
 |---|---|---|
 | `Game` | `["game", game_id]` | Guarda `authority`, `game_id` y `bump`. Es *mint authority*, autoridad de actualización y *permanent delegate* de todos los activos del juego |
-| Mint del tipo | `["item", game, item_seed]` | Mint Token-2022 con sus extensiones. Es una PDA, así que se crea sin clave propia. `item_seed` lo calcula el backend a partir del `item_id` |
+| Mint del tipo | `["item", game, item_seed]` | Mint Token-2022 con sus extensiones. Es una PDA, así que se crea sin clave propia. `item_seed := SHA-256(item_id en UTF-8)`, 32 bytes, con el `item_id` completo, prefijo `itm_` incluido: el backend deriva el mint del `item_id` sin guardar nada más (8-nov-2026) |
 
 | Instrucción | Qué hace | Validaciones principales |
 |---|---|---|
