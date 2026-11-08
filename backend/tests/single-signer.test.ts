@@ -13,6 +13,7 @@
  * `grant`, `create_item` + `grant` juntos y `transfer` (este ultimo se usa en el bloque 4).
  */
 import {
+  blockhash,
   compileTransaction,
   getCompiledTransactionMessageDecoder,
   signTransactionMessageWithSigners,
@@ -37,7 +38,7 @@ const GAME_ID = 'test-game';
 const SEED = Uint8Array.from(Buffer.from('000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f', 'hex'));
 
 /** Cualquier blockhash sirve: no se envia nada. 32 bytes a cero. */
-const LIFETIME: Lifetime = { blockhash: '11111111111111111111111111111111', lastValidBlockHeight: 0n };
+const LIFETIME: Lifetime = { blockhash: blockhash('11111111111111111111111111111111'), lastValidBlockHeight: 0n };
 
 /** Tenedores: direcciones cualquiera, que no firman. Son claves de los vectores de `keys.test.ts`. */
 const ALICE = '9iSwm7eB94k9GL7fEnJCBZa3NvqGiSX7uAv1pzUC2NJp' as Address;
