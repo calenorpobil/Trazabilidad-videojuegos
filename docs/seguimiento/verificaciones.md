@@ -272,16 +272,70 @@ tenedor nuevo, es decir, creando su cuenta:
   `create_item` no cabe ni solo. El backend lo decide **midiendo la transacción serializada**, no
   con esta fórmula, que sólo sirve para orientarse.
 
+### V14 — Cliente generado sobre `@solana/kit` (P3 y P10, 8 de noviembre de 2026)
+
+Leído en el registro de npm y en los paquetes instalados (README de `@codama/renderers-js` 2.8.0 y
+tipos `.d.ts` de `@solana/kit` 8.6.0 y `@solana-program/token-2022` 0.16.1), y comprobado compilando:
+
+- **Con kit 8.2.0 no compila.** El cliente que genera `@codama/renderers-js` 2.8.0 importa
+  `HasAddress` de `@solana/kit` e `InstructionAccountInput`, `InstructionSignerInput` y
+  `ResolvedInstructionAccountMeta` de `program-client-core`, que la 8.2.0 no tiene. El propio
+  renderer avisa: pide `@solana/kit ^8.5.0`. **Decisión:** kit sube a **8.6.0**, la última estable
+  (28 de octubre de 2026; la 8.7 sólo existe como *canary*), en un commit propio. `npm audit
+  --audit-level=high` en verde; los 10 avisos moderados son de `eslint`/`minimatch`, previos.
+- `@solana-program/token-2022` y `@solana-program/token` 0.16.1 piden `@solana/kit ^8.0.0`: valen
+  con la 8.6.0 sin cambios. Hay una 0.20.1 de token-2022 que no hace falta.
+- Generadores, sólo en desarrollo y a versión exacta: `@codama/nodes-from-anchor` 1.5.6,
+  `@codama/renderers-js` 2.8.0 y `codama` 1.11.0 (`createFromRoot`). El `@solana/codecs ^8.3.0` de
+  `nodes-from-anchor` se instala anidado (8.6.0) y no toca el código que se ejecuta. Licencias: MIT,
+  salvo `jsonify` 0.0.1 (dominio público, vía `json-stable-stringify`), que entra en la lista
+  permitida como dependencia de desarrollo.
+- Opciones del renderer que importan aquí: `syncPackageJson: false` (si no, reescribe
+  `package.json` con rangos `^`), `importExtension: 'js'` (`moduleResolution: nodenext`) y
+  `kitImportStrategy: 'rootOnly'` (todo sale de `@solana/kit` y `@solana/kit/program-client-core`, la
+  única dependencia directa).
+- El *plugin* de cliente que genera (`chainAssetsProgram()`) no compila con
+  `exactOptionalPropertyTypes`. El backend no lo usa: construye con `get*Instruction` y firma él.
+  `scripts/codegen.mjs` le pone `// @ts-nocheck` sólo a ese fichero en vez de relajar el `tsconfig`.
+- **API de kit 8.6.0 usada** (no difiere de los ejemplos en lo que importa): `pipe`,
+  `createTransactionMessage({ version: 'legacy' })`, `setTransactionMessageFeePayerSigner`,
+  `setTransactionMessageLifetimeUsingBlockhash`, `appendTransactionMessageInstructions`,
+  `createKeyPairSignerFromPrivateKeyBytes`, `signTransactionMessageWithSigners`,
+  `sendAndConfirmTransactionFactory`. Novedad útil: `getTransactionMessageSize` mide el tamaño de la
+  transacción compilada, firmas incluidas, sin firmar, y `LEGACY_TRANSACTION_SIZE_LIMIT` vale 1.232.
+- Organización: el IDL se copia de `target/idl/` a `backend/idl/chain_assets.json` y se versiona con
+  el cliente (`backend/src/generated/`); `npm run codegen` lo regenera. La CI no necesita Anchor.
+
+### V15 — Constructores, vectores fijos y devnet desde TypeScript (8 de noviembre de 2026)
+
+- `item_seed := SHA-256(item_id)` (propuesta, 4.7). Vectores en `tests/addresses.test.ts`, calculados
+  aparte con `sha256sum` y `solana find-program-derived-address` (CLI 4.1.2): la PDA `Game` de
+  `oc2-1794140207` da `DVKimGfAe2H98Y6BVY1wmtbFPZGB4Z5YERGU54ZuVtEQ`, la misma que derivó `devnet_tx`
+  en Rust (V12).
+- **Los tamaños que mide TypeScript son exactamente los de Rust** (`tests/item-plan.test.ts`), con
+  los mismos datos: `create_item` 472, 1.217 y 1.457 bytes (V10); `create_item` + `grant` 595, 507,
+  1.132, 1.236 y 1.580 (V13). El cliente generado serializa igual que el programa.
+- Prueba manual (`npm run test:devnet`), juego `b3-1794147458`, tipo `itm_vUfoe78NHFq3zQnQ`, tenedor
+  aleatorio `FUyp9oBrARFaPwL7QUX4mr9UJomS4gAGpyqPpxTk1suw`, mint
+  `BFiApoiWA2KKLEZ4RQxxHmktAnVVMonUD1eSA4pHtCLu`. `getTransaction` da **una firma** en cada una:
+
+| Paso | CU | Firma |
+|---|---|---|
+| `initialize_game` | 11.947 | `58WnLke56xhKRDRE9uCw6X4nZgRhevcUHdofTqsADVJqfu3jUso5G6BfPGNMW2NGCnF2ifSuQ3eAvTRuB9RWoFPM` |
+| `create_item` + `grant` típico, una transacción | 98.459 | `5vWB91TQdaektGzuZ26ECpdyLifi6LaDxKPtjYGWuCS1z5dvx4Ft5GEayGdYShkKrwtS7sc3GrszXCGudbhdBFyQ` |
+
+  El tenedor tiene 1 unidad y no firmó nada. La autoridad fue el monedero de WSL; la derivación
+  desde la semilla maestra la cubren los vectores de `keys.test.ts`.
+
 ---
 
 ## Pendiente
 
-P1 (V12) y P7 (V10 y V13) quedan cerrados en OC2.
+P1 (V12) y P7 (V10 y V13) quedan cerrados en OC2. P3 y P10 (V14), en el bloque 3.
 
 | # | Qué hay que verificar | Bloquea | Cómo |
 |---|---|---|---|
 | P2 | Si el delegado permanente puede reasignarse tras la creación del activo. Ya no condiciona la rotación: el delegado es una PDA que no cambia | Nada | Sólo si hace falta |
-| P3 | Si el API de `@solana/kit` 8.2.0 con `@solana-program/token-2022` 0.16.1 difiere de los ejemplos publicados | Bloque 3 | Leer la documentación vigente antes de escribir la primera instrucción |
 | P4 | Texto literal vigente de la regla de onboarding de Steam sobre blockchain, y las políticas actuales de Google Play y App Store | Último bloque (aviso del README) | Leer las políticas, citar con fecha |
 | P5 | Actualizar a la 4.7.2 el Godot de la máquina de desarrollo, que tiene la 4.7.1 | Fase A1 | Instalar y anotar |
-| P10 | Que el cliente de Codama (V6) funciona con `@solana/kit` 8.2.0, o si hay que subir kit a 8.3 | Bloque 3 | Generar el cliente y compilar |
+| P11 | Cómo sigue `operations` las **dos** transacciones de un tipo partido (`split`): la tabla tiene una sola columna `signature`. La segunda (`grant`) sólo se puede enviar cuando la primera ha creado el mint, y tras un reinicio entre las dos hay que saber por cuál va | Bloque 5 (y el registro de `POST /v1/items`) | Decidirlo antes de escribir el seguimiento |

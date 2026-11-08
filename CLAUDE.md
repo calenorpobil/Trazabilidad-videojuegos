@@ -101,8 +101,14 @@ la propuesta; si no está en ella, no entra.
   delegado permanente; 30 tests con LiteSVM. Actualizado en devnet en el mismo id (V12). P1 y P7
   cerrados: cuenta asociada de 170 bytes y 0,00151 SOL; `create_item` + `grant` caben juntos hasta
   unos 746 bytes de campos (V13). **Hecho.**
-- Siguiente: bloque 3, cliente del programa (Codama, P3 y P10) y crear item con el test del
-  invariante de firmante único, separando `create_item` y `grant` cuando no quepan (V13).
+- Bloque 3 (8-nov-2026, rama `bloque-3`, sobre `oc2`): **a medias, por la Q12.** Hecho: kit 8.6.0 y
+  cliente de Codama versionado en `backend/src/generated/` (`npm run codegen`, IDL en `backend/idl/`;
+  P3 y P10, V14); test del invariante de firmante único; derivación de `Game`, `item_seed :=
+  SHA-256(item_id)`, mint y cuenta asociada con vectores fijos; constructores de las cinco
+  transacciones; `planItemCreation` (una, dos o rechazo, midiendo bytes que cuadran con Rust); y
+  `npm run test:devnet` ejecutado (V15). **Falta**, cuando responda el tutor: resolver el tenedor
+  (`holder_id`, `holders`), registrar la operación sobre `idempotency.ts` y `operations.ts` y el
+  endpoint `POST /v1/items`. Antes, decidir P11 (dos firmas en una operación partida).
 - Requisitos de entrega del máster: propuesta, 0.1. Revísalos antes de planificar un bloque.
 - Ver `docs/seguimiento/verificaciones.md` para lo que hay que comprobar antes de OC1 y del
   bloque 3, y `docs/seguimiento/preguntas-tutor.md` para lo que bloquea el proyecto.
@@ -115,7 +121,8 @@ npm ci
 npm run typecheck     # tsc --noEmit
 npm run lint          # eslint
 npm test              # vitest run
-npm run test:devnet   # tests contra devnet, FUERA de la CI (aún no existe)
+npm run codegen       # cliente de chain-assets desde backend/idl/ (copia del IDL de WSL)
+CHAIN_DEVNET_KEYPAIR=<clave con fondos> npm run test:devnet   # devnet, FUERA de la CI
 
 # Programa: en WSL (Debian), desde la raíz. Anchor no funciona nativo en Windows (V5).
 # target/ es un enlace a ~/build/chain-assets-target, en ext4: no lo borres, ahí está la
