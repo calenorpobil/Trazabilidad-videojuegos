@@ -12,6 +12,8 @@ resuelven.
 | Q4 | ¿Hay memoria escrita o defensa, además del vídeo? | «Memoria» sólo aparece en dos sitios: el paso 9 de «Próximos pasos» del enunciado (70, línea 790) y los flujos de estudio del índice (10, líneas 223, 280, 308, 336 y 364: «Escribir memoria TFM (4-6 horas)»). Las instrucciones de entrega (20) no la nombran: ni en los entregables obligatorios, ni en la rúbrica, ni en el checklist final. La defensa no aparece en ninguno. **Por eso el plan no la incluye** | Unas 4-6 h sin presupuestar, ya sin margen |
 | Q11 | ¿Los avances intermedios son obligatorios, y con qué fechas? | Las instrucciones (20, sección 6.1, líneas 573-574) citan el avance 1 (diseño y programa inicial, «semana 1») y el avance 2 (MVP y código en GitHub, «semana 3»), sin fechas reales. No aparecen en los entregables obligatorios, ni en la rúbrica, ni en el checklist final. La entrega final es el 30 de noviembre de 2026 | Habría que adelantar el programa y el MVP, que hoy se terminan el 21 y el 28 de noviembre |
 
+| Q12 | ¿Basta el modelo custodial documentado, o el jugador tiene que custodiar su propia clave? | Al confirmar la Q10, el tutor objetó que la clave privada en el backend queda más expuesta (8 de noviembre). Es cierto: concentra el poder sobre todos los activos. La respuesta enviada lo asume como limitación (12.3), con mitigaciones y la *embedded wallet* como trabajo futuro | Cambian 4.2, 4.3 y la derivación del bloque 2, y el firmante único deja de valer. Por eso el bloque 2 espera para derivar las claves de jugador |
+
 ## Resueltas por la documentación
 
 | # | Pregunta | Respuesta | Fuente |

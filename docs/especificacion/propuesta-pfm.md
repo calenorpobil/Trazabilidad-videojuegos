@@ -66,6 +66,21 @@ noviembre, así que se aplica la línea de corte desde el principio (8.1) y el p
 44 h**. Rust sigue sólo en *Nidada*, y su documento pasa a `docs/juego/`. Las menciones a Rust en las
 revisiones anteriores son historia.
 
+### Revisión del 8 de noviembre de 2026
+
+Al empezar el bloque 2, el responsable cierra tres huecos de 4.3, 4.4 y 4.5:
+
+1. **Se guarda el mapa de tenedores**, en la tabla `holders`. El `holder_id` trunca la dirección y no se
+   puede invertir: sin el mapa, ni el inventario ni `transfer` podrían resolver un `holder_id`. Es además
+   el mapa que el procedimiento de rotación (4.3, paso 4) ya daba por existente.
+2. **La tabla `idempotency` guarda la respuesta aceptada**, para devolver el mismo cuerpo que exige el
+   contrato (sección 3), también en `POST /v1/collections`, que no tiene operación.
+3. **`game_id` es `[a-z0-9-]`, de 1 a 32 caracteres**: cabe siempre en una semilla de PDA y no depende de
+   cómo se normalice el texto.
+
+Queda abierta la **Q12** (sección 14): el tutor objeta que el backend custodie las claves. Mientras no
+responda, el bloque 2 deriva sólo la clave de la autoridad; la de los jugadores espera.
+
 ### 0.1 Requisitos de entrega del máster
 
 Hasta el 4 de noviembre eran supuestos. Ahora salen de las instrucciones generales de entrega del TFM,
@@ -335,6 +350,7 @@ contiene más de una firma requerida.
 |---|---|
 | Identidad del jugador | La aporta el juego. El backend no la crea ni la verifica |
 | Identificador | Opaco, con ámbito `(game_id, external_id)` |
+| `game_id` | `[a-z0-9-]`, de 1 a 32 caracteres. Es semilla de la PDA `Game` (4.7) y `salt` de la derivación |
 | Inmutabilidad | Requisito del integrador. Si cambia, el jugador pierde sus objetos |
 | Claves de jugador | Derivadas de una semilla maestra **por juego** |
 | Custodia de la semilla | Fichero fuera del repositorio, permisos `0600`, o variable de entorno |
@@ -390,8 +406,14 @@ items        (item_id PK, collection_id, mint, name, symbol, uri, qualities, ope
               revision, edit_operation_id, created_at)
 operations   (operation_id PK, kind, state, signature, error_code, error_message,
               created_at, updated_at)
-idempotency  (key PK, operation_id, created_at)
+idempotency  (key PK, operation_id NULL, status_code, response, created_at)
+holders      (holder_id PK, external_id UNIQUE, address, created_at)
 ```
+
+`idempotency.response` es el cuerpo JSON de la respuesta aceptada, y `operation_id` va vacío en
+`POST /v1/collections`, que no tiene operación. Sólo se marca lo aceptado: una petición rechazada por
+validación no guarda la clave. `holders` se rellena la primera vez que se resuelve un `external_id`; un
+`holder_id` que no está en la tabla es `404` (8-nov-2026).
 
 `items.qualities` es texto JSON, sin la clave reservada `collection`. Se guarda al crear el tipo y de
 ahí se sirve: el backend **no lee la cadena en cada consulta**. La cadena sigue siendo la fuente de
@@ -441,7 +463,7 @@ cualquier jugador de ese juego. Ver 12.5.
 | `Collection` | Agrupación lógica del catálogo de un juego. **No tiene existencia on-chain** | SQLite, y como par `collection` en `additional_metadata` de cada item |
 | `Item` | Un **tipo** de objeto. Un mint de Token-2022 | On-chain, indexado en SQLite |
 | `Quality` | Atributo del tipo (`rarity`, `damage`) | `additional_metadata` del mint |
-| `Holder` | Un jugador, identificado de forma opaca | Derivado, no almacenado |
+| `Holder` | Un jugador, identificado de forma opaca | Derivado; el mapa `holder_id` → `external_id` y dirección, en la tabla `holders` |
 
 Esto resuelve una ambigüedad de la propuesta original, que nunca decía qué era una `Collection`
 on-chain. Aquí la respuesta es explícita: **nada**. Crear una colección no produce una transacción y
@@ -942,6 +964,7 @@ La lista viva, con lo que ya han resuelto las instrucciones de entrega, está en
 
 - **Q4:** si hay memoria escrita o defensa, además del vídeo.
 - **Q11:** si los avances intermedios son obligatorios. La entrega final es el 30 de noviembre.
+- **Q12:** si basta el modelo custodial documentado, o el jugador tiene que custodiar su clave.
 
 ---
 
