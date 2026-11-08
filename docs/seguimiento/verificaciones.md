@@ -151,8 +151,8 @@ cada transacción; en devnet, `getTransaction` devuelve una firma.
 | Mint típico (2 cualidades, `uri` de 32) | 481 | 3.134.360 | 0,00313 |
 | Mint con 8 pares de 32/64, sin `uri` | 1.226 | 6.918.960 | 0,00692 |
 
-Comisión por transacción: 5.000 lamports (una firma). **Falta** la cuenta de token asociada,
-que se crea en `grant` (OC2).
+Comisión por transacción: 5.000 lamports (una firma). La cuenta de tenencia asociada se mide en
+OC2 (V12).
 
 ### V10 — Tamaño y cómputo de `create_item` (P7, en parte; 8 de noviembre de 2026)
 
@@ -174,18 +174,114 @@ que se crea en `grant` (OC2).
 - Fórmula aproximada, que cuadra con las dos medidas: 363 bytes fijos + `name` + `symbol` +
   `uri` + `collection` + Σ(clave + valor + 8) por cualidad. Quedan unos 850 bytes para los
   campos.
-- **Falta** medir `create_item` + `grant` juntos, en OC2.
+- `create_item` + `grant` juntos, medido en OC2: V13.
+
+### V11 — Cuenta asociada y transferencia con delegado por CPI desde Anchor (8 de noviembre de 2026)
+
+Leído antes de escribir `grant` y `transfer` (CLAUDE.md, sección 4):
+
+- Ejemplos oficiales de `solana-foundation/program-examples`, rama `main`, en
+  `raw.githubusercontent.com`: `tokens/token-2022/basics/anchor` (Anchor 1.2.1) crea la cuenta
+  asociada con `init` + `associated_token::mint` / `::authority` y mueve con
+  `token_interface::transfer_checked` pasando `mint.decimals`; activa la feature
+  `init-if-needed` de `anchor-lang`. `tokens/token-2022/permanent-delegate/anchor` sólo crea el
+  mint con `extensions::permanent_delegate::delegate`: **no hay ejemplo oficial que transfiera
+  como delegado permanente**.
+- Código de `anchor-spl` 1.2.2 (`src/associated_token.rs`, `src/token_2022.rs`):
+  `associated_token::create` hace `invoke_signed` de `create_associated_token_account` con el
+  pagador, la cuenta, el propietario, el mint y los programas. **El propietario no firma.**
+  `transfer_checked` y `mint_to` pasan la autoridad sin multifirma; con `new_with_signer`, la
+  PDA `Game` firma por CPI. Hace falta la feature `associated_token` de `anchor-spl`, que añade
+  `spl-associated-token-account-interface` 2.0.0 (Apache-2.0).
+- Código generado de `anchor-syn` 1.2.2 (`codegen/accounts/constraints.rs`): con
+  `init_if_needed` y `associated_token::…`, si la cuenta pertenece al programa del sistema la
+  crea; si ya existe, comprueba que su mint, su propietario, su programa de tokens y su
+  dirección asociada son los esperados. Por eso `init_if_needed` es seguro aquí.
+- Anchor 1.2.2 rechaza la misma cuenta mutable pasada dos veces
+  (`ConstraintDuplicateMutableAccount`, 2040): una transferencia de un tenedor a sí mismo con
+  su cuenta asociada falla antes del handler. `SameHolder` cubre un origen que no es la cuenta
+  asociada (test `transfer_rejects_same_holder_from_other_account`).
+- LiteSVM 0.18.2 trae cargado el programa de cuentas asociadas
+  (`spl_associated_token_account-1.1.1.so`), además de Token-2022.
+- Que la PDA `Game`, como delegado permanente, mueve el saldo de cualquier cuenta del mint sin
+  la firma del propietario: **comprobado** en LiteSVM y en devnet (V12).
+- Licencias tras añadir las features (`cargo metadata`): 419 crates, todas permisivas. Dos
+  ofrecen LGPL-2.1 sólo como una de las opciones (`MIT OR Apache-2.0 OR LGPL-2.1-or-later`).
+
+**Cómo se comprueba que el tipo es del juego:** `mint::authority = game`, no las semillas con
+`item_seed`. Es el poder que se ejerce, da un error claro (`ConstraintMintMintAuthority`) y
+ahorra 32 bytes por `grant`, que cuentan en V13. Un mint ajeno con esta PDA como autoridad se
+puede crear fuera del programa, pero emitir de él sólo lo pide la autoridad del juego y no toca
+los activos de nadie más. Explicado en `src/instructions/grant.rs`.
+
+### V12 — `grant` y `transfer` en devnet; renta de la cuenta asociada (P1, 8 de noviembre de 2026)
+
+Programa actualizado **en el mismo id** (`4SUNiKmyk4QtXhU2oNGn6uiXiSUevRdmXpZdRFXPeLNz`), slot
+520017921. Firma del despliegue:
+`31Rqw9T7YuuLmX2jJxyPRvTH7SbrobPw2kPRk17HNvmKpUMviMUJ78Y5FN8idhRaCWrQAW1fZp436LNNrgN7Qju8`.
+`ProgramData` pasa de 233.520 a 281.528 bytes (1,431 SOL de renta; la CLI lo amplía sola). El
+despliegue y la prueba costaron unos 0,26 SOL; quedan 3,38 SOL en el monedero de WSL.
+
+Prueba de humo (`devnet-smoke.sh`), juego `oc2-1794140207`. Todas con **una firma** y 5.000
+lamports de comisión:
+
+| Paso | CU | Firma |
+|---|---|---|
+| `grant` 5, crea la cuenta de alice | 35.415 | `4pPWk61z3t9QBcUTrF7UsC1t8jWmjdFg1mChZQ77BxAhzmAHK8zXqYZxmdLaDzcQfFBsewhdLBe6iz8TdxfeAvZW` |
+| `grant` 2, cuenta existente | 13.425 | `fRKknopbtzCCJ8D2bcFoJKW2YnDo54YKBbEWGZs9iejrga96Az8JSM3ZuU9wkdjTvWhh12adJGL4x1atsE8Ti8M` |
+| `transfer` 3 de alice a bob, crea la cuenta de bob | 41.790 | `2qnB2j2E951N3PShvE91io4fjifPihtdhZ6s8TmU3uyWEdxbyyVLydFKTnLDFJmq74DcDFgSEHsDrZiuqDwDNV6n` |
+| `transfer` 1, cuenta existente | 16.800 | `5EoeL2EjrVpbCsbcGRhmsYH8YxuzsFuTJSbubXJgtS74m2PBN7Zy9s2Doqw2dEysMuXRH2pWnDmwwWbFoHsuCHRZ` |
+| `create_item` + `grant` típico, una transacción | 99.987 | `5N4ktdnUMnGAcLXM35pjxv74HRTRL1MQUpaV77kTwQoBv6buRYwtpeaMEJZ9L6PxKLUqUTtFauurjPzSY9DVVXaq` |
+
+Saldos finales: alice 3, bob 4, carol 1. Ni alice ni bob firmaron nada.
+
+**Renta de la cuenta de tenencia asociada** de estos mints: **170 bytes, 1.513.840 lamports
+(0,00151 SOL)**, igual en LiteSVM y en devnet. Son 165 bytes de la cuenta base más la extensión
+`ImmutableOwner`, que el programa de cuentas asociadas añade siempre; `PermanentDelegate` y los
+metadatos no añaden extensión a la cuenta. La paga la autoridad la primera vez que un tenedor
+recibe un tipo, sea por `grant` o por `transfer`.
+
+Coste de referencia por tipo: crear el mint típico, 0,00313 SOL (V9); cada tenedor nuevo de ese
+tipo, 0,00151 SOL; cada transacción, 0,000005 SOL.
+
+### V13 — Tamaño y cómputo de `create_item` + `grant` en una transacción (P7, 8 de noviembre de 2026)
+
+Medido en LiteSVM (`create_item_and_grant_size_and_compute`), con `grant` de una unidad a un
+tenedor nuevo, es decir, creando su cuenta:
+
+| Caso | Bytes | Cómputo |
+|---|---|---|
+| Típico | 595 | 99.000-104.000 CU (LiteSVM), 99.987 CU (devnet) |
+| Sin cualidades, `uri` vacía, `name` y `symbol` de 1 | 507 | ~70.000 CU |
+| 6 pares de 32/64 y resto mínimo | 1.132 | ~142.000 CU |
+| 7 pares de 32/64 y resto mínimo | 1.236 | **no cabe** |
+| Máximo del contrato | 1.580 | 181.741 CU |
+
+- `grant` añade 122-123 bytes a `create_item`: tres cuentas nuevas (tenedor, su cuenta y el
+  programa de cuentas asociadas) y 16 bytes de datos. Fórmula de la transacción conjunta, que
+  cuadra con las medidas: **486 bytes fijos + `name` + `symbol` + `uri` + `collection` +
+  Σ(clave + valor + 8)** por cualidad. Quedan unos 746 bytes para los campos, frente a los ~869
+  de `create_item` solo (V10).
+- El cómputo cabe siempre: el máximo del contrato gasta 181.741 CU entre las dos instrucciones,
+  y el límite por defecto es de 200.000 por instrucción. No hace falta pedir más cómputo.
+- Las CU varían en unos miles entre ejecuciones porque cada tenedor es una clave aleatoria y la
+  búsqueda del *bump* de su cuenta asociada cambia.
+- **Consecuencia para el bloque 3** (propuesta, revisión del 8 de noviembre): los casos normales
+  van en una transacción. Se separan en dos cuando los campos pasan de unos 746 bytes sin llegar
+  a unos 869: por ejemplo, 7 u 8 cualidades largas. Se rechazan con `400` / `REJECTED` cuando
+  `create_item` no cabe ni solo. El backend lo decide **midiendo la transacción serializada**, no
+  con esta fórmula, que sólo sirve para orientarse.
 
 ---
 
 ## Pendiente
 
+P1 (V12) y P7 (V10 y V13) quedan cerrados en OC2.
+
 | # | Qué hay que verificar | Bloquea | Cómo |
 |---|---|---|---|
-| P1 | Renta de la cuenta de tenencia asociada. La del activo ya está medida (V9) | OC2 | Contra devnet, midiendo |
 | P2 | Si el delegado permanente puede reasignarse tras la creación del activo. Ya no condiciona la rotación: el delegado es una PDA que no cambia | Nada | Sólo si hace falta |
 | P3 | Si el API de `@solana/kit` 8.2.0 con `@solana-program/token-2022` 0.16.1 difiere de los ejemplos publicados | Bloque 3 | Leer la documentación vigente antes de escribir la primera instrucción |
 | P4 | Texto literal vigente de la regla de onboarding de Steam sobre blockchain, y las políticas actuales de Google Play y App Store | Último bloque (aviso del README) | Leer las políticas, citar con fecha |
 | P5 | Actualizar a la 4.7.2 el Godot de la máquina de desarrollo, que tiene la 4.7.1 | Fase A1 | Instalar y anotar |
-| P7 | `create_item` más `grant` juntos, en tamaño y cómputo. `create_item` solo ya está medido (V10): el máximo del contrato no cabe ni así | OC2 y bloque 3 | Transacción real con el caso máximo |
 | P10 | Que el cliente de Codama (V6) funciona con `@solana/kit` 8.2.0, o si hay que subir kit a 8.3 | Bloque 3 | Generar el cliente y compilar |

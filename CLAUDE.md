@@ -96,7 +96,13 @@ la propuesta; si no está en ella, no entra.
   desplegado en devnet (`4SUNiKmyk4QtXhU2oNGn6uiXiSUevRdmXpZdRFXPeLNz`): **hecho**. Se compila
   en WSL (V5). El máximo del contrato no cabe en una transacción (verificaciones, V10): el
   backend separa `create_item` y `grant` o rechaza (propuesta, revisión del 8 de noviembre).
-- Siguiente: OC2, `grant` y `transfer`, con la medida de P1 y P7 que falta.
+- OC2 (8-nov-2026, rama `oc2`, sobre `oc1`): `grant` y `transfer`, con la cuenta asociada creada si
+  hace falta (`init_if_needed`), el tipo atado al juego por `mint::authority = game` y la PDA como
+  delegado permanente; 30 tests con LiteSVM. Actualizado en devnet en el mismo id (V12). P1 y P7
+  cerrados: cuenta asociada de 170 bytes y 0,00151 SOL; `create_item` + `grant` caben juntos hasta
+  unos 746 bytes de campos (V13). **Hecho.**
+- Siguiente: bloque 3, cliente del programa (Codama, P3 y P10) y crear item con el test del
+  invariante de firmante único, separando `create_item` y `grant` cuando no quepan (V13).
 - Requisitos de entrega del máster: propuesta, 0.1. Revísalos antes de planificar un bloque.
 - Ver `docs/seguimiento/verificaciones.md` para lo que hay que comprobar antes de OC1 y del
   bloque 3, y `docs/seguimiento/preguntas-tutor.md` para lo que bloquea el proyecto.
