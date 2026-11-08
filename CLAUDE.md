@@ -88,8 +88,10 @@ la propuesta; si no está en ella, no entra.
 - *Nidada* (`rust/`, `examples/godot-demo/`): J1 (cuidado) y J5 (amigos y visitas) hechos, con límites
   por IP, tokens con hash y decisiones previas a J3/J4 en `docs/juego/plan.md` §9. **Fuera del hito**
   desde el 4-nov-2026: no se trabaja en ella para el PFM. Android, tampoco (5-nov-2026).
-- Siguiente: bloque 2 — configuración, derivación de claves con vectores de test,
-  SQLite, idempotencia, máquina de estados de operaciones. Después, OC1 y OC2: el programa.
+- Bloque 2 (8-nov-2026, rama `bloque-2`): configuración, clave de autoridad con vectores fijos,
+  esquema SQLite (con `holders` y la respuesta en `idempotency`), idempotencia y máquina de estados:
+  **hecho**. **Falta** la derivación de claves de jugador y `holder_id`, que espera a la Q12 del tutor.
+- Siguiente: OC1 y OC2, el programa. Antes, P8 de `verificaciones.md`: el disco C: está al 99 %.
 - Requisitos de entrega del máster: propuesta, 0.1. Revísalos antes de planificar un bloque.
 - Ver `docs/seguimiento/verificaciones.md` para lo que hay que comprobar antes de OC1 y del
   bloque 3, y `docs/seguimiento/preguntas-tutor.md` para lo que bloquea el proyecto.
