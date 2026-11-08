@@ -13,7 +13,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "licenses": "node scripts/check-licenses.mjs",
-    "codegen": "node scripts/codegen.mjs"
+    "codegen": "node scripts/codegen.mjs",
+    "test:devnet": "tsx scripts/devnet.ts"
   },
   "dependencies": {
     "@solana-program/token": "0.16.1",
