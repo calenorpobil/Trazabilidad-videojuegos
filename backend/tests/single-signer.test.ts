@@ -10,7 +10,8 @@
  * de la transaccion y no aparece aqui.
  *
  * Cubre las cinco formas que construye el backend del hito: `initialize_game`, `create_item`,
- * `grant`, `create_item` + `grant` juntos y `transfer` (este ultimo se usa en el bloque 4).
+ * `grant`, `create_item` + `grant` juntos y `transfer`, tambien el que sale de `planTransfer`
+ * (bloque 4).
  */
 import {
   blockhash,
@@ -22,6 +23,7 @@ import {
 } from '@solana/kit';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { deriveAuthority } from '../src/keys.js';
+import { senderAccountRpc } from './fake-rpc.js';
 import {
   authoritySigner,
   buildCreateItem,
@@ -29,6 +31,7 @@ import {
   buildGrant,
   buildInitializeGame,
   buildTransfer,
+  planTransfer,
   type ItemDefinition,
   type Lifetime,
   type TransactionDraft,
@@ -104,5 +107,11 @@ describe('invariante de firmante unico', () => {
     // Ni emisor ni receptor estan entre los firmantes (la primera cuenta es la unica que firma).
     expect(message.staticAccounts.indexOf(ALICE)).not.toBe(0);
     expect(message.staticAccounts.indexOf(BOB)).not.toBe(0);
+  });
+
+  it('transfer planificado (planTransfer)', async () => {
+    const plan = await planTransfer(senderAccountRpc(true), authority, GAME_ID, SWORD.itemId, ALICE, BOB, 1, LIFETIME);
+    if (plan.outcome !== 'ready') throw new Error(`se esperaba una transferencia lista: ${plan.reason}`);
+    await expectSingleSigner(plan.transaction);
   });
 });

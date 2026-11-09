@@ -13,11 +13,15 @@
  *
  * De donde sale la direccion del tenedor no es asunto de este modulo: la recibe como `Address`,
  * igual que el programa la recibe como una cuenta cualquiera.
+ *
+ * Solo `planTransfer` lee la cadena, para comprobar que existe la cuenta del emisor. El resto no
+ * hace ninguna llamada de red.
  */
 import {
   appendTransactionMessageInstructions,
   createKeyPairSignerFromPrivateKeyBytes,
   createTransactionMessage,
+  fetchEncodedAccount,
   getTransactionMessageSize,
   LEGACY_TRANSACTION_SIZE_LIMIT,
   pipe,
@@ -25,8 +29,10 @@ import {
   setTransactionMessageLifetimeUsingBlockhash,
   type Address,
   type BlockhashLifetimeConstraint,
+  type GetAccountInfoApi,
   type Instruction,
   type KeyPairSigner,
+  type Rpc,
   type TransactionSigner,
 } from '@solana/kit';
 import { findGameAddress, findHolderTokenAddress, findItemMintAddress, itemSeed } from './addresses.js';
@@ -177,16 +183,74 @@ export async function buildTransfer(
   lifetime: Lifetime,
 ): Promise<TransactionDraft> {
   const { game, mint } = await addressesOf(gameId, itemId);
+  return transferDraft(authority, game, mint, await findHolderTokenAddress(from, mint), to, amount, lifetime);
+}
+
+async function transferDraft(
+  authority: TransactionSigner,
+  game: Address,
+  mint: Address,
+  fromToken: Address,
+  to: Address,
+  amount: number | bigint,
+  lifetime: Lifetime,
+): Promise<TransactionDraft> {
   const instruction = getTransferInstruction({
     authority,
     game,
     mint,
-    fromToken: await findHolderTokenAddress(from, mint),
+    fromToken,
     toHolder: to,
     toToken: await findHolderTokenAddress(to, mint),
     amount,
   });
   return draft(authority, [instruction], lifetime);
+}
+
+const U64_MAX = 2n ** 64n - 1n;
+
+/** Cantidad de una escritura: entero de 1 al maximo de un `u64` (contrato, 4.5; programa, `amount > 0`). */
+export function isValidAmount(amount: number | bigint): boolean {
+  if (typeof amount === 'number') return Number.isSafeInteger(amount) && amount >= 1;
+  return amount >= 1n && amount <= U64_MAX;
+}
+
+/**
+ * Como se envia una transferencia, o por que no se envia:
+ * - `invalid_amount`: la cantidad no es un entero >= 1 (contrato, 4.5);
+ * - `same_holder`: emisor y receptor son el mismo tenedor (contrato, 4.5: `400` / `REJECTED`);
+ * - `no_sender_account`: el emisor nunca ha tenido unidades de ese tipo, asi que no tiene cuenta.
+ *
+ * El saldo insuficiente y las categorias de error del contrato son del bloque 5. Una cuenta del
+ * emisor que existe pero no alcanza la sigue rechazando Token-2022.
+ */
+export type TransferPlan =
+  | { readonly outcome: 'ready'; readonly transaction: TransactionDraft }
+  | { readonly outcome: 'rejected'; readonly reason: 'invalid_amount' | 'same_holder' | 'no_sender_account' };
+
+/**
+ * Comprueba lo que se puede comprobar antes de tocar la cadena y construye la transferencia. Lee la
+ * cuenta del emisor en `confirmed`: la que acaba de crear un `grant` en `applied` ya cuenta.
+ */
+export async function planTransfer(
+  rpc: Rpc<GetAccountInfoApi>,
+  authority: TransactionSigner,
+  gameId: string,
+  itemId: string,
+  from: Address,
+  to: Address,
+  amount: number | bigint,
+  lifetime: Lifetime,
+): Promise<TransferPlan> {
+  if (!isValidAmount(amount)) return { outcome: 'rejected', reason: 'invalid_amount' };
+  if (from === to) return { outcome: 'rejected', reason: 'same_holder' };
+
+  const { game, mint } = await addressesOf(gameId, itemId);
+  const fromToken = await findHolderTokenAddress(from, mint);
+  const sender = await fetchEncodedAccount(rpc, fromToken, { commitment: 'confirmed' });
+  if (!sender.exists) return { outcome: 'rejected', reason: 'no_sender_account' };
+
+  return { outcome: 'ready', transaction: await transferDraft(authority, game, mint, fromToken, to, amount, lifetime) };
 }
 
 /**
