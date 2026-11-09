@@ -109,6 +109,14 @@ la propuesta; si no está en ella, no entra.
   `npm run test:devnet` ejecutado (V15). **Falta**, cuando responda el tutor: resolver el tenedor
   (`holder_id`, `holders`), registrar la operación sobre `idempotency.ts` y `operations.ts` y el
   endpoint `POST /v1/items`. Antes, decidir P11 (dos firmas en una operación partida).
+- Bloque 4 (9-nov-2026, rama `bloque-4`, sobre `bloque-3`): **a medias, por la Q12.** Se empezó con el 3
+  a medias por excepción explícita. Hecho: `parseItemMint` con fixture de un mint real de devnet;
+  `readHolderInventory` por `Address` (saldos de la cadena en `finalized`, filtro por autoridad = PDA
+  `Game`, `item_id` y datos del tipo de `items`, porque la cadena sólo guarda SHA-256(item_id) y la 4.4
+  los sirve de SQLite); `planTransfer` (cantidad, tenedores distintos, cuenta del emisor); y
+  `test:devnet` con transferencia e inventarios (V16). **Falta**, con la Q12 y P11: resolver
+  `holder_id`, registrar la operación y los endpoints `POST /v1/items/{id}/transfer` y
+  `GET /v1/holders/{id}/items`.
 - Requisitos de entrega del máster: propuesta, 0.1. Revísalos antes de planificar un bloque.
 - Ver `docs/seguimiento/verificaciones.md` para lo que hay que comprobar antes de OC1 y del
   bloque 3, y `docs/seguimiento/preguntas-tutor.md` para lo que bloquea el proyecto.

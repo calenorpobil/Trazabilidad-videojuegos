@@ -327,6 +327,56 @@ tipos `.d.ts` de `@solana/kit` 8.6.0 y `@solana-program/token-2022` 0.16.1), y c
   El tenedor tiene 1 unidad y no firmó nada. La autoridad fue el monedero de WSL; la derivación
   desde la semilla maestra la cubren los vectores de `keys.test.ts`.
 
+### V16 — Inventario, parseo del mint y transferencia desde TypeScript (bloque 4, 9 de noviembre de 2026)
+
+**Formato del mint, leído antes de parsear** (CLAUDE.md, 4): interfaz oficial
+`solana-program/token-metadata`, `interface/src/state.rs` (rama `main`), y el decodificador de
+`@solana-program/token-2022` 0.16.1 instalado (`getMintDecoder`). La página de la documentación de
+Solana sobre la extensión respondió 429 y no se pudo leer. Coinciden en lo que importa:
+
+- 82 bytes del mint base, relleno hasta el byte 165 con el tipo de cuenta (`1` = mint) y entradas TLV
+  de Token-2022 (`u16` tipo, `u16` longitud).
+- `TokenMetadata` va en Borsh: `update_authority` (32 bytes, ceros si no hay), `mint`, `name`, `symbol`,
+  `uri` con prefijo `u32` y `additional_metadata: Vec<(String, String)>`, que el decodificador
+  devuelve como `Map` **en el orden de la cadena**: `collection` primero y después las cualidades.
+- El campo `mint` de los metadatos existe para evitar la suplantación: `parseItemMint` lo compara con
+  la dirección leída.
+
+**Fixture:** `getAccountInfo` del mint de V15 (`BFiApoiWA2KKLEZ4RQxxHmktAnVVMonUD1eSA4pHtCLu`, slot
+520497539): 481 bytes, propiedad de Token-2022. `tests/inventory.test.ts` comprueba que es el mint de
+`itm_vUfoe78NHFq3zQnQ` en `b3-1794147458` y que su autoridad es la PDA `Game` de ese juego.
+
+**De dónde sale cada dato del inventario** (decidido por el responsable el 9-nov-2026):
+
+- **El `item_id` no se puede recuperar de la cadena.** `create_item` guarda `name`, `symbol`, `uri`,
+  `collection` y las cualidades; del `item_id` sólo llega SHA-256(item_id), como semilla del mint y en
+  el evento `ItemCreated` (logs, no estado). Se traduce mint → `item_id` con `items.mint`, que es
+  `UNIQUE` desde el bloque 2 y no depende de la Q12. Un mint del juego que no está en `items` no
+  aparece.
+- **Los datos del tipo salen de `items`**, como fija la propuesta (4.4): el backend no lee los
+  metadatos de la cadena en cada consulta. De la cadena salen los **saldos**, en `finalized` (contrato,
+  5.2), y **la pertenencia al juego**: la autoridad de acuñación del mint es la PDA `Game`, el mismo
+  criterio que el programa (V11). El parseo de metadatos sirve para ese filtro y para comprobar en
+  `test:devnet` que lo escrito en la cadena es lo enviado.
+
+**Transferencia:** `planTransfer` rechaza sin tocar la cadena una cantidad que no sea entero de 1 al
+máximo de `u64` y un emisor igual al receptor, y lee en `confirmed` la cuenta asociada del emisor:
+si no existe, no se envía. El saldo insuficiente es del bloque 5.
+
+**Prueba manual** (`npm run test:devnet`), juego `b4-1794255336`, tipo `itm_FaKCh6ZFbC0Hm3Ow`, mint
+`DsrtqbADsPZaYPyuEmSSQhzHhq5vnCSRrLprzy8LgqaK`, emisor `Cn3t9hRSLumPacDziKeQLEhAtDdUEVyQt4aTVBAzwgXd`,
+receptor `GuQrMiNpioKYjBz9sJAK3QkAxA4Vzgx8LwGCmnuduaai`, los dos con clave aleatoria. `getTransaction`
+da **una firma** en cada una:
+
+| Paso | CU | Firma |
+|---|---|---|
+| `initialize_game` | 7.447 | `2giBnhYQNpskz7uXwepLJWTSgVZXcQXbfXLUubV84xt58R87XiQ8iUS5DBXBb96zPDkiCVxHe1oD6wuBsveTE9g8` |
+| `create_item` + `grant` 3 | 104.459 | `5XWd8qAdHdbBESYRsxc8rUYoPE25jUMKZgPB9zeXRTZEAVoU2g11QZ7uZgYwKgvdjuQYQ61Tob3VrupdiJFFeWSe` |
+| `transfer` 2, crea la cuenta del receptor | 37.276 | `3sjd8Uf8eNoLnVXucweyKfqRr67bz8jv624N31E3G9iiPKGMcuiaLBfJemTHgStz1vUG28Lg5JPps21B3j7QmtZG` |
+
+Ya en `finalized`, `readHolderInventory` da 1 unidad al emisor y 2 al receptor, con los datos del tipo
+en la forma del contrato. Ninguno de los dos firmó. Quedan 3,369 SOL en el monedero de WSL.
+
 ---
 
 ## Pendiente
