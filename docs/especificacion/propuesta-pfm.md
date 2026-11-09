@@ -877,7 +877,9 @@ que nadie —empezando por el tribunal— las descubra por sorpresa.
     devnet, que es el alcance de este proyecto; no para mainnet sin una auditoría.
 14. **Quien tenga la autoridad de actualización del programa controla todos los juegos.** Puede cambiar
     el código y, con él, mover cualquier activo. En devnet se conserva para poder corregir errores; un
-    despliegue real tendría que congelarla o que cada estudio desplegara su propio programa.
+    despliegue real tendría que hacer que cada estudio desplegara su propio programa, con la autoridad de
+    actualización en una multifirma con tiempo de espera, o congelarla tras la auditoría de la limitación
+    13; en ambos casos, con compilación verificable.
 
 ---
 
