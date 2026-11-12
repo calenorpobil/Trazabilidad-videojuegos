@@ -8,7 +8,8 @@
  * aleatorio. Ninguno de los dos firma. Comprueba con `getTransaction` que cada transaccion lleva UNA
  * firma (invariante 1), que los metadatos del mint son los enviados (`parseItemMint`) y, cuando la
  * transferencia es `finalized`, que el inventario de los dos es 1 y 2 (`readHolderInventory`, con
- * el tipo registrado en un SQLite en memoria). Imprime las firmas para `verificaciones.md`.
+ * el tipo registrado en un SQLite en memoria). Despues repite lo mismo por HTTP, con el servidor del
+ * backend y tenedores nombrados por su external_id. Imprime las firmas para `verificaciones.md`.
  *
  * El fichero de clave hace de autoridad del juego. En el backend la autoridad sale de la semilla
  * maestra (`keys.ts`, con sus vectores); aqui se usa un monedero con fondos para no tener que
@@ -32,6 +33,7 @@ import { findGameAddress, findItemMintAddress } from '../src/addresses.js';
 import { openDatabase, timestamp } from '../src/db.js';
 import { newId } from '../src/ids.js';
 import { parseItemMint, readHolderInventory } from '../src/inventory.js';
+import { buildServer } from '../src/server.js';
 import {
   buildInitializeGame,
   planItemCreation,
@@ -66,8 +68,11 @@ async function send(label: string, transaction: TransactionDraft): Promise<Signa
   assertIsSendableTransaction(signed);
   assertIsTransactionWithBlockhashLifetime(signed);
   await sendAndConfirm(signed, { commitment: 'confirmed' });
-  const signature = getSignatureFromTransaction(signed);
+  return checkOneSignature(label, getSignatureFromTransaction(signed));
+}
 
+/** `getTransaction` de una transaccion ya confirmada: una firma (invariante 1) y sin error. */
+async function checkOneSignature(label: string, signature: Signature): Promise<Signature> {
   const sent = await rpc
     .getTransaction(signature, { commitment: 'confirmed', encoding: 'json', maxSupportedTransactionVersion: 0 })
     .send();
@@ -77,6 +82,18 @@ async function send(label: string, transaction: TransactionDraft): Promise<Signa
   if (sent.meta?.err) throw new Error(`${label}: fallo en la cadena: ${JSON.stringify(sent.meta.err)}`);
   console.warn(`${label}: 1 firma, ${sent.meta?.computeUnitsConsumed ?? '?'} CU, ${signature}`);
   return signature;
+}
+
+/** Espera a que la firma llegue a `commitment`, como mucho 90 s. */
+async function waitFor(signature: Signature, commitment: 'confirmed' | 'finalized'): Promise<void> {
+  for (let i = 0; i < 90; i++) {
+    const [status] = (await rpc.getSignatureStatuses([signature]).send()).value;
+    if (status?.err) throw new Error(`${signature}: fallo en la cadena: ${JSON.stringify(status.err)}`);
+    const reached = status?.confirmationStatus;
+    if (reached === 'finalized' || (commitment === 'confirmed' && reached === 'confirmed')) return;
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  throw new Error(`${signature} no llega a ${commitment} en 90 s`);
 }
 
 console.warn(`autoridad ${authority.address}, juego ${gameId}, tipo ${itemId}`);
@@ -120,12 +137,7 @@ if (transfer.outcome !== 'ready') throw new Error(`transferencia rechazada: ${tr
 const transferSignature = await send('transfer 2', transfer.transaction);
 
 // El inventario refleja el estado liquidado (contrato, 5.2): se espera a `finalized`.
-for (let i = 0; ; i++) {
-  const [status] = (await rpc.getSignatureStatuses([transferSignature]).send()).value;
-  if (status?.confirmationStatus === 'finalized') break;
-  if (i === 60) throw new Error('la transferencia no llega a finalized en 60 s');
-  await new Promise((resolve) => setTimeout(resolve, 1000));
-}
+await waitFor(transferSignature, 'finalized');
 
 // El tipo, registrado como lo hara POST /v1/items: el inventario saca de aqui el item_id.
 const db = openDatabase(':memory:');
@@ -150,3 +162,74 @@ for (const [who, address, amount] of [
   console.warn(`inventario del ${who}: ${JSON.stringify(inventory)}`);
 }
 console.warn('ninguno de los dos tenedores ha firmado nada');
+
+// --- Las mismas escrituras y lecturas por HTTP, con el servidor del backend (bloques 3 y 4) ---
+//
+// Mismo juego y misma autoridad; tenedores derivados de una semilla maestra aleatoria y nombrados
+// por su external_id. El seguimiento hasta `settled` es del bloque 5: aqui se espera a mano la firma
+// que el servidor registro en `operations`.
+const WRITE_KEY = 'w'.repeat(40);
+const READ_TOKEN = 'r'.repeat(40);
+const httpDb = openDatabase(':memory:');
+const http = await buildServer({
+  db: httpDb,
+  gameId,
+  masterSeed: crypto.getRandomValues(new Uint8Array(32)),
+  writeKey: WRITE_KEY,
+  readToken: READ_TOKEN,
+  authority,
+  rpc,
+  logger: process.env['CHAIN_DEVNET_LOG'] === '1',
+});
+
+let keyCounter = 0;
+async function request(method: 'GET' | 'POST', url: string, body?: object): Promise<Record<string, unknown>> {
+  const headers: Record<string, string> = { authorization: `Bearer ${method === 'GET' ? READ_TOKEN : WRITE_KEY}` };
+  if (method === 'POST') headers['idempotency-key'] = `devnet-${gameId}-${++keyCounter}`;
+  const response = await http.inject({ method, url, headers, ...(body === undefined ? {} : { payload: body }) });
+  const json = response.json() as Record<string, unknown>;
+  if (response.statusCode >= 300) throw new Error(`${method} ${url}: ${response.statusCode} ${JSON.stringify(json)}`);
+  return json;
+}
+
+/** Firma que el servidor guardo para la operacion, ya comprobada en la cadena. */
+async function settle(label: string, operationId: string): Promise<void> {
+  const row = httpDb.prepare('SELECT signature FROM operations WHERE operation_id = ?').get(operationId) as {
+    signature: Signature;
+  };
+  await waitFor(row.signature, 'finalized');
+  await checkOneSignature(`HTTP ${label}`, row.signature);
+}
+
+const { collection_id: collectionId } = await request('POST', '/v1/collections', { name: 'Armeria' });
+const created = await request('POST', '/v1/items', {
+  collection_id: collectionId,
+  name: 'Escudo de roble',
+  symbol: 'SHIELD',
+  uri: 'https://ejemplo.test/escudo.json',
+  qualities: { rarity: 'rare' },
+  initial_grant: { holder: { external_id: 'player-42' }, amount: 3 },
+});
+console.warn(`HTTP POST /v1/items: ${JSON.stringify(created)}`);
+await settle('create_item + grant 3', created['operation_id'] as string);
+
+const moved = await request('POST', `/v1/items/${created['item_id'] as string}/transfer`, {
+  from: { holder_id: created['holder_id'] },
+  to: { external_id: 'player-77' },
+  amount: 2,
+});
+console.warn(`HTTP POST transfer: ${JSON.stringify(moved)}`);
+await settle('transfer 2', moved['operation_id'] as string);
+
+for (const [who, holderId, amount] of [
+  ['emisor', moved['from_holder_id'], 1],
+  ['receptor', moved['to_holder_id'], 2],
+] as const) {
+  const inventory = await request('GET', `/v1/holders/${holderId as string}/items`);
+  const items = inventory['items'] as { item_id: string; amount: number }[];
+  if (items.length !== 1 || items[0]?.item_id !== created['item_id'] || items[0]?.amount !== amount) {
+    throw new Error(`HTTP inventario del ${who}: ${JSON.stringify(inventory)}, se esperaba ${amount}`);
+  }
+  console.warn(`HTTP inventario del ${who}: ${JSON.stringify(inventory)}`);
+}
+await http.close();
