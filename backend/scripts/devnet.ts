@@ -131,7 +131,9 @@ for (let i = 0; ; i++) {
 const db = openDatabase(':memory:');
 const now = timestamp();
 db.prepare('INSERT INTO collections VALUES (?, ?, ?, ?)').run(item.collectionId, gameId, 'Armeria', now);
-db.prepare("INSERT INTO operations VALUES ('opr_devnet', 'create_item', 'settled', NULL, NULL, NULL, ?, ?)").run(now, now);
+db.prepare(
+  "INSERT INTO operations (operation_id, kind, state, created_at, updated_at) VALUES ('opr_devnet', 'create_item', 'settled', ?, ?)",
+).run(now, now);
 db.prepare(
   `INSERT INTO items (item_id, collection_id, mint, name, symbol, uri, qualities, operation_id, created_at)
    VALUES (?, ?, ?, ?, ?, ?, ?, 'opr_devnet', ?)`,

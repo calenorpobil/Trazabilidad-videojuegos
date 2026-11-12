@@ -6,6 +6,7 @@ import {
   OperationNotFoundError,
   createOperation,
   getOperation,
+  recordSignature,
   transitionOperation,
 } from '../src/operations.js';
 
@@ -77,5 +78,33 @@ describe('maquina de estados de una operacion', () => {
     const { db, id } = operationIn('applied');
     db.prepare("UPDATE operations SET signature = 'firma' WHERE operation_id = ?").run(id);
     expect(Object.keys(getOperation(db, id) ?? {})).toEqual(['operation_id', 'state', 'error']);
+  });
+});
+
+describe('paso, payload y firma (P11)', () => {
+  const row = (db: ReturnType<typeof openDatabase>, id: string) =>
+    db.prepare('SELECT step, payload, signature FROM operations WHERE operation_id = ?').get(id);
+
+  it('nace en el paso 1, sin payload ni firma', () => {
+    const { db, id } = operationIn('pending');
+    expect(row(db, id)).toEqual({ step: 1, payload: null, signature: null });
+  });
+
+  it('guarda el payload como JSON', () => {
+    const db = openDatabase(':memory:');
+    const id = createOperation(db, 'create_item', { holder: 'x', amount: 3 });
+    expect(JSON.parse((row(db, id) as { payload: string }).payload)).toEqual({ holder: 'x', amount: 3 });
+  });
+
+  it('registra la firma en pending', () => {
+    const { db, id } = operationIn('pending');
+    recordSignature(db, id, 'firma');
+    expect(row(db, id)).toMatchObject({ signature: 'firma' });
+  });
+
+  it('no registra una firma fuera de pending ni en una operacion que no existe', () => {
+    const { db, id } = operationIn('settled');
+    expect(() => recordSignature(db, id, 'firma')).toThrow(InvalidTransitionError);
+    expect(() => recordSignature(db, 'opr_nada', 'firma')).toThrow(OperationNotFoundError);
   });
 });

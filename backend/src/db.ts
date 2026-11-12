@@ -1,8 +1,9 @@
 /**
  * Base de datos SQLite del backend: un fichero, sin servidor (propuesta, 4.4).
  *
- * El esquema sale de 4.4, con la revision del 8-nov-2026: `idempotency` guarda la respuesta
- * aceptada y `holders` guarda el mapa de tenedores. La version va en `PRAGMA user_version`; no hay
+ * El esquema sale de 4.4, con las revisiones del 8-nov-2026 (`idempotency` guarda la respuesta
+ * aceptada y `holders` guarda el mapa de tenedores) y del 12-nov-2026 (`operations.step` y
+ * `operations.payload`, P11). Se cambio la version 1 sin migrar porque no hay nada desplegado. La version va en `PRAGMA user_version`; no hay
  * herramienta de migraciones porque solo existe la version 1.
  */
 import Database from 'better-sqlite3';
@@ -30,7 +31,12 @@ CREATE TABLE operations (
   operation_id  TEXT PRIMARY KEY,
   kind          TEXT NOT NULL CHECK (kind IN (${sqlList(OPERATION_KINDS)})),
   state         TEXT NOT NULL CHECK (state IN (${sqlList(OPERATION_STATES)})),
+  -- Firma de la transaccion en curso. Se guarda ANTES de enviarla (revision del 12-nov-2026).
   signature     TEXT,
+  -- Paso en curso: 2 solo en un tipo partido, cuando va el grant (P11).
+  step          INTEGER NOT NULL DEFAULT 1 CHECK (step IN (1, 2)),
+  -- JSON con lo que hace falta para construir el paso pendiente; NULL si no queda ninguno.
+  payload       TEXT,
   error_code    TEXT,
   error_message TEXT,
   created_at    TEXT NOT NULL,

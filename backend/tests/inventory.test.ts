@@ -86,7 +86,9 @@ describe('readHolderInventory', () => {
     game = await findGameAddress(FIXTURE.gameId);
     const now = timestamp();
     db.prepare('INSERT INTO collections VALUES (?, ?, ?, ?)').run(FIXTURE_COLLECTION, FIXTURE.gameId, 'Armeria', now);
-    db.prepare("INSERT INTO operations VALUES ('opr_1', 'create_item', 'settled', NULL, NULL, NULL, ?, ?)").run(
+    db.prepare(
+      "INSERT INTO operations (operation_id, kind, state, created_at, updated_at) VALUES ('opr_1', 'create_item', 'settled', ?, ?)",
+    ).run(
       now,
       now,
     );

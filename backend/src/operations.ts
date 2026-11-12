@@ -40,15 +40,34 @@ function sourcesOf(to: OperationState): OperationState[] {
   return OPERATION_STATES.filter((from) => OPERATION_TRANSITIONS[from].includes(to));
 }
 
-/** Registra una operacion nueva en `pending`. Pensada para llamarse dentro de una reclamacion idempotente. */
-export function createOperation(db: Db, kind: OperationKind, now: Date = new Date()): string {
+/**
+ * Registra una operacion nueva en `pending`, en el paso 1. Pensada para llamarse dentro de una
+ * reclamacion idempotente. `payload` es lo que hace falta para construir un paso posterior (P11):
+ * hoy, solo el `grant` de un tipo partido.
+ */
+export function createOperation(db: Db, kind: OperationKind, payload: unknown = null, now: Date = new Date()): string {
   const id = newId('operation');
   const at = timestamp(now);
   db.prepare(
-    `INSERT INTO operations (operation_id, kind, state, created_at, updated_at)
-     VALUES (?, ?, 'pending', ?, ?)`,
-  ).run(id, kind, at, at);
+    `INSERT INTO operations (operation_id, kind, state, payload, created_at, updated_at)
+     VALUES (?, ?, 'pending', ?, ?, ?)`,
+  ).run(id, kind, payload === null ? null : JSON.stringify(payload), at, at);
   return id;
+}
+
+/**
+ * Guarda la firma de la transaccion del paso en curso. Se llama ANTES de enviarla: si el backend
+ * se reinicia despues, el seguimiento sabe que buscar y no la envia otra vez.
+ */
+export function recordSignature(db: Db, operationId: string, signature: string, now: Date = new Date()): void {
+  const result = db
+    .prepare("UPDATE operations SET signature = ?, updated_at = ? WHERE operation_id = ? AND state = 'pending'")
+    .run(signature, timestamp(now), operationId);
+  if (result.changes === 0) {
+    const current = getOperation(db, operationId);
+    if (current === null) throw new OperationNotFoundError(operationId);
+    throw new InvalidTransitionError(`${operationId}: no se registra una firma en ${current.state}`);
+  }
 }
 
 /**
