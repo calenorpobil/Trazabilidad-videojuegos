@@ -381,11 +381,12 @@ en la forma del contrato. Ninguno de los dos firmó. Quedan 3,369 SOL en el mone
 
 ## Pendiente
 
-P1 (V12) y P7 (V10 y V13) quedan cerrados en OC2. P3 y P10 (V14), en el bloque 3.
+P1 (V12) y P7 (V10 y V13) quedan cerrados en OC2. P3 y P10 (V14), en el bloque 3. P11 queda decidido
+el 12-nov-2026: `operations.step` y `operations.payload` (propuesta, revisión del 12 de noviembre).
 
 | # | Qué hay que verificar | Bloquea | Cómo |
 |---|---|---|---|
 | P2 | Si el delegado permanente puede reasignarse tras la creación del activo. Ya no condiciona la rotación: el delegado es una PDA que no cambia | Nada | Sólo si hace falta |
 | P4 | Texto literal vigente de la regla de onboarding de Steam sobre blockchain, y las políticas actuales de Google Play y App Store | Último bloque (aviso del README) | Leer las políticas, citar con fecha |
 | P5 | Actualizar a la 4.7.2 el Godot de la máquina de desarrollo, que tiene la 4.7.1 | Fase A1 | Instalar y anotar |
-| P11 | Cómo sigue `operations` las **dos** transacciones de un tipo partido (`split`): la tabla tiene una sola columna `signature`. La segunda (`grant`) sólo se puede enviar cuando la primera ha creado el mint, y tras un reinicio entre las dos hay que saber por cuál va | Bloque 5 (y el registro de `POST /v1/items`) | Decidirlo antes de escribir el seguimiento |
+| P12 | **Decisión pendiente del responsable:** alcance de OpenBao, que sugiere el tutor (Q12). A: guardar sólo la semilla en su almacén KV (~1 h). B: que la autoridad firme dentro de OpenBao con Transit (ed25519) y se rote con `rotate_authority` (~4 h; cambia 4.3). C: trabajo futuro en el README. Para B, verificar antes que Transit firma ed25519 puro sobre los bytes del mensaje, sin *prehash*. Leído el 12-nov-2026 en su documentación (2.7.x): Transit admite ed25519 para firmar y rotar, e importar claves; licencia MPL-2.0 y modo `server -dev` | Nada hasta que se decida; si es B, antes del último bloque | Decidir; si B, plazo de 4 h y vuelta a A si tras 2 h no hay una firma válida en devnet |

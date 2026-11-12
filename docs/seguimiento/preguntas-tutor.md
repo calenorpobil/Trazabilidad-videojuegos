@@ -12,7 +12,6 @@ resuelven.
 | Q4 | ¿Hay memoria escrita o defensa, además del vídeo? | «Memoria» sólo aparece en dos sitios: el paso 9 de «Próximos pasos» del enunciado (70, línea 790) y los flujos de estudio del índice (10, líneas 223, 280, 308, 336 y 364: «Escribir memoria TFM (4-6 horas)»). Las instrucciones de entrega (20) no la nombran: ni en los entregables obligatorios, ni en la rúbrica, ni en el checklist final. La defensa no aparece en ninguno. **Por eso el plan no la incluye** | Unas 4-6 h sin presupuestar, ya sin margen |
 | Q11 | ¿Los avances intermedios son obligatorios, y con qué fechas? | Las instrucciones (20, sección 6.1, líneas 573-574) citan el avance 1 (diseño y programa inicial, «semana 1») y el avance 2 (MVP y código en GitHub, «semana 3»), sin fechas reales. No aparecen en los entregables obligatorios, ni en la rúbrica, ni en el checklist final. La entrega final es el 30 de noviembre de 2026 | Habría que adelantar el programa y el MVP, que hoy se terminan el 21 y el 28 de noviembre |
 
-| Q12 | ¿Basta el modelo custodial documentado, o el jugador tiene que custodiar su propia clave? | Al confirmar la Q10, el tutor objetó que la clave privada en el backend queda más expuesta (8 de noviembre). Es cierto: concentra el poder sobre todos los activos. La respuesta enviada lo asume como limitación (12.3), con mitigaciones y la *embedded wallet* como trabajo futuro | Cambian 4.2, 4.3 y la derivación del bloque 2, y el firmante único deja de valer. Por eso el bloque 2 espera para derivar las claves de jugador |
 
 ## Resueltas por la documentación
 
@@ -24,6 +23,12 @@ resuelven.
 | Q5 | ¿Hay que desplegar el backend en un servidor público? | **No se pide.** Lo único que debe estar desplegado es el programa. Es una deducción: los documentos no lo niegan de forma expresa | Instrucciones, 5.2 y 11 |
 | Q6 | ¿Debe ser original? | **Sí, respecto al esqueleto base.** Se premia la diferenciación (15 %) y usar el esqueleto no es obligatorio. Hay que documentar las innovaciones y mencionarlas en el vídeo | Instrucciones, 7.2 y 8 |
 | Q7 | ¿Se aceptan más de 40 h? | **No hay límite de horas.** El índice orienta entre 30 y 55 h según el TFM. La cifra de 40 h no aparece en ningún documento del máster. El plan está en 44 h | Índice de documentación, flujos de estudio |
+
+## Resuelta por el tutor, 12 de noviembre de 2026
+
+| # | Pregunta | Respuesta |
+|---|---|---|
+| Q12 | ¿Basta el modelo custodial documentado, o el jugador tiene que custodiar su propia clave? | **Basta.** «El planteamiento me parece bien. Considera una gestión de las claves o palabras de paso en el server con rotaciones para minimizar el riesgo. Hay un software que se llama open bao para guardar secretos. Míralo porque puede encajar con tu planteamiento. Es un fork de Hashicorp Vault, uno de los productos más potentes del mercado para almacenar secretos. Creo que encajaría con tu proyecto». La sugerencia de OpenBao queda pendiente de decisión del responsable (`verificaciones.md`, P12) |
 
 ## Resueltas por el responsable, 5 de noviembre de 2026
 

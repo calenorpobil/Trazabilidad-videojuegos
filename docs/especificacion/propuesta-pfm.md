@@ -98,6 +98,28 @@ en UTF-8)`**, con el `item_id` completo (4.7). Cabe exacto en los 32 bytes de la
 determinista. Para generar el cliente del programa, `@solana/kit` sube de 8.2.0 a 8.6.0
 (`verificaciones.md`, V14).
 
+### Revisión del 12 de noviembre de 2026
+
+**El tutor responde a la Q12:** «El planteamiento me parece bien». El modelo custodial se mantiene, y con él
+4.2, 4.3 y el firmante único. Se desbloquean la derivación de las claves de jugador, `holder_id` y los
+endpoints de los bloques 3 y 4.
+
+El tutor sugiere además **gestionar las claves en el servidor con rotaciones** y mirar **OpenBao**
+(bifurcación de HashiCorp Vault, MPL-2.0). **Decisión aplazada por el responsable** (`verificaciones.md`,
+P12). Hasta que se tome, la semilla sigue en un fichero o en una variable de entorno (4.3, limitación 12.2).
+Hay tres alcances posibles: sólo guardar la semilla en OpenBao; que la autoridad firme dentro de OpenBao
+(motor Transit, ed25519) y se rote con `rotate_authority`, lo que cambia 4.3; o dejarlo como trabajo futuro.
+
+El responsable cierra también dos huecos:
+
+1. **P11: un tipo partido en dos transacciones.** `operations` gana dos columnas: `step`, el paso en curso
+   (1 o 2), y `payload`, JSON con lo necesario para construir el paso pendiente: la dirección del tenedor
+   y la cantidad del `grant`. Va vacío si no hay paso pendiente. Así el bucle de seguimiento (bloque 5)
+   puede enviar el `grant` aunque el backend se reinicie entre las dos. La firma se guarda **antes** de
+   enviar cada transacción, para que un reinicio nunca la envíe dos veces.
+2. **`external_id` tiene de 1 a 64 caracteres**, como el `call_id` (4.4). El contrato no lo fijaba
+   (contrato, 4.1 y 10).
+
 ### 0.1 Requisitos de entrega del máster
 
 Hasta el 4 de noviembre eran supuestos. Ahora salen de las instrucciones generales de entrega del TFM,
@@ -421,7 +443,7 @@ hace primero, el estudio pierde el juego (12.2).
 collections (collection_id PK, game_id, name, created_at)
 items        (item_id PK, collection_id, mint, name, symbol, uri, qualities, operation_id,
               revision, edit_operation_id, created_at)
-operations   (operation_id PK, kind, state, signature, error_code, error_message,
+operations   (operation_id PK, kind, state, signature, step, payload, error_code, error_message,
               created_at, updated_at)
 idempotency  (key PK, operation_id NULL, status_code, response, created_at)
 holders      (holder_id PK, external_id UNIQUE, address, created_at)
@@ -983,7 +1005,8 @@ La lista viva, con lo que ya han resuelto las instrucciones de entrega, está en
 
 - **Q4:** si hay memoria escrita o defensa, además del vídeo.
 - **Q11:** si los avances intermedios son obligatorios. La entrega final es el 30 de noviembre.
-- **Q12:** si basta el modelo custodial documentado, o el jugador tiene que custodiar su clave.
+
+La **Q12** quedó resuelta el 12 de noviembre: basta el modelo custodial (revisión del 12 de noviembre).
 
 ---
 

@@ -97,7 +97,8 @@ Varios cuerpos necesitan nombrar a un jugador. Se usa siempre esta forma, con
 ```
 
 El `external_id` lo aporta el juego; el backend no lo crea ni lo verifica, y debe ser
-**inmutable** (limitación 12.8). Toda respuesta que resuelva un tenedor devuelve su
+**inmutable** (limitación 12.8). Es texto de **1 a 64 caracteres**. El `holder_id` se
+valida como un identificador opaco más: si no está registrado, `404`. Toda respuesta que resuelva un tenedor devuelve su
 `holder_id`, que es como el juego lo nombra a partir de entonces.
 
 ### 4.2 `POST /v1/collections`
@@ -414,6 +415,8 @@ cerrado con la opción más simple, y quedan listados para que el cambio sea vis
    es como la propuesta describe los atributos por tipo (4.5).
 5. **Una clave de idempotencia reutilizada con cuerpo distinto** devuelve el resultado
    original en vez de un error de conflicto.
+6. **Longitud del `external_id`.** De 1 a 64 caracteres, como el `call_id` de la propuesta
+   (4.4): la validación estricta (sección 8) necesita un límite (12-nov-2026).
 
 ---
 
@@ -426,3 +429,4 @@ cerrado con la opción más simple, y quedan listados para que el cambio sea vis
 | 2026-10-11 | Sección 4.6: la edición de un tipo pasa a ser `PATCH /v1/items/{item_id}` (antes `…/qualities`), con `name`, `uri` y `qualities` como conjunto completo; `symbol` y `collection_id` no se editan. Sigue fuera del hito. Sección 5.4: se añaden `revision` y `edit` a cada tipo. Una edición a la vez por tipo; `revision` sube al aceptarla. |
 | 2026-10-11 | Secciones 5.3 y 5.4: `GET /v1/collections` y `GET /v1/items` (listados de catálogo para la web de administración). Sólo lecturas nuevas; ninguna ruta existente cambia. Fuera del hito: bajo la línea de corte. Sección 2: se aclara que las rutas `/admin` de la consola no son parte del contrato. |
 | 2026-11-08 | Sección 4.3: `POST /v1/items` rechaza con `400` / `REJECTED` un tipo que no cabe en una transacción aunque cumpla los límites. Medido en OC1: sólo ocurre con casi todos los campos al máximo. Sin cambio de forma en ningún endpoint. |
+| 2026-11-12 | Sección 4.1: `external_id` de 1 a 64 caracteres (hueco 9.6). Sin cambio de forma en ningún endpoint. |
