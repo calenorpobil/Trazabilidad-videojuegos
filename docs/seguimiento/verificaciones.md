@@ -377,6 +377,44 @@ da **una firma** en cada una:
 Ya en `finalized`, `readHolderInventory` da 1 unidad al emisor y 2 al receptor, con los datos del tipo
 en la forma del contrato. Ninguno de los dos firmó. Quedan 3,369 SOL en el monedero de WSL.
 
+### V17 — Claves de jugador, tenedores y endpoints por HTTP (cierre de los bloques 2, 3 y 4, 12 de noviembre de 2026)
+
+- **Vectores de jugador** (`tests/keys.test.ts`), escritos y subidos antes de `derivePlayer`. Salen de un
+  script aparte que calcula HKDF-SHA512 a mano con HMAC y la clave pública con WebCrypto a través de kit.
+  Ese script reproduce primero el vector 1 de la autoridad (`84309ef1…`, `8RjThphJ…`). Cubren otro jugador,
+  otra semilla con otro juego, y un `external_id` fuera de ASCII (`jugador-ñ`), en UTF-8.
+- **Orden de una escritura**, en `src/server.ts`: si la clave ya está aceptada, se devuelve lo guardado
+  sin validar; después se valida, se lee lo necesario y se **firma**; `claim` registra la operación, sus
+  filas, la firma y la clave en una sola transacción SQLite; y sólo entonces se envía. Una petición
+  rechazada no guarda la clave. Un reinicio entre el registro y el envío deja una firma que nunca llega a
+  la cadena: el bloque 5 la tiene que dar por caducada.
+- Una transferencia cuyo emisor no tiene cuenta de ese tipo responde `409` / `INSUFFICIENT_BALANCE`: es
+  saldo cero, y el contrato (4.5) da ese código. La comprobación del saldo de una cuenta que sí existe
+  es del bloque 5.
+- Los tests del servidor decodifican lo que se envía de verdad: **una firma, la de la autoridad**, en
+  `create_item` + `grant`, en el primer paso de un tipo partido y en `transfer`.
+
+**Prueba manual** (`npm run test:devnet`), segunda ejecución del 12-nov-2026 (el identificador del juego no
+se guardó: la salida se filtró). La primera parte, con los constructores, repite V16. La segunda va **por HTTP** (`buildServer` con `inject`)
+con tenedores nombrados por su `external_id`. `getTransaction` da **una firma** en cada una:
+
+| Paso por HTTP | CU | Firma |
+|---|---|---|
+| `POST /v1/items` (`create_item` + `grant` 3, `player-42`) | 93.347 | `5u6X1TyjUFejTS5K9xMuvsb71fBfe3iRLzWKxKNiACEVpQS8yRczi2fYHuypjNYHs83q3pNojptf1NH3jQxwKN4N` |
+| `POST …/transfer` 2, de `hld_6GHG64BpjrCRhSTP` a `player-77` | 37.276 | `8kKuQYT5KkhjgB3b7HH2gRDp9PwgxdoJVyQ72BMcTirkqDg92f4EEuWVGCV6jrTi4zVWMQvVtTQQUdLzHrdyqKG` |
+
+Ya en `finalized`, `GET /v1/holders/{id}/items` da 1 unidad a `hld_6GHG64BpjrCRhSTP` y 2 a
+`hld_Hmu88NLrTyGvcf7w`, con la forma del contrato. Quedan 3,342 SOL en el monedero de WSL.
+
+**Fallo sin explicar.** En la primera ejecución, la lectura del inventario del receptor por HTTP respondió
+`500` / `INTERNAL` después de que todo lo anterior pasara. El servidor del script no tenía logs, y en la
+segunda ejecución, ya con `CHAIN_DEVNET_LOG=1`, no se repitió. Lo más probable es un límite de tasa del
+nodo público de devnet, pero **no está comprobado**. Clasificar los errores del nodo
+(`RATE_LIMITED`, `INTERNAL`) es del bloque 5.
+
+En `test:devnet` la autoridad es el monedero de WSL, no la derivada de la semilla. `npm start` sí usa la
+derivada, que necesita fondos y su `initialize_game`, y para eso no hay todavía ni comando ni script.
+
 ---
 
 ## Pendiente
@@ -389,4 +427,6 @@ el 12-nov-2026: `operations.step` y `operations.payload` (propuesta, revisión d
 | P2 | Si el delegado permanente puede reasignarse tras la creación del activo. Ya no condiciona la rotación: el delegado es una PDA que no cambia | Nada | Sólo si hace falta |
 | P4 | Texto literal vigente de la regla de onboarding de Steam sobre blockchain, y las políticas actuales de Google Play y App Store | Último bloque (aviso del README) | Leer las políticas, citar con fecha |
 | P5 | Actualizar a la 4.7.2 el Godot de la máquina de desarrollo, que tiene la 4.7.1 | Fase A1 | Instalar y anotar |
+| P13 | Cómo sabe el seguimiento que una firma ya no puede llegar a la cadena: hoy `operations` no guarda la altura de validez del *blockhash* (`lastValidBlockHeight`). Sin ella, una firma registrada y no enviada (reinicio entre el registro y el envío) o rechazada en el *preflight* no se distingue de una lenta | Bloque 5 | Decidirlo al empezarlo: guardarla en `operations` o tomar otro criterio |
+| P14 | Huecos del contrato que salieron al escribir el servidor. `name` de `POST /v1/collections` no tiene límite: se exige no vacío y el tope es el del cuerpo (1 MB). El `read_token` «va limitado por tasa» (contrato, 2), pero ningún bloque lo asigna. `initialize_game` no tiene comando para crear el juego de un despliegue | W1 (límite de tasa) y A3 (crear el juego de la demo) | Decidir si se fija un límite al nombre; asignar el resto a su bloque |
 | P12 | **Decisión pendiente del responsable:** alcance de OpenBao, que sugiere el tutor (Q12). A: guardar sólo la semilla en su almacén KV (~1 h). B: que la autoridad firme dentro de OpenBao con Transit (ed25519) y se rote con `rotate_authority` (~4 h; cambia 4.3). C: trabajo futuro en el README. Para B, verificar antes que Transit firma ed25519 puro sobre los bytes del mensaje, sin *prehash*. Leído el 12-nov-2026 en su documentación (2.7.x): Transit admite ed25519 para firmar y rotar, e importar claves; licencia MPL-2.0 y modo `server -dev` | Nada hasta que se decida; si es B, antes del último bloque | Decidir; si B, plazo de 4 h y vuelta a A si tras 2 h no hay una firma válida en devnet |

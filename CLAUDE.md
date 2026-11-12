@@ -90,7 +90,7 @@ la propuesta; si no está en ella, no entra.
   desde el 4-nov-2026: no se trabaja en ella para el PFM. Android, tampoco (5-nov-2026).
 - Bloque 2 (8-nov-2026, rama `bloque-2`): configuración, clave de autoridad con vectores fijos,
   esquema SQLite (con `holders` y la respuesta en `idempotency`), idempotencia y máquina de estados:
-  **hecho**. **Falta** la derivación de claves de jugador y `holder_id`, que espera a la Q12 del tutor.
+  **hecho**. La derivación de claves de jugador y `holder_id`, con vectores fijos, se cerró el 12-nov (V17).
 - OC1 (8-nov-2026, rama `oc1`, sobre `bloque-2`): `initialize_game`, `rotate_authority` y
   `create_item` con mint PDA y sus tres extensiones, una sola firma, 16 tests con LiteSVM y
   desplegado en devnet (`4SUNiKmyk4QtXhU2oNGn6uiXiSUevRdmXpZdRFXPeLNz`): **hecho**. Se compila
@@ -101,22 +101,20 @@ la propuesta; si no está en ella, no entra.
   delegado permanente; 30 tests con LiteSVM. Actualizado en devnet en el mismo id (V12). P1 y P7
   cerrados: cuenta asociada de 170 bytes y 0,00151 SOL; `create_item` + `grant` caben juntos hasta
   unos 746 bytes de campos (V13). **Hecho.**
-- Bloque 3 (8-nov-2026, rama `bloque-3`, sobre `oc2`): **a medias, por la Q12.** Hecho: kit 8.6.0 y
-  cliente de Codama versionado en `backend/src/generated/` (`npm run codegen`, IDL en `backend/idl/`;
-  P3 y P10, V14); test del invariante de firmante único; derivación de `Game`, `item_seed :=
-  SHA-256(item_id)`, mint y cuenta asociada con vectores fijos; constructores de las cinco
-  transacciones; `planItemCreation` (una, dos o rechazo, midiendo bytes que cuadran con Rust); y
-  `npm run test:devnet` ejecutado (V15). **Falta**, cuando responda el tutor: resolver el tenedor
-  (`holder_id`, `holders`), registrar la operación sobre `idempotency.ts` y `operations.ts` y el
-  endpoint `POST /v1/items`. Antes, decidir P11 (dos firmas en una operación partida).
-- Bloque 4 (9-nov-2026, rama `bloque-4`, sobre `bloque-3`): **a medias, por la Q12.** Se empezó con el 3
-  a medias por excepción explícita. Hecho: `parseItemMint` con fixture de un mint real de devnet;
-  `readHolderInventory` por `Address` (saldos de la cadena en `finalized`, filtro por autoridad = PDA
-  `Game`, `item_id` y datos del tipo de `items`, porque la cadena sólo guarda SHA-256(item_id) y la 4.4
-  los sirve de SQLite); `planTransfer` (cantidad, tenedores distintos, cuenta del emisor); y
-  `test:devnet` con transferencia e inventarios (V16). **Falta**, con la Q12 y P11: resolver
-  `holder_id`, registrar la operación y los endpoints `POST /v1/items/{id}/transfer` y
-  `GET /v1/holders/{id}/items`.
+- **Q12 resuelta** (12-nov-2026): el tutor acepta el modelo custodial y sugiere OpenBao. Su alcance es una
+  **decisión pendiente** (verificaciones, P12). P11 decidido: `operations.step` y `operations.payload`.
+- Bloques 3 y 4 (rama `cierre-q12`, sobre `bloque-4`, 12-nov-2026): **hechos.** Hecho antes, sin la Q12:
+  cliente de Codama y kit 8.6.0 (V14); test de firmante único; derivación de `Game`, `item_seed`, mint y
+  cuenta asociada con vectores; constructores; `planItemCreation` (V15); `parseItemMint`,
+  `readHolderInventory` y `planTransfer` (V16). Cerrado tras la Q12: `derivePlayer` y `holder_id` con
+  vectores; `resolveHolder`; `step`, `payload` y la firma registrada antes de enviar; y `src/server.ts`
+  (fastify) con `POST /v1/collections`, `POST /v1/items`, `POST /v1/items/{id}/transfer`,
+  `GET /v1/holders/{id}/items` y `GET /v1/operations/{id}`, credenciales e idempotencia. `npm start` y
+  `CHAIN_RPC_URL`. `test:devnet` también por HTTP (V17).
+- **Siguiente: bloque 5.** Seguimiento `pending → applied → settled | failed`, segundo paso de un tipo
+  partido desde `payload`, categorías de error del nodo (`RATE_LIMITED`, `INTERNAL`), `INSUFFICIENT_FUNDS`
+  y saldo insuficiente de una cuenta existente. Antes, decidir P13 (cuándo se da por caducada una firma).
+  Huecos menores en P14.
 - Requisitos de entrega del máster: propuesta, 0.1. Revísalos antes de planificar un bloque.
 - Ver `docs/seguimiento/verificaciones.md` para lo que hay que comprobar antes de OC1 y del
   bloque 3, y `docs/seguimiento/preguntas-tutor.md` para lo que bloquea el proyecto.
@@ -131,6 +129,7 @@ npm run lint          # eslint
 npm test              # vitest run
 npm run codegen       # cliente de chain-assets desde backend/idl/ (copia del IDL de WSL)
 CHAIN_DEVNET_KEYPAIR=<clave con fondos> npm run test:devnet   # devnet, FUERA de la CI
+npm start             # servidor HTTP; CHAIN_GAME_ID, semilla, CHAIN_WRITE_KEY, CHAIN_READ_TOKEN
 
 # Programa: en WSL (Debian), desde la raíz. Anchor no funciona nativo en Windows (V5).
 # target/ es un enlace a ~/build/chain-assets-target, en ext4: no lo borres, ahí está la
