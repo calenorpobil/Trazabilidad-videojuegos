@@ -40,6 +40,21 @@ export interface ClaimResult extends AcceptedResponse {
   replayed: boolean;
 }
 
+/**
+ * Respuesta ya aceptada con esta clave, o `null`. Solo lee: sirve para devolver el resultado
+ * original **antes** de validar contra el estado actual (contrato, 3: reutilizar una clave
+ * devuelve el resultado original). La garantia sigue siendo `claim`, que vuelve a mirar dentro de
+ * su transaccion.
+ */
+export function findAccepted(db: Db, key: string): AcceptedResponse | null {
+  const row = db.prepare('SELECT operation_id, status_code, response FROM idempotency WHERE key = ?').get(key) as
+    | { operation_id: string | null; status_code: number; response: string }
+    | undefined;
+  return row === undefined
+    ? null
+    : { status: row.status_code, body: JSON.parse(row.response), operationId: row.operation_id };
+}
+
 export function claim(db: Db, key: string, register: () => AcceptedResponse, now: Date = new Date()): ClaimResult {
   if (!isValidIdempotencyKey(key)) {
     throw new Error(`la clave de idempotencia debe tener entre 1 y ${IDEMPOTENCY_KEY_MAX} caracteres`);
