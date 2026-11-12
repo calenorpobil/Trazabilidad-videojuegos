@@ -12,27 +12,35 @@
  *
  * **Orden de una escritura** (invariante 2 y revision del 12-nov-2026):
  *   1. si la clave ya esta aceptada, se devuelve lo guardado sin validar ni tocar la cadena;
- *   2. se valida y se prepara: se lee lo que haga falta de la cadena y se **firma** la transaccion;
- *   3. `claim`, en UNA transaccion SQLite: la operacion, sus filas, la firma y la clave;
- *   4. solo entonces, y solo si no era un reintento, se envia.
- * Un reinicio entre 3 y 4 deja una firma que nunca llega a la cadena: el seguimiento (bloque 5) la
- * dara por caducada. Nunca se envia dos veces lo mismo, ni dos transacciones distintas.
+ *   2. se valida y se prepara: se lee lo que haga falta de la cadena, se **firma** la transaccion y
+ *      se **simula** (bloque 5): sin fondos, `503` / `INSUFFICIENT_FUNDS`; sin saldo, `409`;
+ *   3. `claim`, en UNA transaccion SQLite: la operacion, sus filas, la firma, la altura hasta la que
+ *      vale (P13) y la clave;
+ *   4. solo entonces, y solo si no era un reintento, se envia, sin volver a simular.
+ * Un reinicio entre 3 y 4 deja una firma que nunca llega a la cadena: el seguimiento (`tracker.ts`)
+ * la da por caducada cuando pasa su altura. Nunca se envia dos veces lo mismo, ni dos transacciones
+ * distintas.
  *
- * Fuera de este modulo, y por bloque: el seguimiento `pending -> applied -> settled`, el segundo
- * paso de un tipo partido y las categorias de error de la cadena (bloque 5); el limite de tasa
- * del `read_token` y la consola `/admin` (W1).
+ * Un HTTP 429 del nodo responde `429` / `RATE_LIMITED`, con su `Retry-After` si lo trae; cualquier
+ * otro fallo del nodo, `500` / `INTERNAL` (contrato, 6).
+ *
+ * Fuera de este modulo: el seguimiento `pending -> applied -> settled` y el segundo paso de un tipo
+ * partido (`tracker.ts`); el limite de tasa del `read_token` y la consola `/admin` (W1).
  */
 import { createHash, timingSafeEqual } from 'node:crypto';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import {
-  getBase64EncodedWireTransaction,
   getSignatureFromTransaction,
   signTransactionMessageWithSigners,
   type Address,
   type GetAccountInfoApi,
+  type GetBlockHeightApi,
   type GetLatestBlockhashApi,
+  type GetSignatureStatusesApi,
+  type GetTransactionApi,
   type Rpc,
   type SendTransactionApi,
+  type SimulateTransactionApi,
   type Transaction,
   type TransactionSigner,
 } from '@solana/kit';
@@ -46,9 +54,20 @@ import { newId } from './ids.js';
 import { readHolderInventory, type InventoryRpc } from './inventory.js';
 import { EXTERNAL_ID_MAX } from './keys.js';
 import { createOperation, getOperation, recordSignature } from './operations.js';
+import { rateLimitOf, send, simulate } from './submission.js';
 import { planItemCreation, planTransfer, type TransactionDraft } from './transactions.js';
 
-export type ChainRpc = Rpc<GetLatestBlockhashApi & GetAccountInfoApi & SendTransactionApi> & InventoryRpc;
+/** Lo que el servidor y el seguimiento piden al nodo. */
+export type ChainRpc = Rpc<
+  GetLatestBlockhashApi &
+    GetAccountInfoApi &
+    SimulateTransactionApi &
+    SendTransactionApi &
+    GetBlockHeightApi &
+    GetSignatureStatusesApi &
+    GetTransactionApi
+> &
+  InventoryRpc;
 
 export interface ServerOptions {
   readonly db: Db;
@@ -126,7 +145,7 @@ function sendError(reply: FastifyReply, code: ErrorCode, message: string, status
 interface Prepared {
   /** Sincrono: corre dentro de la transaccion SQLite de `claim`. */
   readonly register: () => AcceptedResponse;
-  /** Transaccion ya firmada que se envia despues de reclamar. `null` si no toca la cadena. */
+  /** Transaccion ya firmada: se simula antes de reclamar y se envia despues. `null` si no toca la cadena. */
   readonly transaction: Signed | null;
 }
 
@@ -143,6 +162,12 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
 
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof ContractError) return sendError(reply, error.code, error.message);
+    const limited = rateLimitOf(error);
+    if (limited !== null) {
+      request.log.warn('el nodo limita la tasa');
+      if (limited.retryAfter !== null) void reply.header('retry-after', limited.retryAfter);
+      return sendError(reply, 'RATE_LIMITED', 'demasiadas peticiones: reintenta mas tarde');
+    }
     if (error instanceof z.ZodError) {
       const issues = error.issues.map((i) => `${i.path.join('.') || 'cuerpo'}: ${i.message}`);
       return sendError(reply, 'REJECTED', issues.join('; '));
@@ -182,17 +207,21 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     if (previous !== null) return reply.status(previous.status).send(previous.body);
 
     const prepared = await prepare();
+    if (prepared.transaction !== null) {
+      const simulated = await simulate(rpc, prepared.transaction);
+      if (simulated !== null) {
+        request.log.warn({ detail: simulated.detail }, 'simulacion fallida');
+        const { code, message } = simulated.failure;
+        // EXPIRED solo existe dentro de una operacion failed: aqui todavia no hay operacion.
+        throw new ContractError(ERROR_HTTP_STATUS[code] === null ? 'INTERNAL' : code, message);
+      }
+    }
     const result = claim(db, key, prepared.register);
     if (!result.replayed && prepared.transaction !== null) {
       try {
-        await rpc
-          .sendTransaction(getBase64EncodedWireTransaction(prepared.transaction), {
-            encoding: 'base64',
-            preflightCommitment: 'confirmed',
-          })
-          .send();
+        await send(rpc, prepared.transaction);
       } catch (error) {
-        // Aceptada y con su firma registrada: el seguimiento (bloque 5) decide su final.
+        // Aceptada y con su firma registrada: el seguimiento la da por caducada si no llega.
         request.log.error({ err: error, operation: result.operationId }, 'envio fallido');
       }
     }
@@ -234,7 +263,8 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
         qualities: body.qualities,
       };
       const grant = { holder: holder.address, amount: body.initial_grant.amount };
-      const plan = await planItemCreation(authority, gameId, item, grant, await latest());
+      const lifetime = await latest();
+      const plan = await planItemCreation(authority, gameId, item, grant, lifetime);
       if (plan.outcome === 'rejected') {
         throw new ContractError('REJECTED', 'el tipo no cabe en una transaccion: acorta sus campos');
       }
@@ -247,7 +277,10 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
           // En un tipo partido, el grant (paso 2) se construye despues desde el payload (P11).
           const payload = plan.outcome === 'split' ? { holder: holder.address, amount: grant.amount } : null;
           const operationId = createOperation(db, 'create_item', payload);
-          recordSignature(db, operationId, getSignatureFromTransaction(transaction));
+          recordSignature(db, operationId, {
+            signature: getSignatureFromTransaction(transaction),
+            lastValidBlockHeight: lifetime.lastValidBlockHeight,
+          });
           db.prepare(
             `INSERT INTO items (item_id, collection_id, mint, name, symbol, uri, qualities, operation_id, created_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -288,12 +321,12 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
           throw new ContractError('REJECTED', 'emisor y receptor son el mismo tenedor');
         }
 
-        const plan = await planTransfer(rpc, authority, gameId, itemId, from.address, to.address, body.amount, await latest());
+        const lifetime = await latest();
+        const plan = await planTransfer(rpc, authority, gameId, itemId, from.address, to.address, body.amount, lifetime);
         if (plan.outcome === 'rejected') {
-          // `no_sender_account`: el emisor nunca tuvo unidades de este tipo, y por tanto no le
-          // alcanzan. La comprobacion completa del saldo es del bloque 5.
-          if (plan.reason === 'no_sender_account') {
-            throw new ContractError('INSUFFICIENT_BALANCE', 'el emisor no tiene unidades de este tipo');
+          // Comprobacion optimista del saldo (contrato, 4.5): no tener cuenta es tener cero.
+          if (plan.reason === 'no_sender_account' || plan.reason === 'insufficient_balance') {
+            throw new ContractError('INSUFFICIENT_BALANCE', 'el emisor no tiene unidades suficientes de este tipo');
           }
           throw new ContractError('REJECTED', `transferencia invalida: ${plan.reason}`);
         }
@@ -303,7 +336,10 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
           transaction,
           register: () => {
             const operationId = createOperation(db, 'transfer');
-            recordSignature(db, operationId, getSignatureFromTransaction(transaction));
+            recordSignature(db, operationId, {
+              signature: getSignatureFromTransaction(transaction),
+              lastValidBlockHeight: lifetime.lastValidBlockHeight,
+            });
             return {
               status: 202,
               body: { operation_id: operationId, from_holder_id: from.holderId, to_holder_id: to.holderId },

@@ -111,10 +111,12 @@ la propuesta; si no está en ella, no entra.
   (fastify) con `POST /v1/collections`, `POST /v1/items`, `POST /v1/items/{id}/transfer`,
   `GET /v1/holders/{id}/items` y `GET /v1/operations/{id}`, credenciales e idempotencia. `npm start` y
   `CHAIN_RPC_URL`. `test:devnet` también por HTTP (V17).
-- **Siguiente: bloque 5.** Seguimiento `pending → applied → settled | failed`, segundo paso de un tipo
-  partido desde `payload`, categorías de error del nodo (`RATE_LIMITED`, `INTERNAL`), `INSUFFICIENT_FUNDS`
-  y saldo insuficiente de una cuenta existente. Antes, decidir P13 (cuándo se da por caducada una firma).
-  Huecos menores en P14.
+- Bloque 5 (12-nov-2026, rama `cierre-q12`): **hecho en tests; falta devnet (P15).** P13 decidido:
+  `operations.last_valid_block_height`. Hay un bucle de seguimiento (`src/tracker.ts`, arrancado en `main.ts`) con caducidad por altura
+  finalizada, y el `grant` de un tipo partido sale de `payload`. La simulación va antes de `claim` (`src/submission.ts`):
+  `503`/`INSUFFICIENT_FUNDS` y `409` sin guardar la clave. Saldo de una cuenta existente en `planTransfer`. Un 429 del nodo da
+  `RATE_LIMITED`. Ver V18.
+- **Siguiente: W1.** Huecos menores en P14.
 - Requisitos de entrega del máster: propuesta, 0.1. Revísalos antes de planificar un bloque.
 - Ver `docs/seguimiento/verificaciones.md` para lo que hay que comprobar antes de OC1 y del
   bloque 3, y `docs/seguimiento/preguntas-tutor.md` para lo que bloquea el proyecto.

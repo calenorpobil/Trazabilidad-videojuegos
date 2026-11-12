@@ -3,7 +3,7 @@
  *
  * El esquema sale de 4.4, con las revisiones del 8-nov-2026 (`idempotency` guarda la respuesta
  * aceptada y `holders` guarda el mapa de tenedores) y del 12-nov-2026 (`operations.step` y
- * `operations.payload`, P11). Se cambio la version 1 sin migrar porque no hay nada desplegado. La version va en `PRAGMA user_version`; no hay
+ * `operations.payload`, P11; `operations.last_valid_block_height`, P13). Se cambio la version 1 sin migrar porque no hay nada desplegado. La version va en `PRAGMA user_version`; no hay
  * herramienta de migraciones porque solo existe la version 1.
  */
 import Database from 'better-sqlite3';
@@ -33,6 +33,9 @@ CREATE TABLE operations (
   state         TEXT NOT NULL CHECK (state IN (${sqlList(OPERATION_STATES)})),
   -- Firma de la transaccion en curso. Se guarda ANTES de enviarla (revision del 12-nov-2026).
   signature     TEXT,
+  -- Ultima altura de bloque en la que esa transaccion puede entrar (P13). Pasada en finalized,
+  -- una firma que no aparece ya no puede llegar: la operacion caduca (EXPIRED).
+  last_valid_block_height INTEGER,
   -- Paso en curso: 2 solo en un tipo partido, cuando va el grant (P11).
   step          INTEGER NOT NULL DEFAULT 1 CHECK (step IN (1, 2)),
   -- JSON con lo que hace falta para construir el paso pendiente; NULL si no queda ninguno.
@@ -42,7 +45,8 @@ CREATE TABLE operations (
   created_at    TEXT NOT NULL,
   updated_at    TEXT NOT NULL,
   -- Una operacion lleva error si y solo si esta en failed (contrato, 5.1).
-  CHECK ((state = 'failed') = (error_code IS NOT NULL))
+  CHECK ((state = 'failed') = (error_code IS NOT NULL)),
+  CHECK ((signature IS NULL) = (last_valid_block_height IS NULL))
 );
 
 CREATE TABLE items (

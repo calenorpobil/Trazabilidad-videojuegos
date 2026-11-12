@@ -9,7 +9,10 @@
  * firma (invariante 1), que los metadatos del mint son los enviados (`parseItemMint`) y, cuando la
  * transferencia es `finalized`, que el inventario de los dos es 1 y 2 (`readHolderInventory`, con
  * el tipo registrado en un SQLite en memoria). Despues repite lo mismo por HTTP, con el servidor del
- * backend y tenedores nombrados por su external_id. Imprime las firmas para `verificaciones.md`.
+ * backend y tenedores nombrados por su external_id, y con el bucle de seguimiento (`trackOnce`)
+ * llevando cada operacion hasta `settled`. Por HTTP prueba tambien un tipo partido (P11), una
+ * transferencia sin saldo suficiente (`409`) y una autoridad sin fondos (`503`). Imprime las firmas
+ * para `verificaciones.md`.
  *
  * El fichero de clave hace de autoridad del juego. En el backend la autoridad sale de la semilla
  * maestra (`keys.ts`, con sus vectores); aqui se usa un monedero con fondos para no tener que
@@ -30,6 +33,7 @@ import {
   type Signature,
 } from '@solana/kit';
 import { findGameAddress, findItemMintAddress } from '../src/addresses.js';
+import { trackOnce } from '../src/tracker.js';
 import { openDatabase, timestamp } from '../src/db.js';
 import { newId } from '../src/ids.js';
 import { parseItemMint, readHolderInventory } from '../src/inventory.js';
@@ -166,8 +170,7 @@ console.warn('ninguno de los dos tenedores ha firmado nada');
 // --- Las mismas escrituras y lecturas por HTTP, con el servidor del backend (bloques 3 y 4) ---
 //
 // Mismo juego y misma autoridad; tenedores derivados de una semilla maestra aleatoria y nombrados
-// por su external_id. El seguimiento hasta `settled` es del bloque 5: aqui se espera a mano la firma
-// que el servidor registro en `operations`.
+// por su external_id. El seguimiento es el del backend (bloque 5): `trackOnce` hasta `settled`.
 const WRITE_KEY = 'w'.repeat(40);
 const READ_TOKEN = 'r'.repeat(40);
 const httpDb = openDatabase(':memory:');
@@ -183,22 +186,51 @@ const http = await buildServer({
 });
 
 let keyCounter = 0;
-async function request(method: 'GET' | 'POST', url: string, body?: object): Promise<Record<string, unknown>> {
+async function raw(server: typeof http, method: 'GET' | 'POST', url: string, body?: object) {
   const headers: Record<string, string> = { authorization: `Bearer ${method === 'GET' ? READ_TOKEN : WRITE_KEY}` };
   if (method === 'POST') headers['idempotency-key'] = `devnet-${gameId}-${++keyCounter}`;
-  const response = await http.inject({ method, url, headers, ...(body === undefined ? {} : { payload: body }) });
-  const json = response.json() as Record<string, unknown>;
-  if (response.statusCode >= 300) throw new Error(`${method} ${url}: ${response.statusCode} ${JSON.stringify(json)}`);
+  const response = await server.inject({ method, url, headers, ...(body === undefined ? {} : { payload: body }) });
+  return { status: response.statusCode, json: response.json() as Record<string, unknown> };
+}
+
+async function request(method: 'GET' | 'POST', url: string, body?: object): Promise<Record<string, unknown>> {
+  const { status, json } = await raw(http, method, url, body);
+  if (status >= 300) throw new Error(`${method} ${url}: ${status} ${JSON.stringify(json)}`);
   return json;
 }
 
-/** Firma que el servidor guardo para la operacion, ya comprobada en la cadena. */
+const tracker = {
+  db: httpDb,
+  rpc,
+  gameId,
+  authority,
+  log: (message: string, detail?: unknown) => console.warn(`seguimiento: ${message}`, detail ?? ''),
+};
+
+/**
+ * Vueltas del seguimiento hasta `settled`, como `GET /v1/operations/{id}`, imprimiendo cada estado
+ * nuevo. Despues comprueba UNA firma en cada transaccion que el servidor registro.
+ */
 async function settle(label: string, operationId: string): Promise<void> {
-  const row = httpDb.prepare('SELECT signature FROM operations WHERE operation_id = ?').get(operationId) as {
-    signature: Signature;
-  };
-  await waitFor(row.signature, 'finalized');
-  await checkOneSignature(`HTTP ${label}`, row.signature);
+  const seen: string[] = [];
+  const signatures = new Set<Signature>();
+  const deadline = Date.now() + 120_000;
+  for (;;) {
+    const row = httpDb.prepare('SELECT signature FROM operations WHERE operation_id = ?').get(operationId) as {
+      signature: Signature;
+    };
+    signatures.add(row.signature);
+    const operation = await request('GET', `/v1/operations/${operationId}`);
+    const state = operation['state'] as string;
+    if (seen.at(-1) !== state) seen.push(state);
+    if (state === 'settled') break;
+    if (state === 'failed') throw new Error(`HTTP ${label}: ${JSON.stringify(operation)}`);
+    if (Date.now() > deadline) throw new Error(`HTTP ${label}: sin settled en 120 s (${seen.join(' -> ')})`);
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await trackOnce(tracker);
+  }
+  console.warn(`HTTP ${label}: ${seen.join(' -> ')}`);
+  for (const signature of signatures) await checkOneSignature(`HTTP ${label}`, signature);
 }
 
 const { collection_id: collectionId } = await request('POST', '/v1/collections', { name: 'Armeria' });
@@ -232,4 +264,48 @@ for (const [who, holderId, amount] of [
   }
   console.warn(`HTTP inventario del ${who}: ${JSON.stringify(inventory)}`);
 }
+
+// Saldo de una cuenta que existe y no alcanza: el emisor tiene 1 y pide 2 (contrato, 4.5).
+const short = await raw(http, 'POST', `/v1/items/${created['item_id'] as string}/transfer`, {
+  from: { holder_id: moved['from_holder_id'] },
+  to: { external_id: 'player-77' },
+  amount: 2,
+});
+if (short.status !== 409) throw new Error(`transferencia sin saldo: ${short.status} ${JSON.stringify(short.json)}`);
+console.warn(`HTTP transferencia sin saldo: ${short.status} ${JSON.stringify(short.json)}`);
+
+// Tipo partido (P11): no cabe con su grant, asi que el seguimiento envia el grant al finalizar el paso 1.
+const longQualities = Object.fromEntries([...Array(7).keys()].map((i) => [`${i}`.padEnd(32, 'k'), 'v'.repeat(64)]));
+const split = await request('POST', '/v1/items', {
+  collection_id: collectionId,
+  name: 'a',
+  symbol: 'A',
+  qualities: longQualities,
+  initial_grant: { holder: { external_id: 'player-42' }, amount: 1 },
+});
+await settle('tipo partido (create_item, despues grant 1)', split['operation_id'] as string);
+const splitStep = httpDb.prepare('SELECT step FROM operations WHERE operation_id = ?').get(split['operation_id']);
+if ((splitStep as { step: number }).step !== 2) throw new Error('el tipo partido no paso por el paso 2');
+
+// Autoridad sin fondos: otra clave, nunca financiada. La simulacion la rechaza antes de reclamar.
+const brokeDb = openDatabase(':memory:');
+const broke = await buildServer({
+  db: brokeDb,
+  gameId,
+  masterSeed: crypto.getRandomValues(new Uint8Array(32)),
+  writeKey: WRITE_KEY,
+  readToken: READ_TOKEN,
+  authority: await generateKeyPairSigner(),
+  rpc,
+});
+const brokeCollection = (await raw(broke, 'POST', '/v1/collections', { name: 'x' })).json['collection_id'];
+const unpaid = await raw(broke, 'POST', '/v1/items', {
+  collection_id: brokeCollection,
+  name: 'x',
+  symbol: 'X',
+  initial_grant: { holder: { external_id: 'p' }, amount: 1 },
+});
+if (unpaid.status !== 503) throw new Error(`autoridad sin fondos: ${unpaid.status} ${JSON.stringify(unpaid.json)}`);
+console.warn(`HTTP autoridad sin fondos: ${unpaid.status} ${JSON.stringify(unpaid.json)}`);
+await broke.close();
 await http.close();

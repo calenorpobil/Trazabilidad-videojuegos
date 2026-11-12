@@ -110,7 +110,7 @@ describe('invariante de firmante unico', () => {
   });
 
   it('transfer planificado (planTransfer)', async () => {
-    const plan = await planTransfer(senderAccountRpc(true), authority, GAME_ID, SWORD.itemId, ALICE, BOB, 1, LIFETIME);
+    const plan = await planTransfer(senderAccountRpc(5n), authority, GAME_ID, SWORD.itemId, ALICE, BOB, 1, LIFETIME);
     if (plan.outcome !== 'ready') throw new Error(`se esperaba una transferencia lista: ${plan.reason}`);
     await expectSingleSigner(plan.transaction);
   });

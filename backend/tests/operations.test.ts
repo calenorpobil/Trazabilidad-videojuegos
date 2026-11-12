@@ -6,11 +6,13 @@ import {
   OperationNotFoundError,
   createOperation,
   getOperation,
+  openOperations,
   recordSignature,
   transitionOperation,
 } from '../src/operations.js';
 
 const failure = { code: 'EXPIRED', message: 'la ventana de validez se agoto' } as const;
+const SUBMISSION = { signature: 'firma', lastValidBlockHeight: 300_000_123n };
 
 /** Lleva una operacion nueva hasta `state` por el camino mas corto. */
 function operationIn(state: OperationState) {
@@ -76,18 +78,20 @@ describe('maquina de estados de una operacion', () => {
 
   it('no expone la firma ni datos de red en la vista del contrato', () => {
     const { db, id } = operationIn('applied');
-    db.prepare("UPDATE operations SET signature = 'firma' WHERE operation_id = ?").run(id);
+    db.prepare("UPDATE operations SET signature = 'firma', last_valid_block_height = 1 WHERE operation_id = ?").run(id);
     expect(Object.keys(getOperation(db, id) ?? {})).toEqual(['operation_id', 'state', 'error']);
   });
 });
 
-describe('paso, payload y firma (P11)', () => {
+describe('paso, payload, firma y altura de validez (P11 y P13)', () => {
   const row = (db: ReturnType<typeof openDatabase>, id: string) =>
-    db.prepare('SELECT step, payload, signature FROM operations WHERE operation_id = ?').get(id);
+    db
+      .prepare('SELECT step, payload, signature, last_valid_block_height AS lvbh FROM operations WHERE operation_id = ?')
+      .get(id);
 
-  it('nace en el paso 1, sin payload ni firma', () => {
+  it('nace en el paso 1, sin payload, firma ni altura', () => {
     const { db, id } = operationIn('pending');
-    expect(row(db, id)).toEqual({ step: 1, payload: null, signature: null });
+    expect(row(db, id)).toEqual({ step: 1, payload: null, signature: null, lvbh: null });
   });
 
   it('guarda el payload como JSON', () => {
@@ -96,15 +100,61 @@ describe('paso, payload y firma (P11)', () => {
     expect(JSON.parse((row(db, id) as { payload: string }).payload)).toEqual({ holder: 'x', amount: 3 });
   });
 
-  it('registra la firma en pending', () => {
+  it('registra la firma en pending con la altura hasta la que vale', () => {
     const { db, id } = operationIn('pending');
-    recordSignature(db, id, 'firma');
-    expect(row(db, id)).toMatchObject({ signature: 'firma' });
+    recordSignature(db, id, SUBMISSION);
+    expect(row(db, id)).toMatchObject({ step: 1, signature: 'firma', lvbh: 300_000_123 });
+  });
+
+  it('el paso 2 sustituye la firma y la altura y vacia el payload', () => {
+    const db = openDatabase(':memory:');
+    const id = createOperation(db, 'create_item', { holder: 'x', amount: 3 });
+    recordSignature(db, id, SUBMISSION);
+    recordSignature(db, id, { signature: 'firma-2', lastValidBlockHeight: 300_000_456n }, 2);
+    expect(row(db, id)).toEqual({ step: 2, payload: null, signature: 'firma-2', lvbh: 300_000_456 });
+  });
+
+  it('una firma sin altura, o una altura sin firma, no se pueden guardar', () => {
+    const { db, id } = operationIn('pending');
+    const set = (sql: string) => () => db.prepare(`UPDATE operations SET ${sql} WHERE operation_id = ?`).run(id);
+    expect(set("signature = 'firma'")).toThrow(/CHECK/);
+    expect(set('last_valid_block_height = 1')).toThrow(/CHECK/);
   });
 
   it('no registra una firma fuera de pending ni en una operacion que no existe', () => {
     const { db, id } = operationIn('settled');
-    expect(() => recordSignature(db, id, 'firma')).toThrow(InvalidTransitionError);
-    expect(() => recordSignature(db, 'opr_nada', 'firma')).toThrow(OperationNotFoundError);
+    expect(() => recordSignature(db, id, SUBMISSION)).toThrow(InvalidTransitionError);
+    expect(() => recordSignature(db, 'opr_nada', SUBMISSION)).toThrow(OperationNotFoundError);
+  });
+});
+
+describe('openOperations', () => {
+  it('lista las pending y applied con firma, y nada mas', () => {
+    const db = openDatabase(':memory:');
+    const withSignature = (state: OperationState, payload: unknown = null) => {
+      const id = createOperation(db, 'create_item', payload);
+      recordSignature(db, id, SUBMISSION);
+      if (state !== 'pending') transitionOperation(db, id, state === 'failed' ? 'failed' : 'applied', state === 'failed' ? failure : undefined);
+      if (state === 'settled') transitionOperation(db, id, 'settled');
+      return id;
+    };
+    const pending = withSignature('pending', { holder: 'x', amount: 3 });
+    const applied = withSignature('applied');
+    withSignature('settled');
+    withSignature('failed');
+    createOperation(db, 'transfer'); // sin firma: aun no reclamada del todo, no se sigue
+
+    expect(openOperations(db)).toEqual([
+      {
+        operationId: pending,
+        kind: 'create_item',
+        state: 'pending',
+        step: 1,
+        payload: { holder: 'x', amount: 3 },
+        signature: 'firma',
+        lastValidBlockHeight: 300_000_123n,
+      },
+      expect.objectContaining({ operationId: applied, state: 'applied', payload: null }),
+    ]);
   });
 });

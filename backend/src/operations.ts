@@ -55,14 +55,35 @@ export function createOperation(db: Db, kind: OperationKind, payload: unknown = 
   return id;
 }
 
+/** La transaccion de un paso, tal como la necesita el seguimiento. */
+export interface Submission {
+  readonly signature: string;
+  /** Ultima altura de bloque en la que puede entrar (P13). */
+  readonly lastValidBlockHeight: bigint;
+}
+
 /**
- * Guarda la firma de la transaccion del paso en curso. Se llama ANTES de enviarla: si el backend
- * se reinicia despues, el seguimiento sabe que buscar y no la envia otra vez.
+ * Guarda la firma de la transaccion del paso en curso y la altura hasta la que vale. Se llama ANTES
+ * de enviarla: si el backend se reinicia despues, el seguimiento sabe que buscar, no la envia otra
+ * vez y sabe cuando darla por caducada.
+ *
+ * `step = 2` es el `grant` de un tipo partido: el `payload` se vacia porque ya no queda paso
+ * pendiente (P11).
  */
-export function recordSignature(db: Db, operationId: string, signature: string, now: Date = new Date()): void {
+export function recordSignature(
+  db: Db,
+  operationId: string,
+  submission: Submission,
+  step: 1 | 2 = 1,
+  now: Date = new Date(),
+): void {
+  const clearPayload = step === 2 ? ', payload = NULL' : '';
   const result = db
-    .prepare("UPDATE operations SET signature = ?, updated_at = ? WHERE operation_id = ? AND state = 'pending'")
-    .run(signature, timestamp(now), operationId);
+    .prepare(
+      `UPDATE operations SET signature = ?, last_valid_block_height = ?, step = ?${clearPayload}, updated_at = ?
+        WHERE operation_id = ? AND state = 'pending'`,
+    )
+    .run(submission.signature, submission.lastValidBlockHeight, step, timestamp(now), operationId);
   if (result.changes === 0) {
     const current = getOperation(db, operationId);
     if (current === null) throw new OperationNotFoundError(operationId);
@@ -114,4 +135,45 @@ export function getOperation(db: Db, operationId: string): OperationView | null 
     state: row.state,
     error: row.error_code === null ? null : errorBody(row.error_code, row.error_message ?? ''),
   };
+}
+
+/** Una operacion que el seguimiento todavia tiene que mover. */
+export interface OpenOperation {
+  readonly operationId: string;
+  readonly kind: OperationKind;
+  readonly state: 'pending' | 'applied';
+  readonly step: 1 | 2;
+  /** Lo que hace falta para el paso 2, o `null` si no queda ninguno (P11). */
+  readonly payload: unknown;
+  readonly signature: string;
+  readonly lastValidBlockHeight: bigint;
+}
+
+/** Operaciones en `pending` o `applied` con firma registrada, en el orden en que se registraron. */
+export function openOperations(db: Db): OpenOperation[] {
+  const rows = db
+    .prepare(
+      `SELECT operation_id, kind, state, step, payload, signature, last_valid_block_height
+         FROM operations
+        WHERE state IN ('pending', 'applied') AND signature IS NOT NULL
+        ORDER BY rowid`,
+    )
+    .all() as {
+    operation_id: string;
+    kind: OperationKind;
+    state: 'pending' | 'applied';
+    step: 1 | 2;
+    payload: string | null;
+    signature: string;
+    last_valid_block_height: number;
+  }[];
+  return rows.map((r) => ({
+    operationId: r.operation_id,
+    kind: r.kind,
+    state: r.state,
+    step: r.step,
+    payload: r.payload === null ? null : (JSON.parse(r.payload) as unknown),
+    signature: r.signature,
+    lastValidBlockHeight: BigInt(r.last_valid_block_height),
+  }));
 }

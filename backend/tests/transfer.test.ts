@@ -1,6 +1,6 @@
 /**
- * Lo que rodea a `buildTransfer` (bloque 4): cantidad, emisor y receptor distintos, y cuenta del
- * emisor existente. El saldo insuficiente y las categorias de error son del bloque 5.
+ * Lo que rodea a `buildTransfer` (bloques 4 y 5): cantidad, emisor y receptor distintos, cuenta del
+ * emisor existente y con saldo suficiente.
  *
  * Que la transferencia planificada lleva una sola firma lo cubre `single-signer.test.ts`.
  */
@@ -37,7 +37,7 @@ describe('isValidAmount', () => {
 
 describe('planTransfer', () => {
   it('lista: lee la cuenta asociada del emisor en confirmed', async () => {
-    const rpc = senderAccountRpc(true);
+    const rpc = senderAccountRpc(5n);
     const plan = await planTransfer(rpc, authority, GAME_ID, ITEM_ID, ALICE, BOB, 2, LIFETIME);
     expect(plan.outcome).toBe('ready');
     const mint = await findItemMintAddress(await findGameAddress(GAME_ID), ITEM_ID);
@@ -46,7 +46,7 @@ describe('planTransfer', () => {
   });
 
   it('rechaza una cantidad invalida sin tocar la cadena', async () => {
-    const rpc = senderAccountRpc(true);
+    const rpc = senderAccountRpc(5n);
     expect(await planTransfer(rpc, authority, GAME_ID, ITEM_ID, ALICE, BOB, 0, LIFETIME)).toEqual({
       outcome: 'rejected',
       reason: 'invalid_amount',
@@ -55,7 +55,7 @@ describe('planTransfer', () => {
   });
 
   it('rechaza emisor y receptor iguales sin tocar la cadena', async () => {
-    const rpc = senderAccountRpc(true);
+    const rpc = senderAccountRpc(5n);
     expect(await planTransfer(rpc, authority, GAME_ID, ITEM_ID, ALICE, ALICE, 1, LIFETIME)).toEqual({
       outcome: 'rejected',
       reason: 'same_holder',
@@ -63,8 +63,17 @@ describe('planTransfer', () => {
     expect(rpc.requested).toEqual([]);
   });
 
+  it('rechaza si la cuenta del emisor existe pero no alcanza, y acepta el saldo justo', async () => {
+    expect(await planTransfer(senderAccountRpc(1n), authority, GAME_ID, ITEM_ID, ALICE, BOB, 2, LIFETIME)).toEqual({
+      outcome: 'rejected',
+      reason: 'insufficient_balance',
+    });
+    const exact = await planTransfer(senderAccountRpc(2n), authority, GAME_ID, ITEM_ID, ALICE, BOB, 2, LIFETIME);
+    expect(exact.outcome).toBe('ready');
+  });
+
   it('rechaza si el emisor no tiene cuenta de ese tipo', async () => {
-    expect(await planTransfer(senderAccountRpc(false), authority, GAME_ID, ITEM_ID, ALICE, BOB, 1, LIFETIME)).toEqual({
+    expect(await planTransfer(senderAccountRpc(null), authority, GAME_ID, ITEM_ID, ALICE, BOB, 1, LIFETIME)).toEqual({
       outcome: 'rejected',
       reason: 'no_sender_account',
     });

@@ -415,18 +415,54 @@ nodo público de devnet, pero **no está comprobado**. Clasificar los errores de
 En `test:devnet` la autoridad es el monedero de WSL, no la derivada de la semilla. `npm start` sí usa la
 derivada, que necesita fondos y su `initialize_game`, y para eso no hay todavía ni comando ni script.
 
+### V18 — Seguimiento, caducidad y categorías de error (bloque 5, P13, 12 de noviembre de 2026)
+
+- **P13, decidido por el responsable:** `operations.last_valid_block_height`, la última altura de bloque en
+  la que puede entrar la transacción del paso en curso. Se guarda con la firma, en la misma sentencia y antes
+  de enviar. Un `CHECK` exige que las dos vayan juntas. Se cambió la versión 1 del esquema sin migrar, como en P11:
+  no hay ninguna base desplegada (comprobado: ningún `.db` del backend en el repositorio).
+- **Regla de caducidad** (`src/tracker.ts`). Una operación pasa a `failed` / `EXPIRED` cuando la altura
+  **finalizada** supera su cota y la firma no aparece en `getSignatureStatuses` con `searchTransactionHistory`.
+  La altura se pide antes que los estados: una vez pasada la cota, la transacción ya no puede entrar, y lo que entrara
+  antes lo ve la consulta de estados. Se usa la altura finalizada y no la confirmada, porque todo bloque que
+  descienda de uno finalizado por encima de la cota tiene más altura que ella. La regla cubre los tres casos de P13: firma nunca
+  enviada, rechazada sin entrar y `applied` que desaparece. Con el histórico, un reinicio largo no da por
+  caducada una transacción que entró. El backend no reenvía: sólo guarda la firma.
+- **Transiciones.** `confirmed` lleva a `applied` y `finalized` a `settled`. Un error de la transacción sólo se da por final en
+  `finalized`. Un tipo partido sigue en `pending` hasta que el paso 1 está en `finalized`. Entonces el seguimiento construye el `grant`
+  desde `payload`, lo firma, lo simula, registra su firma y su cota (`step = 2`, `payload` vacío) y sólo entonces lo envía.
+- **Simular antes de reclamar la clave** (`src/submission.ts`). La transacción firmada se simula antes de `claim`.
+  Así, sin fondos la respuesta es `503` / `INSUFFICIENT_FUNDS`, sin saldo es `409` / `INSUFFICIENT_BALANCE`, y en ninguno
+  de los dos casos se guarda la clave. Después se envía con `skipPreflight`. El número de llamadas al nodo no cambia: la simulación es la misma que hacía antes el *preflight*.
+- **Saldo de una cuenta que existe:** `planTransfer` decodifica la cuenta del emisor (`getTokenDecoder`) y
+  compara el `amount` (contrato, 4.5: comprobación optimista).
+- **`Custom: 1` es ambiguo.** Vale `InsufficientFunds` en Token-2022 y `ResultWithNegativeLamports` en el programa de
+  sistema. Leído en `@solana-program/token-2022` 0.16.1 y `@solana-program/system`, ya instalados. Se distingue por la primera línea
+  `Program <id> failed: …` de los logs, que corresponde al programa más interno. El formato es `"Program {} failed: {}"`, según
+  `program-runtime/src/stable_log.rs` de Agave, leído el 12-nov-2026. En una transacción ya en la cadena, los logs se leen
+  con `getTransaction`.
+- **Nodo:** un HTTP 429 (`SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR`, `statusCode` 429 en kit 8.6.0) da `429` /
+  `RATE_LIMITED` con su `Retry-After`. Cualquier otro fallo, `500` / `INTERNAL`. Es la explicación más probable del `500` de V17,
+  pero eso sigue sin comprobar.
+
+**Sin comprobar en devnet todavía.** `npm run test:devnet` lleva ahora las operaciones HTTP hasta `settled` con
+`trackOnce`, y prueba por HTTP un tipo partido, una transferencia sin saldo suficiente (`409`) y una autoridad nunca financiada
+(`503`, por `AccountNotFound`). **No se ha ejecutado** todavía. Las dos ramas de `Custom: 1` sólo tienen tests con logs construidos
+según el formato leído, no logs reales.
+
 ---
 
 ## Pendiente
 
 P1 (V12) y P7 (V10 y V13) quedan cerrados en OC2. P3 y P10 (V14), en el bloque 3. P11 queda decidido
-el 12-nov-2026: `operations.step` y `operations.payload` (propuesta, revisión del 12 de noviembre).
+el 12-nov-2026: `operations.step` y `operations.payload` (propuesta, revisión del 12 de noviembre). P13 queda
+decidido el mismo día: `operations.last_valid_block_height` (V18).
 
 | # | Qué hay que verificar | Bloquea | Cómo |
 |---|---|---|---|
 | P2 | Si el delegado permanente puede reasignarse tras la creación del activo. Ya no condiciona la rotación: el delegado es una PDA que no cambia | Nada | Sólo si hace falta |
 | P4 | Texto literal vigente de la regla de onboarding de Steam sobre blockchain, y las políticas actuales de Google Play y App Store | Último bloque (aviso del README) | Leer las políticas, citar con fecha |
 | P5 | Actualizar a la 4.7.2 el Godot de la máquina de desarrollo, que tiene la 4.7.1 | Fase A1 | Instalar y anotar |
-| P13 | Cómo sabe el seguimiento que una firma ya no puede llegar a la cadena: hoy `operations` no guarda la altura de validez del *blockhash* (`lastValidBlockHeight`). Sin ella, una firma registrada y no enviada (reinicio entre el registro y el envío) o rechazada en el *preflight* no se distingue de una lenta | Bloque 5 | Decidirlo al empezarlo: guardarla en `operations` o tomar otro criterio |
+| P15 | Ejecutar `npm run test:devnet` con el seguimiento, el tipo partido, el `409` y el `503` (V18), y capturar unos logs reales de `Custom: 1` del programa de sistema y de Token-2022 para contrastar la clasificación | Nada; antes del último bloque | Ejecutarlo y anotar las firmas en V18 |
 | P14 | Huecos del contrato que salieron al escribir el servidor. `name` de `POST /v1/collections` no tiene límite: se exige no vacío y el tope es el del cuerpo (1 MB). El `read_token` «va limitado por tasa» (contrato, 2), pero ningún bloque lo asigna. `initialize_game` no tiene comando para crear el juego de un despliegue | W1 (límite de tasa) y A3 (crear el juego de la demo) | Decidir si se fija un límite al nombre; asignar el resto a su bloque |
 | P12 | **Decisión pendiente del responsable:** alcance de OpenBao, que sugiere el tutor (Q12). A: guardar sólo la semilla en su almacén KV (~1 h). B: que la autoridad firme dentro de OpenBao con Transit (ed25519) y se rote con `rotate_authority` (~4 h; cambia 4.3). C: trabajo futuro en el README. Para B, verificar antes que Transit firma ed25519 puro sobre los bytes del mensaje, sin *prehash*. Leído el 12-nov-2026 en su documentación (2.7.x): Transit admite ed25519 para firmar y rotar, e importar claves; licencia MPL-2.0 y modo `server -dev` | Nada hasta que se decida; si es B, antes del último bloque | Decidir; si B, plazo de 4 h y vuelta a A si tras 2 h no hay una firma válida en devnet |

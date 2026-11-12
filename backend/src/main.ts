@@ -1,5 +1,6 @@
 /**
- * Arranque del backend: configuracion (variables de entorno), SQLite, nodo de la red y servidor.
+ * Arranque del backend: configuracion (variables de entorno), SQLite, nodo de la red, servidor y
+ * bucle de seguimiento (`tracker.ts`).
  *
  *   CHAIN_GAME_ID=... CHAIN_MASTER_SEED_FILE=... CHAIN_WRITE_KEY=... CHAIN_READ_TOKEN=... npm start
  *
@@ -11,17 +12,29 @@ import { loadConfig } from './config.js';
 import { openDatabase } from './db.js';
 import { deriveAuthority } from './keys.js';
 import { buildServer } from './server.js';
+import { startTracker } from './tracker.js';
 import { authoritySigner } from './transactions.js';
 
 const config = loadConfig();
+const db = openDatabase(config.databasePath);
+const authority = await authoritySigner(deriveAuthority(config.masterSeed, config.gameId));
+const rpc = createSolanaRpc(config.rpcUrl);
 const app = await buildServer({
-  db: openDatabase(config.databasePath),
+  db,
   gameId: config.gameId,
   masterSeed: config.masterSeed,
   writeKey: config.writeKey,
   readToken: config.readToken,
-  authority: await authoritySigner(deriveAuthority(config.masterSeed, config.gameId)),
-  rpc: createSolanaRpc(config.rpcUrl),
+  authority,
+  rpc,
   logger: true,
 });
+const stopTracker = startTracker({
+  db,
+  rpc,
+  gameId: config.gameId,
+  authority,
+  log: (message, detail) => app.log.warn(detail ?? {}, message),
+});
+app.addHook('onClose', async () => stopTracker());
 await app.listen({ host: config.host, port: config.port });

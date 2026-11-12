@@ -20,7 +20,9 @@ import { resolveHolder } from '../src/holders.js';
 import { deriveAuthority, derivePlayer } from '../src/keys.js';
 import { buildServer, type ChainRpc } from '../src/server.js';
 import { authoritySigner } from '../src/transactions.js';
-import { chainRpc, type FakeChain } from './fake-rpc.js';
+import { chainRpc, fakeChain, type FakeChain } from './fake-rpc.js';
+import { SYSTEM_PROGRAM_ADDRESS } from '../src/submission.js';
+import { TOKEN_2022_PROGRAM_ADDRESS } from '@solana-program/token-2022';
 
 const SEED = Uint8Array.from(Buffer.from('000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f', 'hex'));
 const WRITE = 'w'.repeat(40);
@@ -35,7 +37,7 @@ let keyCounter = 0;
 
 async function start(gameId = GAME_ID): Promise<void> {
   db = openDatabase(':memory:');
-  chain = { senderAccount: true, tokenAccounts: [], mints: {}, sent: [] };
+  chain = fakeChain();
   authority = await authoritySigner(deriveAuthority(SEED, gameId));
   app = await buildServer({
     db,
@@ -98,13 +100,29 @@ function signersOf(wire: string): { count: number; first: Address | undefined } 
 }
 
 const operationRow = (id: string) =>
-  db.prepare('SELECT kind, state, step, payload, signature FROM operations WHERE operation_id = ?').get(id) as {
+  db
+    .prepare(
+      'SELECT kind, state, step, payload, signature, last_valid_block_height AS lvbh FROM operations WHERE operation_id = ?',
+    )
+    .get(id) as {
     kind: string;
     state: string;
     step: number;
     payload: string | null;
     signature: string | null;
+    lvbh: number | null;
   };
+
+/** Logs de una transaccion en la que falla, por dentro, `program` con `Custom: 1`. */
+const customOneFrom = (program: string) => ({
+  err: { InstructionError: [0, { Custom: 1 }] } as never,
+  logs: [
+    'Program 4SUNiKmyk4QtXhU2oNGn6uiXiSUevRdmXpZdRFXPeLNz invoke [1]',
+    `Program ${program} invoke [2]`,
+    `Program ${program} failed: custom program error: 0x1`,
+    'Program 4SUNiKmyk4QtXhU2oNGn6uiXiSUevRdmXpZdRFXPeLNz failed: custom program error: 0x1',
+  ],
+});
 
 describe('credenciales (contrato, 2)', () => {
   it('una escritura sin credencial, o con el read_token, es 401 REJECTED', async () => {
@@ -184,7 +202,7 @@ describe('POST /v1/items', () => {
     expect(r.body).toEqual({ operation_id: expect.stringMatching(/^opr_/), item_id: expect.stringMatching(/^itm_/), holder_id: player.holderId });
 
     const operation = operationRow(r.body['operation_id'] as string);
-    expect(operation).toMatchObject({ kind: 'create_item', state: 'pending', step: 1, payload: null });
+    expect(operation).toMatchObject({ kind: 'create_item', state: 'pending', step: 1, payload: null, lvbh: 100 });
     expect(operation.signature).not.toBeNull();
 
     const item = db.prepare('SELECT mint, qualities FROM items WHERE item_id = ?').get(r.body['item_id']) as {
@@ -196,6 +214,39 @@ describe('POST /v1/items', () => {
 
     expect(chain.sent).toHaveLength(1);
     expect(signersOf(chain.sent[0] as string)).toEqual({ count: 1, first: authority.address });
+    // Simulada antes de reclamar la clave, y enviada sin volver a simular.
+    expect(chain.simulations).toBe(1);
+    expect(chain.sendOptions).toEqual([{ encoding: 'base64', skipPreflight: true }]);
+  });
+
+  it('si la autoridad no puede pagar es 503 INSUFFICIENT_FUNDS, sin enviar ni guardar la clave', async () => {
+    const collection = await newCollection();
+    for (const simulation of [
+      { err: 'InsufficientFundsForFee' as const, logs: [] },
+      customOneFrom(SYSTEM_PROGRAM_ADDRESS),
+    ]) {
+      chain.simulation = simulation;
+      const r = await call({ url: '/v1/items', body: { collection_id: collection, ...SWORD, initial_grant: { holder: { external_id: 'p' }, amount: 1 } }, key: 'sin-fondos' });
+      expect(r.status).toBe(503);
+      expect(r.body).toEqual({ error: { code: 'INSUFFICIENT_FUNDS', message: expect.any(String), retryable: true } });
+    }
+    expect(chain.sent).toEqual([]);
+    expect(db.prepare("SELECT count(*) AS n FROM idempotency WHERE key = 'sin-fondos'").get()).toEqual({ n: 0 });
+    expect(db.prepare('SELECT count(*) AS n FROM operations').get()).toEqual({ n: 0 });
+
+    // Recargada la autoridad, la misma clave se acepta.
+    chain.simulation = null;
+    const r = await call({ url: '/v1/items', body: { collection_id: collection, ...SWORD, initial_grant: { holder: { external_id: 'p' }, amount: 1 } }, key: 'sin-fondos' });
+    expect(r.status).toBe(202);
+  });
+
+  it('una simulacion fallida sin categoria es 500 INTERNAL', async () => {
+    const collection = await newCollection();
+    chain.simulation = { err: { InstructionError: [0, { Custom: 6000 }] } as never, logs: [] };
+    const r = await newItem(collection);
+    expect(r.status).toBe(500);
+    expect(errorOf(r)).toBe('INTERNAL');
+    expect(chain.sent).toEqual([]);
   });
 
   it('valida los limites del contrato en caracteres, no en bytes', async () => {
@@ -292,10 +343,34 @@ describe('POST /v1/items/{item_id}/transfer', () => {
 
   it('un emisor sin unidades de ese tipo es 409 INSUFFICIENT_BALANCE', async () => {
     const item = await itemId();
-    chain.senderAccount = false;
+    chain.senderAmount = null;
     const r = await call({
       url: `/v1/items/${item}/transfer`,
       body: { from: { external_id: 'player-77' }, to: { external_id: 'player-42' }, amount: 1 },
+    });
+    expect(r.status).toBe(409);
+    expect(errorOf(r)).toBe('INSUFFICIENT_BALANCE');
+    expect(chain.sent).toEqual([]);
+  });
+
+  it('un emisor con cuenta y saldo insuficiente es 409, sin enviar', async () => {
+    const item = await itemId();
+    chain.senderAmount = 1n;
+    const r = await call({
+      url: `/v1/items/${item}/transfer`,
+      body: { from: { external_id: 'player-42' }, to: { external_id: 'player-77' }, amount: 2 },
+    });
+    expect(r.status).toBe(409);
+    expect(errorOf(r)).toBe('INSUFFICIENT_BALANCE');
+    expect(chain.sent).toEqual([]);
+  });
+
+  it('si el saldo cambia y lo rechaza Token-2022 en la simulacion, tambien es 409', async () => {
+    const item = await itemId();
+    chain.simulation = customOneFrom(TOKEN_2022_PROGRAM_ADDRESS);
+    const r = await call({
+      url: `/v1/items/${item}/transfer`,
+      body: { from: { external_id: 'player-42' }, to: { external_id: 'player-77' }, amount: 1 },
     });
     expect(r.status).toBe(409);
     expect(errorOf(r)).toBe('INSUFFICIENT_BALANCE');
@@ -314,7 +389,7 @@ describe('POST /v1/items/{item_id}/transfer', () => {
     const item = await itemId();
     const body = { from: { external_id: 'player-42' }, to: { external_id: 'player-77' }, amount: 1 };
     const first = await call({ url: `/v1/items/${item}/transfer`, body, key: 't1' });
-    chain.senderAccount = false;
+    chain.senderAmount = null;
     expect(await call({ url: `/v1/items/${item}/transfer`, body, key: 't1' })).toEqual(first);
     expect(chain.sent).toHaveLength(1);
   });
@@ -370,6 +445,30 @@ describe('GET /v1/holders/{holder_id}/items', () => {
       holder_id: player.holderId,
       items: [{ item_id: fixture.itemId, collection_id: collection, ...SWORD, amount: 2 }],
     });
+  });
+});
+
+describe('limite de tasa del nodo (contrato, 6)', () => {
+  it('un HTTP 429 del nodo es 429 RATE_LIMITED con su Retry-After, en escrituras y lecturas', async () => {
+    const collection = await newCollection();
+    const holder = derivePlayer(SEED, GAME_ID, 'player-42');
+    resolveHolder(db, { masterSeed: SEED, gameId: GAME_ID }, { external_id: 'player-42' });
+    chain.rateLimited = true;
+
+    const write = await app.inject({
+      method: 'POST',
+      url: '/v1/items',
+      headers: { authorization: `Bearer ${WRITE}`, 'idempotency-key': 'limitada' },
+      payload: { collection_id: collection, ...SWORD, initial_grant: { holder: { external_id: 'player-42' }, amount: 1 } },
+    });
+    expect(write.statusCode).toBe(429);
+    expect(write.headers['retry-after']).toBe('3');
+    expect(write.json()).toEqual({ error: { code: 'RATE_LIMITED', message: expect.any(String), retryable: true } });
+    expect(db.prepare("SELECT count(*) AS n FROM idempotency WHERE key = 'limitada'").get()).toEqual({ n: 0 });
+
+    const read = await call({ method: 'GET', url: `/v1/holders/${holder.holderId}/items` });
+    expect(read.status).toBe(429);
+    expect(errorOf(read)).toBe('RATE_LIMITED');
   });
 });
 

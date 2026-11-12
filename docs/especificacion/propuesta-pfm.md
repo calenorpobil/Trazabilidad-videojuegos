@@ -119,6 +119,11 @@ El responsable cierra también dos huecos:
    enviar cada transacción, para que un reinicio nunca la envíe dos veces.
 2. **`external_id` tiene de 1 a 64 caracteres**, como el `call_id` (4.4). El contrato no lo fijaba
    (contrato, 4.1 y 10).
+3. **P13: cuándo caduca una firma.** `operations` gana `last_valid_block_height`, que se guarda con la firma
+   antes de enviar. Una operación es `failed` / `EXPIRED` cuando la altura finalizada supera esa cota y la firma no
+   aparece. En el bloque 5 se fija además que la transacción se **simula antes de reclamar la clave**: si no se puede
+   pagar, `503` / `INSUFFICIENT_FUNDS`, y si no hay saldo, `409`, sin guardar la clave (`verificaciones.md`, V18). El
+   contrato no cambia.
 
 ### 0.1 Requisitos de entrega del máster
 
