@@ -14,7 +14,8 @@
     "test:watch": "vitest",
     "licenses": "node scripts/check-licenses.mjs",
     "codegen": "node scripts/codegen.mjs",
-    "test:devnet": "tsx scripts/devnet.ts"
+    "test:devnet": "tsx scripts/devnet.ts",
+    "start": "tsx src/main.ts"
   },
   "dependencies": {
     "@solana-program/token": "0.16.1",

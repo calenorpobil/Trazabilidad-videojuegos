@@ -24,6 +24,13 @@ describe('loadConfig', () => {
     expect(c.host).toBe('127.0.0.1');
     expect(c.port).toBe(8787);
     expect(c.databasePath).toBe('chain.db');
+    expect(c.rpcUrl).toBe('https://api.devnet.solana.com');
+  });
+
+  it('acepta otro nodo http(s) y rechaza lo que no es una URL', () => {
+    expect(loadConfig({ ...base, CHAIN_RPC_URL: 'http://127.0.0.1:8899' }).rpcUrl).toBe('http://127.0.0.1:8899');
+    expect(() => loadConfig({ ...base, CHAIN_RPC_URL: 'devnet' })).toThrow(ConfigError);
+    expect(() => loadConfig({ ...base, CHAIN_RPC_URL: 'ftp://x.test' })).toThrow(ConfigError);
   });
 
   it('lee la semilla de un fichero, admitiendo un salto de linea final', () => {

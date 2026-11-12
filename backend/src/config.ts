@@ -9,7 +9,9 @@
  *
  * Ningun mensaje de error repite el valor de la semilla ni de las credenciales.
  *
- * Fuera de este bloque: la URL de la red (bloque 3) y la credencial de la consola (W1).
+ * `CHAIN_RPC_URL` es el nodo de la red; por defecto, devnet (propuesta, 11: mainnet esta fuera).
+ *
+ * Fuera de este bloque: la credencial de la consola (W1).
  */
 import { readFileSync, statSync } from 'node:fs';
 import { z } from 'zod';
@@ -23,11 +25,14 @@ export interface Config {
   readonly databasePath: string;
   readonly host: string;
   readonly port: number;
+  readonly rpcUrl: string;
 }
 
 export class ConfigError extends Error {
   override readonly name = 'ConfigError';
 }
+
+export const DEVNET_RPC_URL = 'https://api.devnet.solana.com';
 
 /** Longitud minima de `write_key` y `read_token`: lo bastante para no adivinarse. */
 export const MIN_CREDENTIAL_LENGTH = 32;
@@ -44,6 +49,7 @@ const schema = z
     CHAIN_DATABASE_PATH: z.string().min(1).default('chain.db'),
     CHAIN_HOST: z.string().min(1).default('127.0.0.1'),
     CHAIN_PORT: z.coerce.number().int().min(1).max(65535).default(8787),
+    CHAIN_RPC_URL: z.url({ protocol: /^https?$/ }).default(DEVNET_RPC_URL),
   })
   .refine((e) => (e.CHAIN_MASTER_SEED === undefined) !== (e.CHAIN_MASTER_SEED_FILE === undefined), {
     message: 'define exactamente una: CHAIN_MASTER_SEED o CHAIN_MASTER_SEED_FILE',
@@ -110,5 +116,6 @@ export function loadConfig(
     databasePath: e.CHAIN_DATABASE_PATH,
     host: e.CHAIN_HOST,
     port: e.CHAIN_PORT,
+    rpcUrl: e.CHAIN_RPC_URL,
   };
 }
