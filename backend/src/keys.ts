@@ -2,17 +2,20 @@
  * Derivacion de claves desde la semilla maestra del juego (propuesta, 4.3). Esquema concreto,
  * no se reinventa:
  *
- *   authority_seed := HKDF-SHA512(ikm = master_seed, salt = game_id, info = "authority")
- *   keypair(x)     := ed25519_from_seed(primeros 32 bytes de x)
+ *   authority_seed     := HKDF-SHA512(ikm = master_seed, salt = game_id, info = "authority")
+ *   player_seed(ext)   := HKDF-SHA512(ikm = master_seed, salt = game_id, info = "player:" || ext)
+ *   keypair(x)         := ed25519_from_seed(primeros 32 bytes de x)
+ *   holder_id(ext)     := "hld_" || base58(pubkey(keypair(player_seed(ext))))[0..16]
  *
  * Los vectores fijos estan en `tests/keys.test.ts`. Cambiar cualquier detalle de este modulo
- * cambia la autoridad de todo juego ya desplegado.
+ * cambia la autoridad y los tenedores de todo juego ya desplegado.
  *
- * Las claves de jugador (`info = "player:" || external_id`) esperan a la respuesta del tutor
- * (Q12, preguntas-tutor.md).
+ * Las claves privadas de jugador se derivan pero no firman nunca en la v1 (propuesta, 4.2): hacen
+ * falta para la direccion, y son el camino que usaria un futuro `claim`.
  */
 import { createPrivateKey, createPublicKey, hkdfSync } from 'node:crypto';
 import { getAddressDecoder } from '@solana/kit';
+import { ID_PREFIX } from './contract.js';
 
 export const MASTER_SEED_BYTES = 32;
 
@@ -60,4 +63,30 @@ export function deriveAuthority(masterSeed: Uint8Array, gameId: string): Authori
   const secret = hkdf(masterSeed, gameId, 'authority');
   const publicKey = publicKeyFromSeed(secret);
   return { secret, publicKey, address: getAddressDecoder().decode(publicKey) };
+}
+
+/** Longitud de un `external_id`, en caracteres (contrato, 4.1; revision del 12-nov-2026). */
+export const EXTERNAL_ID_MAX = 64;
+
+export function isValidExternalId(externalId: string): boolean {
+  const length = [...externalId].length;
+  return length >= 1 && length <= EXTERNAL_ID_MAX;
+}
+
+/** Caracteres de la direccion que entran en el `holder_id`. */
+const HOLDER_ID_ADDRESS_CHARS = 16;
+
+export interface PlayerKey extends AuthorityKey {
+  /** Identificador publico del tenedor. No se puede invertir: el mapa vive en `holders`. */
+  readonly holderId: string;
+}
+
+export function derivePlayer(masterSeed: Uint8Array, gameId: string, externalId: string): PlayerKey {
+  if (!isValidExternalId(externalId)) {
+    throw new Error(`external_id debe tener entre 1 y ${EXTERNAL_ID_MAX} caracteres`);
+  }
+  const secret = hkdf(masterSeed, gameId, `player:${externalId}`);
+  const publicKey = publicKeyFromSeed(secret);
+  const address = getAddressDecoder().decode(publicKey);
+  return { secret, publicKey, address, holderId: ID_PREFIX.holder + address.slice(0, HOLDER_ID_ADDRESS_CHARS) };
 }
