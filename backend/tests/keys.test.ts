@@ -11,10 +11,14 @@
  * Si alguno de estos valores cambia, todas las direcciones de un juego desplegado cambian con
  * el: el juego pierde su autoridad. No se "actualizan" para que el test pase.
  *
- * Las claves de jugador no estan aqui: esperan a la respuesta del tutor (Q12).
+ * Las claves de jugador se anadieron el 12-nov-2026, al resolverse la Q12, con el mismo metodo:
+ * el script aparte reproduce primero el vector 1 de la autoridad y despues calcula estos.
+ *
+ *   player_seed(ext) := HKDF-SHA512(ikm = master_seed, salt = game_id, info = "player:" || ext)
+ *   holder_id(ext)   := "hld_" || base58(pubkey(keypair(player_seed(ext))))[0..16]
  */
 import { describe, expect, it } from 'vitest';
-import { deriveAuthority, publicKeyFromSeed } from '../src/keys.js';
+import { deriveAuthority, derivePlayer, publicKeyFromSeed } from '../src/keys.js';
 
 const hex = (s: string): Uint8Array => Uint8Array.from(Buffer.from(s, 'hex'));
 const toHex = (b: Uint8Array): string => Buffer.from(b).toString('hex');
@@ -63,5 +67,48 @@ describe('clave de la autoridad del juego', () => {
     for (const bad of ['', 'Test-Game', 'juego_1', 'año', 'a'.repeat(33)]) {
       expect(() => deriveAuthority(SEED_COUNTING, bad), bad).toThrow();
     }
+  });
+});
+
+describe('clave y holder_id de un jugador', () => {
+  it('vector 1: semilla 00..1f, juego test-game, player-42', () => {
+    const p = derivePlayer(SEED_COUNTING, 'test-game', 'player-42');
+    expect(toHex(p.secret)).toBe('cbf6163fb57f29b5aa56daee9106d121f919214a8b095eb8df26ec1ea5750b9a');
+    expect(p.address).toBe('2LmEXGH9GXGjSmfFy7VY9E6nVXioH5R2bTvusCUbRWTq');
+    expect(p.holderId).toBe('hld_2LmEXGH9GXGjSmfF');
+  });
+
+  it('vector 2: otro jugador del mismo juego', () => {
+    const p = derivePlayer(SEED_COUNTING, 'test-game', 'player-77');
+    expect(toHex(p.secret)).toBe('19efcaca0d81423dc22849ca3996236c7b63bd0af5a54e0e044f5c057e42d2dd');
+    expect(p.address).toBe('4ZqitPcCAcAz1X7L5KY9ZNFHMu5uf5URh5Rz4tpFs31j');
+    expect(p.holderId).toBe('hld_4ZqitPcCAcAz1X7L');
+  });
+
+  it('vector 3: mismo jugador, otra semilla y otro juego', () => {
+    const p = derivePlayer(SEED_ONES, 'otro-juego', 'player-42');
+    expect(toHex(p.secret)).toBe('0d3eacfd4b0533cbd03e805bfabefc1adca50b7fbbdf213014d081201702ab35');
+    expect(p.address).toBe('EGraMU8wB9SASaBXkXXxEZU1XKv2NMk1uafnaSEHcMo6');
+    expect(p.holderId).toBe('hld_EGraMU8wB9SASaBX');
+  });
+
+  it('vector 4: external_id fuera de ASCII, en UTF-8', () => {
+    const p = derivePlayer(SEED_COUNTING, 'test-game', 'jugador-ñ');
+    expect(toHex(p.secret)).toBe('03cecf9913ae76c3107cc2cba2d040229955ac532e02f7bdbf0d7191dd476c60');
+    expect(p.address).toBe('2tgNY9ZNwUfSk6ZiwFJwFH8BKBhNNQ16oA2a3aa5tibB');
+    expect(p.holderId).toBe('hld_2tgNY9ZNwUfSk6Zi');
+  });
+
+  it('un jugador nunca coincide con la autoridad', () => {
+    expect(derivePlayer(SEED_COUNTING, 'test-game', 'authority').address).not.toBe(
+      deriveAuthority(SEED_COUNTING, 'test-game').address,
+    );
+  });
+
+  it('rechaza un external_id fuera de 1..64 caracteres', () => {
+    expect(() => derivePlayer(SEED_COUNTING, 'test-game', '')).toThrow();
+    expect(() => derivePlayer(SEED_COUNTING, 'test-game', 'a'.repeat(65))).toThrow();
+    // 64 caracteres, aunque ocupen mas bytes en UTF-8.
+    expect(() => derivePlayer(SEED_COUNTING, 'test-game', 'ñ'.repeat(64))).not.toThrow();
   });
 });
