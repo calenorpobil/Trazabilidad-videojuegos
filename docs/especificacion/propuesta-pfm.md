@@ -450,8 +450,8 @@ hace primero, el estudio pierde el juego (12.2).
 collections (collection_id PK, game_id, name, created_at)
 items        (item_id PK, collection_id, mint, name, symbol, uri, qualities, operation_id,
               revision, edit_operation_id, created_at)
-operations   (operation_id PK, kind, state, signature, step, payload, error_code, error_message,
-              created_at, updated_at)
+operations   (operation_id PK, kind, state, signature, last_valid_block_height, step, payload,
+              item_id, from_holder_id, to_holder_id, error_code, error_message, created_at, updated_at)
 idempotency  (key PK, operation_id NULL, status_code, response, created_at)
 holders      (holder_id PK, external_id UNIQUE, address, created_at)
 ```
@@ -460,6 +460,10 @@ holders      (holder_id PK, external_id UNIQUE, address, created_at)
 `POST /v1/collections`, que no tiene operación. Sólo se marca lo aceptado: una petición rechazada por
 validación no guarda la clave. `holders` se rellena la primera vez que se resuelve un `external_id`; un
 `holder_id` que no está en la tabla es `404` (8-nov-2026).
+
+`operations.item_id`, `from_holder_id` y `to_holder_id` dicen qué tipo mueve un `transfer` y entre quién; en las
+demás operaciones van vacías. Sólo los muestra la consola, para que una transferencia hecha desde la demo se
+reconozca en su lista de operaciones (14-nov-2026, W1).
 
 `items.qualities` es texto JSON, sin la clave reservada `collection`. Se guarda al crear el tipo y de
 ahí se sirve: el backend **no lee la cadena en cada consulta**. La cadena sigue siendo la fuente de

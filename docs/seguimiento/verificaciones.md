@@ -503,8 +503,17 @@ la comprobación optimista del saldo y la simulación las paran antes de que lle
 - **Operaciones en la consola:** una por su identificador y **las 50 últimas**, también las del servidor de juego, con
   la firma registrada y su enlace (`CHAIN_EXPLORER_TX_URL`, por defecto el explorador de devnet). Es lo que pide el
   hito (sección 7: «con enlace de cada operación a su transacción»), y sin lista no habría forma de llegar desde la
-  consola a una transferencia hecha en la demo. En un tipo partido el enlace es el del paso en curso: la tabla sólo
-  guarda una firma. Una transferencia no dice de qué tipo ni entre quién: `operations` no lo guarda.
+  consola a una transferencia hecha en la demo. La lista empieza por la hora de creación, como la maqueta, en la hora
+  local del navegador.
+- **Qué mueve una transferencia** (decidido por el responsable el mismo día): `operations` gana `item_id`,
+  `from_holder_id` y `to_holder_id`, que se rellenan al reclamar la clave y sólo en un `transfer` (dos `CHECK`: las
+  tres juntas, y sólo en ese tipo de operación). La consola muestra el tipo y «`player-42` → `player-77`». Cambio de la
+  versión 1 del esquema sin migrar, como en P11 y P13: la única base del repositorio es `rust/nidada.db`, de *Nidada*.
+  Comprobado en Chromium con una base preparada a mano, porque la autoridad sin fondos no deja hacer una real.
+- **Limitaciones de la lista, aceptadas:** en un tipo partido sólo queda la firma del paso en curso, porque la del
+  `grant` sustituye a la de `create_item` y la tabla guarda una sola. Es un caso raro (V13), y el tipo del vídeo no lo
+  será. El enlace por defecto es el explorador de devnet aunque `CHAIN_RPC_URL` apunte a otro nodo; con un nodo local
+  hay que fijar `CHAIN_EXPLORER_TX_URL`.
 - **Inventario en la consola** por `holder_id` o por un `external_id` ya registrado; consultar no registra tenedores.
 - **Fuera, por 8.1:** entregar y transferir (recorte 5), importar catálogo y editar tipos (recorte 1). Fuera también la
   simulación y las pantallas «futuras» de la maqueta.
