@@ -50,6 +50,9 @@ export const DEFAULT_READ_RATE_LIMIT = 120;
 /** Longitud minima de `write_key` y `read_token`: lo bastante para no adivinarse. */
 export const MIN_CREDENTIAL_LENGTH = 32;
 
+/** Solo se comprueba la longitud, no la entropia (limitacion documentada): de ahi la receta en el error. */
+const CREDENTIAL_HINT = `minimo ${MIN_CREDENTIAL_LENGTH} caracteres; genera una con: openssl rand -hex 32`;
+
 const SEED_HEX = new RegExp(`^[0-9a-fA-F]{${MASTER_SEED_BYTES * 2}}$`);
 
 const schema = z
@@ -57,13 +60,13 @@ const schema = z
     CHAIN_GAME_ID: z.string().regex(GAME_ID_PATTERN, 'debe cumplir [a-z0-9-]{1,32}'),
     CHAIN_MASTER_SEED: z.string().optional(),
     CHAIN_MASTER_SEED_FILE: z.string().min(1).optional(),
-    CHAIN_WRITE_KEY: z.string().min(MIN_CREDENTIAL_LENGTH, `minimo ${MIN_CREDENTIAL_LENGTH} caracteres`),
-    CHAIN_READ_TOKEN: z.string().min(MIN_CREDENTIAL_LENGTH, `minimo ${MIN_CREDENTIAL_LENGTH} caracteres`),
+    CHAIN_WRITE_KEY: z.string().min(MIN_CREDENTIAL_LENGTH, CREDENTIAL_HINT),
+    CHAIN_READ_TOKEN: z.string().min(MIN_CREDENTIAL_LENGTH, CREDENTIAL_HINT),
     CHAIN_DATABASE_PATH: z.string().min(1).default('chain.db'),
     CHAIN_HOST: z.string().min(1).default('127.0.0.1'),
     CHAIN_PORT: z.coerce.number().int().min(1).max(65535).default(8787),
     CHAIN_RPC_URL: z.url({ protocol: /^https?$/ }).default(DEVNET_RPC_URL),
-    CHAIN_ADMIN_KEY: z.string().min(MIN_CREDENTIAL_LENGTH, `minimo ${MIN_CREDENTIAL_LENGTH} caracteres`),
+    CHAIN_ADMIN_KEY: z.string().min(MIN_CREDENTIAL_LENGTH, CREDENTIAL_HINT),
     CHAIN_READ_RATE_LIMIT: z.coerce.number().int().min(1).default(DEFAULT_READ_RATE_LIMIT),
     CHAIN_EXPLORER_TX_URL: z
       .string()

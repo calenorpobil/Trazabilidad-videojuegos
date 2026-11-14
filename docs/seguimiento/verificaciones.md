@@ -497,6 +497,26 @@ la comprobación optimista del saldo y la simulación las paran antes de que lle
   pantalla de entrada o separar `/admin/login`: ninguna protege nada, porque el código de la página ya es público en el
   repositorio. Se corrigió el texto de la propuesta (3), que decía «las rutas de `/admin`». CSP `default-src 'self'`: el
   frontend no tiene nada en línea.
+- **Revisión de la consola** (14-nov-2026, segunda opinión; corregido lo de las sesiones). Las cookies y `SameSite` no
+  distinguen puertos: una página en otro puerto de `127.0.0.1` es del mismo sitio y su petición lleva la cookie. Hasta
+  ahora las escrituras sólo se salvaban de rebote, porque `Idempotency-Key` obliga a un preflight que falla sin CORS.
+  Se corrigió:
+  - **Origen:** toda petición a `/admin/api` que no sea `GET` ni `HEAD` (entrar, salir, crear) exige `Origin` con el
+    mismo host que `Host`; si no, `403`. No hace falta token CSRF. Detrás de un proxy, éste debe conservar `Host`.
+  - **Cookie por juego:** `chain_admin_<game_id>`. Con un solo nombre, dos despliegues en la misma máquina en puertos
+    distintos se pisaban la sesión y el navegador mandaba la cookie de uno al otro.
+  - **Host:** si `CHAIN_HOST` es loopback, `/admin` sólo responde a `127.0.0.1`, `localhost` o `[::1]` con su puerto;
+    si no, `421`. Corta el DNS rebinding, con el que una web ajena agotaría los intentos de entrada. `/v1` no cambia.
+
+  **Limitaciones documentadas** (decidido por el responsable, sin cambiar código):
+  - `CHAIN_ADMIN_KEY` sólo se valida por longitud, no por entropía; se recomienda `openssl rand -hex 32`. Una sola
+    credencial compartida, sin usuarios ni registro de quién hizo qué (las escrituras quedan en `operations`). Se
+    compara con el valor de la variable de entorno, sin hash lento: quien lee ese entorno ya tiene la semilla maestra.
+    Rotarla es cambiar la variable y reiniciar, lo que cierra todas las sesiones.
+  - El límite de entrada va por IP: en `127.0.0.1` todos comparten IP, y detrás de un proxy la IP es la del proxy, así
+    que cualquiera puede mantener bloqueada la entrada (no el juego). No se activa `trustProxy`, que dejaría falsear la IP.
+  - `Secure` sólo si la petición llega por HTTPS al propio fastify: detrás de un proxy con TLS la cookie sale sin
+    `Secure`. Quien expone la consola debe servir HSTS y no atender HTTP en claro en ese dominio.
 - **Mismas funciones que la API:** crear colección y tipo son los mismos manejadores de `/v1`, con su idempotencia y su
   validación; la consola calcula la clave como SHA-256 de `operación:call_id`, igual que la maqueta. Los listados son
   los mismos de `catalog.ts`.

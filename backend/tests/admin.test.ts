@@ -4,6 +4,7 @@
  */
 import type { FastifyInstance } from 'fastify';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { loopbackHosts, sessionCookie } from '../src/admin.js';
 import { openDatabase, type Db } from '../src/db.js';
 import { deriveAuthority } from '../src/keys.js';
 import { transitionOperation } from '../src/operations.js';
@@ -17,6 +18,9 @@ const READ = 'r'.repeat(40);
 const ADMIN = 'a'.repeat(40);
 const GAME_ID = 'test-game';
 const HOUR = 60 * 60 * 1000;
+/** El origen con que el navegador llama a la consola: `inject` manda `Host: localhost:80`. */
+const ORIGIN = 'http://localhost:80';
+const COOKIE = 'chain_admin_test-game';
 
 let db: Db;
 let app: FastifyInstance;
@@ -40,7 +44,7 @@ beforeEach(async () => {
 });
 
 async function login(key = ADMIN) {
-  return app.inject({ method: 'POST', url: '/admin/api/session', payload: { key } });
+  return app.inject({ method: 'POST', url: '/admin/api/session', headers: { origin: ORIGIN }, payload: { key } });
 }
 
 /** Cookie de una sesion valida, lista para la cabecera `cookie`. */
@@ -53,7 +57,10 @@ async function session(): Promise<string> {
 async function admin(cookie: string | null, method: 'GET' | 'POST', url: string, payload?: object) {
   const headers: Record<string, string> = {};
   if (cookie !== null) headers['cookie'] = cookie;
-  if (method === 'POST') headers['idempotency-key'] = `consola-${++keyCounter}`;
+  if (method === 'POST') {
+    headers['idempotency-key'] = `consola-${++keyCounter}`;
+    headers['origin'] = ORIGIN;
+  }
   const r = await app.inject({ method, url, headers, ...(payload === undefined ? {} : { payload }) });
   return { status: r.statusCode, body: r.body === '' ? null : (r.json() as Record<string, unknown>), headers: r.headers };
 }
@@ -87,7 +94,7 @@ describe('sesion', () => {
       expect(r.status).toBe(401);
       expect((r.body?.['error'] as { code: string }).code).toBe('REJECTED');
     }
-    expect((await admin('chain_admin=inventada', 'GET', '/admin/api/collections')).status).toBe(401);
+    expect((await admin(`${COOKIE}=inventada`, 'GET', '/admin/api/collections')).status).toBe(401);
   });
 
   it('ni el read_token ni el write_key abren la consola', async () => {
@@ -102,7 +109,7 @@ describe('sesion', () => {
     const r = await login();
     expect(r.statusCode).toBe(204);
     const cookie = r.headers['set-cookie'] as string;
-    expect(cookie).toMatch(/^chain_admin=[A-Za-z0-9_-]{43}; /);
+    expect(cookie).toMatch(new RegExp(`^${COOKIE}=[A-Za-z0-9_-]{43}; `));
     expect(cookie).toContain('HttpOnly');
     expect(cookie).toContain('SameSite=Strict');
     expect(cookie).toContain('Path=/admin');
@@ -116,7 +123,7 @@ describe('sesion', () => {
     expect((await admin(cookie, 'GET', '/admin/api/session')).status).toBe(401);
 
     const other = await session();
-    const out = await app.inject({ method: 'DELETE', url: '/admin/api/session', headers: { cookie: other } });
+    const out = await app.inject({ method: 'DELETE', url: '/admin/api/session', headers: { cookie: other, origin: ORIGIN } });
     expect(out.statusCode).toBe(204);
     expect(out.headers['set-cookie']).toContain('Max-Age=0');
     expect((await admin(other, 'GET', '/admin/api/session')).status).toBe(401);
@@ -129,6 +136,77 @@ describe('sesion', () => {
     expect(r.headers['retry-after']).toBeDefined();
     clock.t += 60_000;
     expect((await login()).statusCode).toBe(204);
+  });
+
+  it('la cookie lleva el game_id: dos despliegues en la misma maquina no se pisan la sesion', async () => {
+    expect(sessionCookie('juego-a')).not.toBe(sessionCookie('juego-b'));
+    const cookie = await session();
+    expect(cookie.startsWith(`${COOKIE}=`)).toBe(true);
+    // La de otro juego, con el mismo valor, no vale aqui.
+    expect((await admin(cookie.replace(COOKIE, sessionCookie('otro')), 'GET', '/admin/api/session')).status).toBe(401);
+  });
+});
+
+describe('origen y host', () => {
+  /** Una escritura de la consola con sesion valida y el `origin` dado. */
+  async function write(cookie: string, headers: Record<string, string>) {
+    return app.inject({
+      method: 'POST',
+      url: '/admin/api/collections',
+      headers: { cookie, 'idempotency-key': `origen-${++keyCounter}`, ...headers },
+      payload: { name: 'Armeria' },
+    });
+  }
+
+  it('sin Origin, o con el de otro puerto u otro host, una escritura da 403 aunque haya sesion', async () => {
+    const cookie = await session();
+    for (const headers of [{}, { origin: 'http://localhost:3000' }, { origin: 'http://evil.test' }, { origin: 'null' }]) {
+      const r = await write(cookie, headers);
+      expect(r.statusCode).toBe(403);
+      expect((r.json() as { error: { code: string } }).error.code).toBe('REJECTED');
+    }
+    expect(db.prepare('SELECT COUNT(*) AS n FROM collections').get()).toEqual({ n: 0 });
+    expect((await write(cookie, { origin: ORIGIN })).statusCode).toBe(201);
+    expect(db.prepare('SELECT COUNT(*) AS n FROM collections').get()).toEqual({ n: 1 });
+  });
+
+  it('entrar y salir tambien exigen el origen; las lecturas no', async () => {
+    const noOrigin = await app.inject({ method: 'POST', url: '/admin/api/session', payload: { key: ADMIN } });
+    expect(noOrigin.statusCode).toBe(403);
+    const cookie = await session();
+    const out = await app.inject({ method: 'DELETE', url: '/admin/api/session', headers: { cookie } });
+    expect(out.statusCode).toBe(403);
+    expect((await admin(cookie, 'GET', '/admin/api/session')).status).toBe(204);
+  });
+
+  it('con allowedHosts, /admin solo responde a esos Host (DNS rebinding): 421', async () => {
+    const hosts = loopbackHosts('127.0.0.1', 8787);
+    expect(hosts).toEqual(['127.0.0.1:8787', 'localhost:8787', '[::1]:8787']);
+    expect(loopbackHosts('0.0.0.0', 8787)).toBeUndefined();
+    const guarded = await buildServer({
+      db,
+      gameId: GAME_ID,
+      masterSeed: SEED,
+      writeKey: WRITE,
+      readToken: READ,
+      authority: await authoritySigner(deriveAuthority(SEED, GAME_ID)),
+      rpc: chainRpc(fakeChain()) as ChainRpc,
+      admin: { key: ADMIN, explorerTxUrl: 'https://explorer.test/tx/{signature}', ...(hosts ? { allowedHosts: hosts } : {}) },
+    });
+    const at = (host: string, origin: string) =>
+      guarded.inject({ method: 'POST', url: '/admin/api/session', headers: { host, origin }, payload: { key: ADMIN } });
+    const rebound = await at('evil.test:8787', 'http://evil.test:8787');
+    expect(rebound.statusCode).toBe(421);
+    expect((await guarded.inject({ method: 'GET', url: '/admin', headers: { host: 'evil.test:8787' } })).statusCode).toBe(421);
+    expect((await at('127.0.0.1:8787', 'http://127.0.0.1:8787')).statusCode).toBe(204);
+    expect((await at('LOCALHOST:8787', 'http://localhost:8787')).statusCode).toBe(204);
+    // La API no cambia: el addon y el servidor de juego no pasan por aqui.
+    const api = await guarded.inject({
+      method: 'GET',
+      url: '/v1/items',
+      headers: { host: 'evil.test:8787', authorization: `Bearer ${READ}` },
+    });
+    expect(api.statusCode).toBe(200);
   });
 });
 
@@ -151,7 +229,7 @@ describe('datos: los mismos manejadores que la API', () => {
     expect((viaApi.json() as { items: { item_id: string }[] }).items.map((i) => i.item_id)).toEqual([item.body?.['item_id']]);
 
     // Validacion estricta y sin clave, como en la API.
-    const bad = await app.inject({ method: 'POST', url: '/admin/api/collections', headers: { cookie }, payload: { name: 'x' } });
+    const bad = await app.inject({ method: 'POST', url: '/admin/api/collections', headers: { cookie, origin: ORIGIN }, payload: { name: 'x' } });
     expect(bad.statusCode).toBe(400);
   });
 

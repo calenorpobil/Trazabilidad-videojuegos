@@ -26,6 +26,18 @@
  * que pide la credencial. Ninguna credencial de la API (`write_key`, `read_token`) llega al
  * navegador: las rutas llaman a los mismos manejadores por dentro.
  *
+ * La cookie se llama `chain_admin_<game_id>`: las cookies no distinguen puertos, y dos despliegues en
+ * la misma maquina (`127.0.0.1:8787` y `:8788`) con el mismo nombre se pisarian la sesion.
+ *
+ * **Origen.** `SameSite=Strict` tampoco distingue puertos: una pagina en otro puerto de `127.0.0.1` es
+ * del mismo sitio y su peticion lleva la cookie. Por eso toda peticion a `/admin/api` que no sea
+ * `GET` ni `HEAD` exige una cabecera `Origin` cuyo host coincida con `Host`, o responde `403`. Detras
+ * de un proxy, este debe conservar `Host`.
+ *
+ * **Host.** Si el backend escucha en loopback, `/admin` solo responde a `Host` de loopback con su
+ * puerto (`allowedHosts`), o `421`: corta el DNS rebinding, con el que una web ajena hablaria con la
+ * consola bajo su propio nombre y podria agotar los intentos de entrada.
+ *
  * La pagina se sirve con una CSP que solo admite recursos del propio origen: ni scripts en linea
  * ni de terceros.
  */
@@ -49,11 +61,37 @@ export interface AdminOptions {
   readonly sessionMs?: number;
   /** Intentos de entrada por minuto y por IP. Por defecto, 10. */
   readonly loginLimit?: number;
+  /** Valores de `Host` admitidos en `/admin`, en minusculas. Sin ella, cualquiera (`loopbackHosts`). */
+  readonly allowedHosts?: readonly string[];
+}
+
+const LOOPBACK = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
+
+/**
+ * Los `Host` con que se llega a un backend que escucha en loopback, o `undefined` si escucha en otra
+ * direccion: exponerlo es decision de quien despliega, y entonces el nombre publico no se conoce aqui.
+ */
+export function loopbackHosts(host: string, port: number): string[] | undefined {
+  if (!LOOPBACK.has(host.toLowerCase())) return undefined;
+  return [`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`];
+}
+
+/** Si el host de `origin` es el de la cabecera `Host`, con el puerto por defecto de su esquema normalizado. */
+function sameHost(origin: string | undefined, host: string | undefined): boolean {
+  if (origin === undefined || host === undefined || host === '') return false;
+  try {
+    const o = new URL(origin);
+    return o.host === new URL(`${o.protocol}//${host}`).host;
+  } catch {
+    return false;
+  }
 }
 
 /** Lo que la consola toma del servidor: los mismos manejadores y lecturas que la API. */
 export interface AdminDeps {
   readonly db: Db;
+  /** Da nombre a la cookie de sesion. */
+  readonly gameId: string;
   readonly createCollection: RouteHandlerMethod;
   readonly createItem: RouteHandlerMethod;
   readonly listItems: RouteHandlerMethod;
@@ -61,7 +99,8 @@ export interface AdminDeps {
   readonly now?: () => number;
 }
 
-export const SESSION_COOKIE = 'chain_admin';
+/** Nombre de la cookie de sesion de un juego. `game_id` cumple `[a-z0-9-]`, valido en una cookie. */
+export const sessionCookie = (gameId: string): string => `chain_admin_${gameId}`;
 const DEFAULT_SESSION_MS = 8 * 60 * 60 * 1000;
 const RECENT_OPERATIONS = 50;
 
@@ -152,6 +191,8 @@ export function registerAdmin(app: FastifyInstance, options: AdminOptions, deps:
   const loginLimiter = new FixedWindowLimiter({ limit: options.loginLimit ?? 10, windowMs: 60_000 }, now);
   /** Resumen del token de sesion -> caducidad. El token en claro solo esta en la cookie. */
   const sessions = new Map<string, number>();
+  const cookieName = sessionCookie(deps.gameId);
+  const allowedHosts = options.allowedHosts === undefined ? undefined : new Set(options.allowedHosts);
 
   const page = readFileSync(new URL('index.html', FRONTEND), 'utf8');
   const assets = new Map(
@@ -181,14 +222,29 @@ export function registerAdmin(app: FastifyInstance, options: AdminOptions, deps:
     updated_at: r.updated_at,
   });
 
+  const isAdmin = (url: string) => url === '/admin' || url.startsWith('/admin/') || url.startsWith('/admin?');
+
   app.addHook('onSend', async (request, reply) => {
-    if (request.url === '/admin' || request.url.startsWith('/admin/')) void reply.headers(SECURITY_HEADERS);
+    if (isAdmin(request.url)) void reply.headers(SECURITY_HEADERS);
+  });
+
+  // Host y origen, antes que la sesion y que el limite de entrada.
+  app.addHook('onRequest', async (request, reply) => {
+    if (!isAdmin(request.url)) return;
+    const host = request.headers.host?.toLowerCase();
+    if (allowedHosts !== undefined && (host === undefined || !allowedHosts.has(host))) {
+      return fail(reply, 421, 'REJECTED', 'host no admitido en la consola');
+    }
+    const unsafe = request.method !== 'GET' && request.method !== 'HEAD';
+    if (unsafe && request.url.startsWith('/admin/api/') && !sameHost(request.headers.origin, host)) {
+      return fail(reply, 403, 'REJECTED', 'origen ausente o distinto del de la consola');
+    }
   });
 
   // --- Sesion ---
 
   const sessionOf = (request: FastifyRequest): string | null => {
-    const token = cookieValue(request, SESSION_COOKIE);
+    const token = cookieValue(request, cookieName);
     if (token === null || token === '') return null;
     const id = digest(token).toString('hex');
     const expires = sessions.get(id);
@@ -206,7 +262,7 @@ export function registerAdmin(app: FastifyInstance, options: AdminOptions, deps:
 
   const cookie = (request: FastifyRequest, token: string, maxAgeSeconds: number) =>
     [
-      `${SESSION_COOKIE}=${token}`,
+      `${cookieName}=${token}`,
       'Path=/admin',
       'HttpOnly',
       'SameSite=Strict',

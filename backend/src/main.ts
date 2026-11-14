@@ -10,6 +10,7 @@
  * `initialize_game` antes de la primera escritura.
  */
 import { createSolanaRpc } from '@solana/kit';
+import { loopbackHosts } from './admin.js';
 import { loadConfig } from './config.js';
 import { openDatabase } from './db.js';
 import { deriveAuthority } from './keys.js';
@@ -21,6 +22,7 @@ const config = loadConfig();
 const db = openDatabase(config.databasePath);
 const authority = await authoritySigner(deriveAuthority(config.masterSeed, config.gameId));
 const rpc = createSolanaRpc(config.rpcUrl);
+const allowedHosts = loopbackHosts(config.host, config.port);
 const app = await buildServer({
   db,
   gameId: config.gameId,
@@ -31,7 +33,11 @@ const app = await buildServer({
   rpc,
   logger: true,
   readRateLimit: config.readRateLimit,
-  admin: { key: config.adminKey, explorerTxUrl: config.explorerTxUrl },
+  admin: {
+    key: config.adminKey,
+    explorerTxUrl: config.explorerTxUrl,
+    ...(allowedHosts === undefined ? {} : { allowedHosts }),
+  },
 });
 const stopTracker = startTracker({
   db,
