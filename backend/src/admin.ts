@@ -10,7 +10,8 @@
  *   POST   /admin/api/collections          el mismo manejador que POST /v1/collections
  *   GET    /admin/api/items                el mismo listado que GET /v1/items
  *   POST   /admin/api/items                el mismo manejador que POST /v1/items
- *   GET    /admin/api/operations           las 50 ultimas, con enlace a su transaccion
+ *   GET    /admin/api/operations           las 50 ultimas, con enlace a su transaccion, su tipo y, en
+ *                                          un transfer, entre quien
  *   GET    /admin/api/operations/{id}      una, con enlace a su transaccion
  *   GET    /admin/api/holders/{ref}/items  inventario por holder_id o por external_id ya registrado
  *
@@ -103,9 +104,17 @@ export interface AdminOperation {
   error: { code: string; message: string } | null;
   signature: string | null;
   explorer_url: string | null;
+  /** El tipo que crea un `create_item` o que mueve un `transfer`. */
   item: { item_id: string; name: string } | null;
+  /** En un `transfer`, entre quien. El `external_id` es el identificador del jugador en el juego. */
+  transfer: { from: AdminHolder; to: AdminHolder } | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface AdminHolder {
+  holder_id: string;
+  external_id: string;
 }
 
 interface OperationRow {
@@ -120,11 +129,20 @@ interface OperationRow {
   updated_at: string;
   item_id: string | null;
   item_name: string | null;
+  from_holder_id: string | null;
+  from_external_id: string | null;
+  to_holder_id: string | null;
+  to_external_id: string | null;
 }
 
+/** El tipo sale de `items.operation_id` en un `create_item` y de `operations.item_id` en un `transfer`. */
 const OPERATION_SELECT = `SELECT o.operation_id, o.kind, o.state, o.step, o.signature, o.error_code, o.error_message,
-       o.created_at, o.updated_at, i.item_id, i.name AS item_name
-  FROM operations o LEFT JOIN items i ON i.operation_id = o.operation_id`;
+       o.created_at, o.updated_at, i.item_id, i.name AS item_name,
+       o.from_holder_id, hf.external_id AS from_external_id, o.to_holder_id, ht.external_id AS to_external_id
+  FROM operations o
+  LEFT JOIN items i ON i.item_id = COALESCE(o.item_id, (SELECT c.item_id FROM items c WHERE c.operation_id = o.operation_id))
+  LEFT JOIN holders hf ON hf.holder_id = o.from_holder_id
+  LEFT JOIN holders ht ON ht.holder_id = o.to_holder_id`;
 
 export function registerAdmin(app: FastifyInstance, options: AdminOptions, deps: AdminDeps): void {
   const { db } = deps;
@@ -152,6 +170,13 @@ export function registerAdmin(app: FastifyInstance, options: AdminOptions, deps:
     signature: r.signature,
     explorer_url: explorerUrl(r.signature),
     item: r.item_id === null ? null : { item_id: r.item_id, name: r.item_name ?? '' },
+    transfer:
+      r.from_holder_id === null || r.to_holder_id === null
+        ? null
+        : {
+            from: { holder_id: r.from_holder_id, external_id: r.from_external_id ?? '' },
+            to: { holder_id: r.to_holder_id, external_id: r.to_external_id ?? '' },
+          },
     created_at: r.created_at,
     updated_at: r.updated_at,
   });

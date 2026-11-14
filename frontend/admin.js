@@ -25,6 +25,15 @@ function randomSuffix(n = 6) {
 const badge = state => `<span class="badge ${esc(state)}">${esc(state)}</span>`;
 const qualitiesHtml = q => Object.entries(q).map(([k, v]) => `<code>${esc(k)}=${esc(v)}</code>`).join(" ") || "—";
 const KIND = { create_item: "Crear tipo", grant: "Entregar", transfer: "Transferir" };
+/* Las marcas de tiempo llegan en UTC (ISO 8601); se muestran en la hora local del navegador. */
+const localTime = iso => new Date(iso).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "medium" });
+/** Qué hace una operación, en una línea: el tipo y, en una transferencia, de quién a quién. */
+function actionHtml(o) {
+  let html = esc(KIND[o.kind] || o.kind);
+  if (o.transfer && o.item) html += ` «${esc(o.item.name)}»<div class="muted small">${esc(o.transfer.from.external_id)} → ${esc(o.transfer.to.external_id)}</div>`;
+  else if (o.item) html += ` <span class="muted">«${esc(o.item.name)}»</span>`;
+  return html;
+}
 
 /** Clave de idempotencia de la consola: SHA-256 en hexadecimal de «operación:call_id». */
 async function idempotencyKey(op, callId) {
@@ -222,19 +231,20 @@ views.operations = {
   },
   async tick() {
     const { body } = await api("GET", "/operations");
-    setHtml($("#list"), `<table><tr><th>Operación</th><th>Acción</th><th>Estado</th><th>Transacción</th><th>Actualizada</th></tr>${
-      body.operations.map(o => `<tr><td>${operationLink(o.operation_id)}</td><td>${esc(KIND[o.kind] || o.kind)}${o.item ? ` <span class="muted">«${esc(o.item.name)}»</span>` : ""}</td>
-        <td>${badge(o.state)}${o.error ? `<div class="error">${esc(o.error.code)}</div>` : ""}</td><td>${explorer(o)}</td><td>${esc(o.updated_at)}</td></tr>`).join("")
-      || `<tr><td colspan="5" class="muted">Aún no hay operaciones.</td></tr>`}</table>`);
+    setHtml($("#list"), `<table><tr><th>Hora</th><th>Acción</th><th>Operación</th><th>Estado</th><th>Transacción</th><th>Actualizada</th></tr>${
+      body.operations.map(o => `<tr><td>${esc(localTime(o.created_at))}</td><td>${actionHtml(o)}</td><td>${operationLink(o.operation_id)}</td>
+        <td>${badge(o.state)}${o.error ? `<div class="error">${esc(o.error.code)}</div>` : ""}</td><td>${explorer(o)}</td><td>${esc(localTime(o.updated_at))}</td></tr>`).join("")
+      || `<tr><td colspan="6" class="muted">Aún no hay operaciones.</td></tr>`}</table>`);
     if (!this.current) { setHtml($("#detail"), ""); return; }
     try {
       const { body: op } = await api("GET", `/operations/${encodeURIComponent(this.current)}`);
       setHtml($("#detail"), `<h2>${esc(op.operation_id)} ${badge(op.state)}</h2>${steps(op)}
         <p>${esc(KIND[op.kind] || op.kind)}${op.item ? ` del tipo «${esc(op.item.name)}» <span class="mono muted">${esc(op.item.item_id)}</span>` : ""}${op.step === 2 ? " — segundo paso (entrega)" : ""}</p>
+        ${op.transfer ? `<p>De ${esc(op.transfer.from.external_id)} <span class="mono muted">${esc(op.transfer.from.holder_id)}</span> a ${esc(op.transfer.to.external_id)} <span class="mono muted">${esc(op.transfer.to.holder_id)}</span></p>` : ""}
         ${op.state === "applied" ? `<p class="muted small">Confirmada pero no final: todavía puede pasar a failed. No la des por buena.</p>` : ""}
         ${op.error ? `<p class="error">${esc(op.error.code)} — ${esc(op.error.message)}</p>` : ""}
         <p>Transacción: ${explorer(op)}</p>
-        <p class="muted small">Creada ${esc(op.created_at)} · actualizada ${esc(op.updated_at)}</p>`);
+        <p class="muted small">Creada ${esc(localTime(op.created_at))} · actualizada ${esc(localTime(op.updated_at))}</p>`);
     } catch (e) {
       setHtml($("#detail"), `<p class="error">${esc(e.message)}</p>`);
     }

@@ -55,6 +55,28 @@ export function createOperation(db: Db, kind: OperationKind, payload: unknown = 
   return id;
 }
 
+/** Que tipo transfiere un `transfer` y entre quien. */
+export interface TransferParties {
+  readonly itemId: string;
+  readonly fromHolderId: string;
+  readonly toHolderId: string;
+}
+
+/**
+ * Anota en un `transfer` el tipo y los dos tenedores (W1). No cambia nada del seguimiento: solo lo
+ * muestra la consola, porque sin ello una transferencia no se distingue de otra. Pensada para ir en
+ * la misma transaccion SQLite que `createOperation`.
+ */
+export function recordTransferParties(db: Db, operationId: string, parties: TransferParties): void {
+  const result = db
+    .prepare(
+      `UPDATE operations SET item_id = ?, from_holder_id = ?, to_holder_id = ?
+        WHERE operation_id = ? AND kind = 'transfer'`,
+    )
+    .run(parties.itemId, parties.fromHolderId, parties.toHolderId, operationId);
+  if (result.changes === 0) throw new OperationNotFoundError(`${operationId}: no es un transfer`);
+}
+
 /** La transaccion de un paso, tal como la necesita el seguimiento. */
 export interface Submission {
   readonly signature: string;

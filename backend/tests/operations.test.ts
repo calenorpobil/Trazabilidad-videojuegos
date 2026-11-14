@@ -8,6 +8,7 @@ import {
   getOperation,
   openOperations,
   recordSignature,
+  recordTransferParties,
   transitionOperation,
 } from '../src/operations.js';
 
@@ -156,5 +157,17 @@ describe('openOperations', () => {
       },
       expect.objectContaining({ operationId: applied, state: 'applied', payload: null }),
     ]);
+  });
+});
+
+describe('partes de un transfer (W1)', () => {
+  it('solo se anotan en un transfer, y las tres juntas', () => {
+    const db = openDatabase(':memory:');
+    expect(() =>
+      recordTransferParties(db, createOperation(db, 'grant'), { itemId: 'itm_x', fromHolderId: 'hld_a', toHolderId: 'hld_b' }),
+    ).toThrow(OperationNotFoundError);
+    const id = createOperation(db, 'transfer');
+    // El esquema no admite una parte suelta.
+    expect(() => db.prepare("UPDATE operations SET from_holder_id = 'hld_a' WHERE operation_id = ?").run(id)).toThrow(/CHECK/);
   });
 });

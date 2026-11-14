@@ -60,7 +60,7 @@ import { claim, findAccepted, isValidIdempotencyKey, type AcceptedResponse } fro
 import { newId } from './ids.js';
 import { readHolderInventory, type InventoryRpc } from './inventory.js';
 import { EXTERNAL_ID_MAX } from './keys.js';
-import { createOperation, getOperation, recordSignature } from './operations.js';
+import { createOperation, getOperation, recordSignature, recordTransferParties } from './operations.js';
 import { FixedWindowLimiter } from './rate-limit.js';
 import { rateLimitOf, send, simulate } from './submission.js';
 import { planItemCreation, planTransfer, type TransactionDraft } from './transactions.js';
@@ -374,6 +374,7 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
           transaction,
           register: () => {
             const operationId = createOperation(db, 'transfer');
+            recordTransferParties(db, operationId, { itemId, fromHolderId: from.holderId, toHolderId: to.holderId });
             recordSignature(db, operationId, {
               signature: getSignatureFromTransaction(transaction),
               lastValidBlockHeight: lifetime.lastValidBlockHeight,

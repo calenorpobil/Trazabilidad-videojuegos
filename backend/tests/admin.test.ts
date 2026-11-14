@@ -205,12 +205,45 @@ describe('datos: los mismos manejadores que la API', () => {
       signature,
       explorer_url: `https://explorer.test/tx/${signature}?cluster=devnet`,
       item: { item_id: created.body?.['item_id'], name: 'Espada' },
+      transfer: null,
       created_at: expect.any(String),
       updated_at: expect.any(String),
     });
     const list = await admin(cookie, 'GET', '/admin/api/operations');
     expect(list.body).toEqual({ operations: [one.body] });
     expect((await admin(cookie, 'GET', '/admin/api/operations/opr_nada')).status).toBe(404);
+  });
+
+  it('una transferencia dice que tipo mueve y entre quien', async () => {
+    const cookie = await session();
+    const collectionId = (await admin(cookie, 'POST', '/admin/api/collections', { name: 'Armeria' })).body?.['collection_id'];
+    const created = await admin(cookie, 'POST', '/admin/api/items', {
+      collection_id: collectionId,
+      name: 'Espada',
+      symbol: 'SWORD',
+      initial_grant: { holder: { external_id: 'player-42' }, amount: 3 },
+    });
+    // Las transferencias no se hacen desde la consola (8.1, recorte 5): llegan del servidor de juego.
+    const sent = await app.inject({
+      method: 'POST',
+      url: `/v1/items/${created.body?.['item_id'] as string}/transfer`,
+      headers: { authorization: `Bearer ${WRITE}`, 'idempotency-key': 'transferencia' },
+      payload: { from: { external_id: 'player-42' }, to: { external_id: 'player-77' }, amount: 1 },
+    });
+    expect(sent.statusCode).toBe(202);
+    const { operation_id, from_holder_id, to_holder_id } = sent.json() as Record<string, string>;
+
+    const r = await admin(cookie, 'GET', `/admin/api/operations/${operation_id as string}`);
+    expect(r.body).toMatchObject({
+      kind: 'transfer',
+      item: { item_id: created.body?.['item_id'], name: 'Espada' },
+      transfer: {
+        from: { holder_id: from_holder_id, external_id: 'player-42' },
+        to: { holder_id: to_holder_id, external_id: 'player-77' },
+      },
+    });
+    const list = (await admin(cookie, 'GET', '/admin/api/operations')).body?.['operations'] as { kind: string }[];
+    expect(list.map((o) => o.kind)).toEqual(['transfer', 'create_item']);
   });
 
   it('el inventario se consulta por holder_id o por external_id registrado, sin registrar ninguno nuevo', async () => {

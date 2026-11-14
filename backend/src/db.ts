@@ -3,7 +3,8 @@
  *
  * El esquema sale de 4.4, con las revisiones del 8-nov-2026 (`idempotency` guarda la respuesta
  * aceptada y `holders` guarda el mapa de tenedores) y del 12-nov-2026 (`operations.step` y
- * `operations.payload`, P11; `operations.last_valid_block_height`, P13). Se cambio la version 1 sin migrar porque no hay nada desplegado. La version va en `PRAGMA user_version`; no hay
+ * `operations.payload`, P11; `operations.last_valid_block_height`, P13) y del 14-nov-2026 (que tipo
+ * transfiere un `transfer` y entre quien, W1). Se cambio la version 1 sin migrar porque no hay nada desplegado. La version va en `PRAGMA user_version`; no hay
  * herramienta de migraciones porque solo existe la version 1.
  */
 import Database from 'better-sqlite3';
@@ -40,13 +41,20 @@ CREATE TABLE operations (
   step          INTEGER NOT NULL DEFAULT 1 CHECK (step IN (1, 2)),
   -- JSON con lo que hace falta para construir el paso pendiente; NULL si no queda ninguno.
   payload       TEXT,
+  -- Que tipo transfiere un transfer y entre quien (W1). Solo lo muestra la consola /admin; las
+  -- tres van juntas, y en las demas operaciones van vacias.
+  item_id        TEXT REFERENCES items (item_id),
+  from_holder_id TEXT REFERENCES holders (holder_id),
+  to_holder_id   TEXT REFERENCES holders (holder_id),
   error_code    TEXT,
   error_message TEXT,
   created_at    TEXT NOT NULL,
   updated_at    TEXT NOT NULL,
   -- Una operacion lleva error si y solo si esta en failed (contrato, 5.1).
   CHECK ((state = 'failed') = (error_code IS NOT NULL)),
-  CHECK ((signature IS NULL) = (last_valid_block_height IS NULL))
+  CHECK ((signature IS NULL) = (last_valid_block_height IS NULL)),
+  CHECK ((item_id IS NULL) = (from_holder_id IS NULL) AND (from_holder_id IS NULL) = (to_holder_id IS NULL)),
+  CHECK (item_id IS NULL OR kind = 'transfer')
 );
 
 CREATE TABLE items (
