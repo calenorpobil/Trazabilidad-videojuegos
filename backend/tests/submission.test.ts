@@ -31,8 +31,8 @@ describe('failingProgram', () => {
 });
 
 describe('classifyFailure', () => {
-  it('la autoridad sin fondos para la comision, la renta o sin cuenta es INSUFFICIENT_FUNDS', () => {
-    for (const err of ['InsufficientFundsForFee', 'AccountNotFound', { InsufficientFundsForRent: { account_index: 0 } }]) {
+  it('la autoridad sin fondos para la comision o la renta, o sin cuenta, es INSUFFICIENT_FUNDS', () => {
+    for (const err of ['InsufficientFundsForFee', 'InvalidAccountForFee', 'AccountNotFound', { InsufficientFundsForRent: { account_index: 0 } }]) {
       expect(classifyFailure(err as TransactionError, []).code).toBe('INSUFFICIENT_FUNDS');
     }
   });

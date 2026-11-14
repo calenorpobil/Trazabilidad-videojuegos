@@ -111,11 +111,12 @@ la propuesta; si no está en ella, no entra.
   (fastify) con `POST /v1/collections`, `POST /v1/items`, `POST /v1/items/{id}/transfer`,
   `GET /v1/holders/{id}/items` y `GET /v1/operations/{id}`, credenciales e idempotencia. `npm start` y
   `CHAIN_RPC_URL`. `test:devnet` también por HTTP (V17).
-- Bloque 5 (12-nov-2026, rama `cierre-q12`): **hecho en tests; falta devnet (P15).** P13 decidido:
+- Bloque 5 (12-nov-2026, rama `cierre-q12`; devnet el 14-nov): **hecho.** P13 decidido:
   `operations.last_valid_block_height`. Hay un bucle de seguimiento (`src/tracker.ts`, arrancado en `main.ts`) con caducidad por altura
   finalizada, y el `grant` de un tipo partido sale de `payload`. La simulación va antes de `claim` (`src/submission.ts`):
   `503`/`INSUFFICIENT_FUNDS` y `409` sin guardar la clave. Saldo de una cuenta existente en `planTransfer`. Un 429 del nodo da
-  `RATE_LIMITED`. Ver V18.
+  `RATE_LIMITED`. En devnet: tipo partido, `409` y `503` comprobados, y el `500` de V17 era un 429. En devnet no se llega a ver
+  `applied`: allí finaliza casi al instante. Ver V18.
 - **Siguiente: W1.** Huecos menores en P14.
 - Requisitos de entrega del máster: propuesta, 0.1. Revísalos antes de planificar un bloque.
 - Ver `docs/seguimiento/verificaciones.md` para lo que hay que comprobar antes de OC1 y del

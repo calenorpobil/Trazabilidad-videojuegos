@@ -59,7 +59,9 @@ export function failingProgram(logs: readonly string[]): string | null {
 
 /** Traduce el error de una transaccion, simulada o ya en la cadena, a una categoria del contrato. */
 export function classifyFailure(err: TransactionError, logs: readonly string[]): Failure {
-  if (err === 'InsufficientFundsForFee' || err === 'AccountNotFound') return FUNDS;
+  // InvalidAccountForFee: lo que devuelve devnet al simular con una pagadora que nunca tuvo fondos (V18,
+  // 14-nov-2026). Tambien saldria con una pagadora con datos, pero la autoridad es siempre una clave normal.
+  if (err === 'InsufficientFundsForFee' || err === 'InvalidAccountForFee' || err === 'AccountNotFound') return FUNDS;
   if (err === 'BlockhashNotFound') return EXPIRED;
   if (typeof err !== 'object') return INTERNAL;
   if ('InsufficientFundsForRent' in err) return FUNDS;

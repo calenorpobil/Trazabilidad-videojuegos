@@ -445,10 +445,33 @@ derivada, que necesita fondos y su `initialize_game`, y para eso no hay todavía
   `RATE_LIMITED` con su `Retry-After`. Cualquier otro fallo, `500` / `INTERNAL`. Es la explicación más probable del `500` de V17,
   pero eso sigue sin comprobar.
 
-**Sin comprobar en devnet todavía.** `npm run test:devnet` lleva ahora las operaciones HTTP hasta `settled` con
-`trackOnce`, y prueba por HTTP un tipo partido, una transferencia sin saldo suficiente (`409`) y una autoridad nunca financiada
-(`503`, por `AccountNotFound`). **No se ha ejecutado** todavía. Las dos ramas de `Custom: 1` sólo tienen tests con logs construidos
-según el formato leído, no logs reales.
+**Prueba manual en devnet** (`npm run test:devnet`, 14-nov-2026; tres ejecuciones; la buena es el juego
+`b4-1794678740`). Las operaciones HTTP llegan a `settled` con `trackOnce`, y `getTransaction` da **una firma** en
+cada transacción, también en las dos del tipo partido:
+
+| Paso por HTTP | CU | Firma |
+|---|---|---|
+| `POST /v1/items` (`create_item` + `grant` 3) | 90.347 | `3x937WYzki8VwFWFj9jSPHmoJKTmSdLsMfSA5ox4WhdZfQgXWcacYyyPQ7nnVrDbcnjVh9Upvs7ccghmDeCw5Wg1` |
+| `POST …/transfer` 2 | 37.276 | `39ocBbvyECvk5uqeYvKS63ao7dMtXpxmYeYiB5S8ympNJR1ADa4tEV5GuZXSYkoDk5YHkedNS71oKKdKouJ3m3vV` |
+| Tipo partido, paso 1 (`create_item`) | 134.159 | `2SniHtWgVpL8ivQ7kYrBxSBBFtvWUohhq9YgKRG4Lw2y9w4SwAw2PXiyJR7i7ofJMDCNmzLrCM2hk3oEisqiFhjf` |
+| Tipo partido, paso 2 (`grant` 1, enviado por el seguimiento) | 48.913 | `8QuzmUbmiYFRiYpNb2UaRXQhP6uHuC8UyUL57HcLfWEbgVxTd7LzmxrhxrEkqSpnH3SzDacgPX8aSUrQHjmAYHc` |
+
+- **Inventarios** 1 y 2, como en V17. Transferir 2 desde un emisor con 1 da `409` / `INSUFFICIENT_BALANCE`.
+- **Autoridad nunca financiada:** la simulación de devnet devuelve **`InvalidAccountForFee`**, no `AccountNotFound`
+  como se suponía. La primera ejecución respondió por eso `500`. Desde entonces `InvalidAccountForFee` cuenta como
+  `INSUFFICIENT_FUNDS`, porque la autoridad es siempre una clave normal y no una cuenta con datos. Ahora responde
+  `503` / `INSUFFICIENT_FUNDS`.
+- **El `500` de V17 era un límite de tasa.** La lectura de un inventario recibió un 429 del nodo público, en las tres
+  ejecuciones. Ahora el backend lo devuelve como `429` / `RATE_LIMITED` con `Retry-After: 10`, y el script, igual que el addon,
+  espera y reintenta. En la primera ejecución el script aún no reintentaba y se detuvo ahí.
+- **En devnet no se llega a ver `applied`.** En la primera consulta, segundo y medio después del envío, el nodo ya da la firma
+  como `finalized`. Medido aparte: `getBlockHeight` en `confirmed` y en `finalized` coinciden (diferencia 0 en tres lecturas,
+  altura ~509.390.000). Una sola vuelta lleva la operación de `pending` a `settled` pasando por `applied`, que el contrato
+  permite (7). La causa, una finalidad casi inmediata en devnet, **no está comprobada**. La regla de caducidad no cambia: usa la
+  altura finalizada, y si la finalidad tarda más, la caducidad sólo llega antes o después.
+
+Las dos ramas de `Custom: 1` (sistema y Token-2022) siguen probadas sólo con logs construidos según el formato leído:
+la comprobación optimista del saldo y la simulación las paran antes de que lleguen a la cadena (P15).
 
 ---
 
@@ -463,6 +486,6 @@ decidido el mismo día: `operations.last_valid_block_height` (V18).
 | P2 | Si el delegado permanente puede reasignarse tras la creación del activo. Ya no condiciona la rotación: el delegado es una PDA que no cambia | Nada | Sólo si hace falta |
 | P4 | Texto literal vigente de la regla de onboarding de Steam sobre blockchain, y las políticas actuales de Google Play y App Store | Último bloque (aviso del README) | Leer las políticas, citar con fecha |
 | P5 | Actualizar a la 4.7.2 el Godot de la máquina de desarrollo, que tiene la 4.7.1 | Fase A1 | Instalar y anotar |
-| P15 | Ejecutar `npm run test:devnet` con el seguimiento, el tipo partido, el `409` y el `503` (V18), y capturar unos logs reales de `Custom: 1` del programa de sistema y de Token-2022 para contrastar la clasificación | Nada; antes del último bloque | Ejecutarlo y anotar las firmas en V18 |
+| P15 | Capturar logs reales de `Custom: 1` del programa de sistema y de Token-2022 para contrastar la clasificación (V18). Lo demás de `test:devnet` quedó comprobado el 14-nov-2026 | Nada | Sólo si sobra tiempo: simular a mano una transferencia por encima del saldo y una autoridad con fondos para la comisión pero no para la renta |
 | P14 | Huecos del contrato que salieron al escribir el servidor. `name` de `POST /v1/collections` no tiene límite: se exige no vacío y el tope es el del cuerpo (1 MB). El `read_token` «va limitado por tasa» (contrato, 2), pero ningún bloque lo asigna. `initialize_game` no tiene comando para crear el juego de un despliegue | W1 (límite de tasa) y A3 (crear el juego de la demo) | Decidir si se fija un límite al nombre; asignar el resto a su bloque |
 | P12 | **Decisión pendiente del responsable:** alcance de OpenBao, que sugiere el tutor (Q12). A: guardar sólo la semilla en su almacén KV (~1 h). B: que la autoridad firme dentro de OpenBao con Transit (ed25519) y se rote con `rotate_authority` (~4 h; cambia 4.3). C: trabajo futuro en el README. Para B, verificar antes que Transit firma ed25519 puro sobre los bytes del mensaje, sin *prehash*. Leído el 12-nov-2026 en su documentación (2.7.x): Transit admite ed25519 para firmar y rotar, e importar claves; licencia MPL-2.0 y modo `server -dev` | Nada hasta que se decida; si es B, antes del último bloque | Decidir; si B, plazo de 4 h y vuelta a A si tras 2 h no hay una firma válida en devnet |

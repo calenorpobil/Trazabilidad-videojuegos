@@ -186,11 +186,23 @@ const http = await buildServer({
 });
 
 let keyCounter = 0;
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Una peticion como la haria el addon: ante `429` / `RATE_LIMITED` (el nodo publico de devnet limita
+ * la tasa) espera `Retry-After` y reintenta, con la MISMA clave de idempotencia.
+ */
 async function raw(server: typeof http, method: 'GET' | 'POST', url: string, body?: object) {
   const headers: Record<string, string> = { authorization: `Bearer ${method === 'GET' ? READ_TOKEN : WRITE_KEY}` };
   if (method === 'POST') headers['idempotency-key'] = `devnet-${gameId}-${++keyCounter}`;
-  const response = await server.inject({ method, url, headers, ...(body === undefined ? {} : { payload: body }) });
-  return { status: response.statusCode, json: response.json() as Record<string, unknown> };
+  for (let attempt = 1; ; attempt++) {
+    const response = await server.inject({ method, url, headers, ...(body === undefined ? {} : { payload: body }) });
+    const json = response.json() as Record<string, unknown>;
+    if (response.statusCode !== 429 || attempt === 6) return { status: response.statusCode, json };
+    const wait = Number(response.headers['retry-after'] ?? 2) * 1000;
+    console.warn(`${method} ${url}: 429 RATE_LIMITED, reintento ${attempt} en ${wait} ms`);
+    await sleep(wait);
+  }
 }
 
 async function request(method: 'GET' | 'POST', url: string, body?: object): Promise<Record<string, unknown>> {
@@ -213,6 +225,7 @@ const tracker = {
  */
 async function settle(label: string, operationId: string): Promise<void> {
   const seen: string[] = [];
+  const observed: string[] = [];
   const signatures = new Set<Signature>();
   const deadline = Date.now() + 120_000;
   for (;;) {
@@ -226,10 +239,23 @@ async function settle(label: string, operationId: string): Promise<void> {
     if (state === 'settled') break;
     if (state === 'failed') throw new Error(`HTTP ${label}: ${JSON.stringify(operation)}`);
     if (Date.now() > deadline) throw new Error(`HTTP ${label}: sin settled en 120 s (${seen.join(' -> ')})`);
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    await trackOnce(tracker);
+    await sleep(1500);
+    try {
+      await trackOnce(tracker);
+    } catch (error) {
+      // Como en startTracker: la vuelta siguiente lo intenta de nuevo.
+      console.warn(`seguimiento: vuelta fallida (${(error as Error).message})`);
+    }
+    // Diagnostico: lo que dice el nodo de la firma en curso, sin el historico.
+    try {
+      const [status] = (await rpc.getSignatureStatuses([row.signature]).send()).value;
+      const raw = status === undefined || status === null ? 'null' : `${status.confirmationStatus ?? '?'}${status.err === null ? '' : ' con error'}`;
+      if (observed.at(-1) !== raw) observed.push(raw);
+    } catch {
+      // limite de tasa: no importa para el diagnostico
+    }
   }
-  console.warn(`HTTP ${label}: ${seen.join(' -> ')}`);
+  console.warn(`HTTP ${label}: ${seen.join(' -> ')} (firma en el nodo: ${observed.join(' -> ')})`);
   for (const signature of signatures) await checkOneSignature(`HTTP ${label}`, signature);
 }
 
