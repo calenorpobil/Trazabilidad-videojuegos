@@ -1,0 +1,93 @@
+/* Estilos de la consola, sacados de la maqueta (docs/especificacion/mockup-admin/index.html). */
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --ink: #1c2330; --muted: #5d6778; --line: #dde1e8;
+  --accent: #2f5fd0; --accent-ink: #ffffff; --ok: #1b7f4c; --warn: #9a6200; --bad: #b3261e;
+  --ok-bg: #e4f4ea; --warn-bg: #fdf0d5; --bad-bg: #fbe5e3; --info-bg: #e6edfb; --code-bg: #eef0f4;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12151b; --panel: #1b2029; --ink: #e8ebf1; --muted: #9aa4b5; --line: #2d3442;
+    --accent: #6f94f0; --accent-ink: #0d1220; --ok: #5fcf8f; --warn: #e8b04e; --bad: #f1807a;
+    --ok-bg: #17301f; --warn-bg: #352a12; --bad-bg: #3a1c1a; --info-bg: #1c2740; --code-bg: #232a36;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+code, pre, .mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 13px; }
+h1 { font-size: 20px; margin: 0 0 4px; }
+h2 { font-size: 16px; margin: 24px 0 8px; }
+.card > h2:first-child { margin-top: 0; }
+p { margin: 0 0 12px; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+button { font: inherit; cursor: pointer; }
+
+/* Entrada */
+#login { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 10; }
+#login form { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 24px; width: 100%; max-width: 380px; }
+#login .small { margin-top: 12px; }
+
+/* Estructura */
+.app { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+nav { background: var(--panel); border-right: 1px solid var(--line); padding: 16px 12px; }
+nav .brand { font-weight: 600; padding: 0 8px 12px; }
+nav .group { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 14px 8px 4px; }
+nav button { display: flex; width: 100%; align-items: center; gap: 8px; text-align: left; background: none; border: 0; border-radius: 6px; padding: 7px 8px; color: var(--ink); }
+nav button:hover { background: var(--code-bg); }
+nav button[aria-current="page"] { background: var(--info-bg); color: var(--accent); font-weight: 600; }
+main { padding: 24px; max-width: 1040px; width: 100%; min-width: 0; }
+.topbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+
+/* Componentes */
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; overflow-x: auto; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+label .hint { font-weight: 400; color: var(--muted); }
+label.inline { display: inline; font-weight: 400; }
+input[type=text], input[type=number], input[type=password], select {
+  width: 100%; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; }
+input:focus, select:focus, button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.field { margin-bottom: 12px; }
+.field.last { margin-bottom: 0; }
+.btn { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 6px; padding: 8px 14px; font-weight: 600; }
+.btn.secondary { background: none; color: var(--accent); border: 1px solid var(--line); }
+.btn.small { padding: 4px 9px; font-size: 13px; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.row { display: flex; gap: 8px; align-items: flex-end; }
+.row > * { flex: 1; }
+.row > .fixed { flex: 0 0 auto; }
+.pairs .pair { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin-bottom: 6px; }
+.badge { display: inline-block; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 1px 9px; }
+.badge.pending { background: var(--warn-bg); color: var(--warn); }
+.badge.applied { background: var(--info-bg); color: var(--accent); }
+.badge.settled { background: var(--ok-bg); color: var(--ok); }
+.badge.failed { background: var(--bad-bg); color: var(--bad); }
+.key { background: var(--code-bg); border-radius: 6px; padding: 6px 9px; word-break: break-all; font-size: 12px; margin-top: 4px; }
+.result { background: var(--code-bg); border-radius: 8px; padding: 12px; margin-top: 12px; overflow-x: auto; }
+.result pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
+.result .ok { color: var(--ok); } .result .bad { color: var(--bad); }
+.error { color: var(--bad); font-size: 13px; margin: 4px 0 0; }
+.error:empty { display: none; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; color: var(--muted); font-weight: 600; }
+td.num, th.num { text-align: right; }
+.link { background: none; border: 0; color: var(--accent); padding: 0; text-decoration: underline; font: inherit; }
+a { color: var(--accent); }
+.steps { display: flex; gap: 6px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
+.steps span { font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; color: var(--muted); }
+.steps span.on { background: var(--info-bg); color: var(--accent); border-color: transparent; font-weight: 600; }
+.steps span.done { background: var(--ok-bg); color: var(--ok); border-color: transparent; }
+.steps span.bad { background: var(--bad-bg); color: var(--bad); border-color: transparent; font-weight: 600; }
+.filters { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+.spaced { margin-top: 12px; }
+
+@media (max-width: 760px) {
+  .app { grid-template-columns: 1fr; }
+  nav { border-right: 0; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 4px; }
+  nav .brand, nav .group { width: 100%; }
+  nav button { width: auto; }
+  main { padding: 16px; }
+  .grid2, .filters { grid-template-columns: 1fr; }
+}

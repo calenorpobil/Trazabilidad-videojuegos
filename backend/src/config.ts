@@ -11,7 +11,15 @@
  *
  * `CHAIN_RPC_URL` es el nodo de la red; por defecto, devnet (propuesta, 11: mainnet esta fuera).
  *
- * Fuera de este bloque: la credencial de la consola (W1).
+ * Consola `/admin` (W1, propuesta 3):
+ * - `CHAIN_ADMIN_KEY`: su credencial, distinta del `write_key` y del `read_token`, que se cambia por
+ *   una cookie de sesion. Nunca en el repositorio.
+ * - `CHAIN_EXPLORER_TX_URL`: plantilla del enlace de una operacion a su transaccion, con
+ *   `{signature}`. Por defecto, el explorador de devnet. El enlace solo lo ve la consola.
+ *
+ * `CHAIN_READ_RATE_LIMIT`: lecturas por minuto y por IP con el `read_token` (P14). Por defecto 120:
+ * el addon sondea una operacion con un intervalo fijo (8.1, recorte 4), y una pantalla con varias
+ * operaciones en curso y su inventario cabe holgada.
  */
 import { readFileSync, statSync } from 'node:fs';
 import { z } from 'zod';
@@ -26,6 +34,9 @@ export interface Config {
   readonly host: string;
   readonly port: number;
   readonly rpcUrl: string;
+  readonly adminKey: string;
+  readonly readRateLimit: number;
+  readonly explorerTxUrl: string;
 }
 
 export class ConfigError extends Error {
@@ -33,6 +44,8 @@ export class ConfigError extends Error {
 }
 
 export const DEVNET_RPC_URL = 'https://api.devnet.solana.com';
+export const DEVNET_EXPLORER_TX_URL = 'https://explorer.solana.com/tx/{signature}?cluster=devnet';
+export const DEFAULT_READ_RATE_LIMIT = 120;
 
 /** Longitud minima de `write_key` y `read_token`: lo bastante para no adivinarse. */
 export const MIN_CREDENTIAL_LENGTH = 32;
@@ -50,6 +63,12 @@ const schema = z
     CHAIN_HOST: z.string().min(1).default('127.0.0.1'),
     CHAIN_PORT: z.coerce.number().int().min(1).max(65535).default(8787),
     CHAIN_RPC_URL: z.url({ protocol: /^https?$/ }).default(DEVNET_RPC_URL),
+    CHAIN_ADMIN_KEY: z.string().min(MIN_CREDENTIAL_LENGTH, `minimo ${MIN_CREDENTIAL_LENGTH} caracteres`),
+    CHAIN_READ_RATE_LIMIT: z.coerce.number().int().min(1).default(DEFAULT_READ_RATE_LIMIT),
+    CHAIN_EXPLORER_TX_URL: z
+      .string()
+      .refine((u) => u.startsWith('https://') && u.includes('{signature}'), 'https:// y con {signature}')
+      .default(DEVNET_EXPLORER_TX_URL),
   })
   .refine((e) => (e.CHAIN_MASTER_SEED === undefined) !== (e.CHAIN_MASTER_SEED_FILE === undefined), {
     message: 'define exactamente una: CHAIN_MASTER_SEED o CHAIN_MASTER_SEED_FILE',
@@ -59,6 +78,11 @@ const schema = z
     // Una lectura exige el read_token exactamente (contrato, 2): si coincidieran, no se distinguirian.
     message: 'CHAIN_WRITE_KEY y CHAIN_READ_TOKEN deben ser distintos',
     path: ['CHAIN_READ_TOKEN'],
+  })
+  .refine((e) => e.CHAIN_ADMIN_KEY !== e.CHAIN_WRITE_KEY && e.CHAIN_ADMIN_KEY !== e.CHAIN_READ_TOKEN, {
+    // Una credencial propia (propuesta, 3): quien tiene el read_token del binario no entra en la consola.
+    message: 'CHAIN_ADMIN_KEY debe ser distinta de CHAIN_WRITE_KEY y de CHAIN_READ_TOKEN',
+    path: ['CHAIN_ADMIN_KEY'],
   });
 
 /**
@@ -117,5 +141,8 @@ export function loadConfig(
     host: e.CHAIN_HOST,
     port: e.CHAIN_PORT,
     rpcUrl: e.CHAIN_RPC_URL,
+    adminKey: e.CHAIN_ADMIN_KEY,
+    readRateLimit: e.CHAIN_READ_RATE_LIMIT,
+    explorerTxUrl: e.CHAIN_EXPLORER_TX_URL,
   };
 }

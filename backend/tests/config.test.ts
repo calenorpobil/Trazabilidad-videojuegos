@@ -10,6 +10,7 @@ const common = {
   CHAIN_GAME_ID: 'chain-demo',
   CHAIN_WRITE_KEY: 'w'.repeat(32),
   CHAIN_READ_TOKEN: 'r'.repeat(32),
+  CHAIN_ADMIN_KEY: 'a'.repeat(32),
 };
 const base = { ...common, CHAIN_MASTER_SEED: SEED };
 
@@ -25,6 +26,25 @@ describe('loadConfig', () => {
     expect(c.port).toBe(8787);
     expect(c.databasePath).toBe('chain.db');
     expect(c.rpcUrl).toBe('https://api.devnet.solana.com');
+    expect(c.adminKey).toBe('a'.repeat(32));
+    expect(c.readRateLimit).toBe(120);
+    expect(c.explorerTxUrl).toBe('https://explorer.solana.com/tx/{signature}?cluster=devnet');
+  });
+
+  it('exige una credencial de la consola propia y larga', () => {
+    expect(() => loadConfig({ ...base, CHAIN_ADMIN_KEY: undefined })).toThrow(/CHAIN_ADMIN_KEY/);
+    expect(() => loadConfig({ ...base, CHAIN_ADMIN_KEY: 'corta' })).toThrow(ConfigError);
+    expect(() => loadConfig({ ...base, CHAIN_ADMIN_KEY: base.CHAIN_WRITE_KEY })).toThrow(/CHAIN_ADMIN_KEY/);
+    expect(() => loadConfig({ ...base, CHAIN_ADMIN_KEY: base.CHAIN_READ_TOKEN })).toThrow(/CHAIN_ADMIN_KEY/);
+  });
+
+  it('lee el limite de lecturas y la plantilla del explorador', () => {
+    expect(loadConfig({ ...base, CHAIN_READ_RATE_LIMIT: '30' }).readRateLimit).toBe(30);
+    expect(() => loadConfig({ ...base, CHAIN_READ_RATE_LIMIT: '0' })).toThrow(ConfigError);
+    const url = 'https://explorer.test/tx/{signature}';
+    expect(loadConfig({ ...base, CHAIN_EXPLORER_TX_URL: url }).explorerTxUrl).toBe(url);
+    expect(() => loadConfig({ ...base, CHAIN_EXPLORER_TX_URL: 'https://explorer.test/tx/' })).toThrow(ConfigError);
+    expect(() => loadConfig({ ...base, CHAIN_EXPLORER_TX_URL: 'http://explorer.test/{signature}' })).toThrow(ConfigError);
   });
 
   it('acepta otro nodo http(s) y rechaza lo que no es una URL', () => {

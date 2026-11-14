@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Administración de activos</title>
+<!-- Consola de administración de godot-chain (propuesta, 3). La sirve el backend bajo /admin y sólo habla con él. -->
+<link rel="stylesheet" href="/admin/admin.css">
+<script src="/admin/admin.js" defer></script>
+</head>
+<body>
+
+<div id="login" hidden>
+  <form id="loginForm">
+    <h1>Administración de activos</h1>
+    <p class="muted">Acceso para el equipo de desarrollo del juego.</p>
+    <div class="field">
+      <label for="key">Credencial de la consola</label>
+      <input id="key" type="password" autocomplete="current-password" required>
+    </div>
+    <button class="btn" type="submit">Entrar</button>
+    <p class="error" id="loginError" aria-live="polite"></p>
+    <p class="muted small">Es la credencial de administrador que se configura al arrancar el backend
+      (<span class="mono">CHAIN_ADMIN_KEY</span>), distinta de la clave de escritura y del token de lectura.</p>
+  </form>
+</div>
+
+<div class="app" id="app" hidden>
+  <nav id="nav" aria-label="Secciones"></nav>
+  <main>
+    <div class="topbar">
+      <div><h1 id="title"></h1><div class="muted" id="subtitle"></div></div>
+      <button class="link" id="logout" type="button">Salir</button>
+    </div>
+    <div id="view"></div>
+  </main>
+</div>
+
+</body>
+</html>

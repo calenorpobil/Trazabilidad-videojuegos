@@ -2,7 +2,9 @@
  * Arranque del backend: configuracion (variables de entorno), SQLite, nodo de la red, servidor y
  * bucle de seguimiento (`tracker.ts`).
  *
- *   CHAIN_GAME_ID=... CHAIN_MASTER_SEED_FILE=... CHAIN_WRITE_KEY=... CHAIN_READ_TOKEN=... npm start
+ *   CHAIN_GAME_ID=... CHAIN_MASTER_SEED_FILE=... CHAIN_WRITE_KEY=... CHAIN_READ_TOKEN=... CHAIN_ADMIN_KEY=... npm start
+ *
+ * La consola queda en http://127.0.0.1:8787/admin (W1).
  *
  * La autoridad sale de la semilla maestra (`keys.ts`) y debe tener fondos y su juego creado con
  * `initialize_game` antes de la primera escritura.
@@ -28,6 +30,8 @@ const app = await buildServer({
   authority,
   rpc,
   logger: true,
+  readRateLimit: config.readRateLimit,
+  admin: { key: config.adminKey, explorerTxUrl: config.explorerTxUrl },
 });
 const stopTracker = startTracker({
   db,

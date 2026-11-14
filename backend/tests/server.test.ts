@@ -18,6 +18,7 @@ import { findGameAddress, findItemMintAddress } from '../src/addresses.js';
 import { openDatabase, type Db } from '../src/db.js';
 import { resolveHolder } from '../src/holders.js';
 import { deriveAuthority, derivePlayer } from '../src/keys.js';
+import { transitionOperation } from '../src/operations.js';
 import { buildServer, type ChainRpc } from '../src/server.js';
 import { authoritySigner } from '../src/transactions.js';
 import { chainRpc, fakeChain, type FakeChain } from './fake-rpc.js';
@@ -35,7 +36,7 @@ let app: FastifyInstance;
 let authority: KeyPairSigner;
 let keyCounter = 0;
 
-async function start(gameId = GAME_ID): Promise<void> {
+async function start(gameId = GAME_ID, readRateLimit?: number): Promise<void> {
   db = openDatabase(':memory:');
   chain = fakeChain();
   authority = await authoritySigner(deriveAuthority(SEED, gameId));
@@ -47,6 +48,7 @@ async function start(gameId = GAME_ID): Promise<void> {
     readToken: READ,
     authority,
     rpc: chainRpc(chain) as ChainRpc,
+    ...(readRateLimit === undefined ? {} : { readRateLimit }),
   });
 }
 
@@ -400,7 +402,8 @@ describe('GET /v1/holders/{holder_id}/items', () => {
     expect((await call({ method: 'GET', url: '/v1/holders/hld_nada/items' })).status).toBe(404);
   });
 
-  it('devuelve el holder_id y sus tipos, con la forma del contrato', async () => {
+  /** El tipo de la fixture de devnet en manos de player-42, con su creacion en `state`. */
+  async function inventoryWithCreation(state: 'settled' | 'applied' | 'failed') {
     // Juego y tipo de la fixture de devnet, para que la autoridad del mint sea la PDA de este juego.
     const fixture = JSON.parse(readFileSync(new URL('./fixtures/devnet-item-mint.json', import.meta.url), 'utf8')) as {
       address: Address;
@@ -412,8 +415,8 @@ describe('GET /v1/holders/{holder_id}/items', () => {
     const collection = 'col_xR2SNQ2Am7QiZC1a';
     db.prepare("INSERT INTO collections VALUES (?, ?, 'Armeria', 't')").run(collection, fixture.gameId);
     db.prepare(
-      "INSERT INTO operations (operation_id, kind, state, created_at, updated_at) VALUES ('opr_1', 'create_item', 'settled', 't', 't')",
-    ).run();
+      "INSERT INTO operations (operation_id, kind, state, error_code, created_at, updated_at) VALUES ('opr_1', 'create_item', ?, ?, 't', 't')",
+    ).run(state, state === 'failed' ? 'EXPIRED' : null);
     db.prepare(
       `INSERT INTO items (item_id, collection_id, mint, name, symbol, uri, qualities, operation_id, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, 'opr_1', 't')`,
@@ -441,10 +444,112 @@ describe('GET /v1/holders/{holder_id}/items', () => {
     ];
     const r = await call({ method: 'GET', url: `/v1/holders/${player.holderId}/items` });
     expect(r.status).toBe(200);
+    return { r, player, fixture, collection };
+  }
+
+  it('devuelve el holder_id y sus tipos, con la forma del contrato', async () => {
+    const { r, player, fixture, collection } = await inventoryWithCreation('settled');
     expect(r.body).toEqual({
       holder_id: player.holderId,
       items: [{ item_id: fixture.itemId, collection_id: collection, ...SWORD, amount: 2 }],
     });
+  });
+
+  it('un tipo cuya creacion no esta en settled no aparece, aunque la cadena tenga saldo (contrato, 5.4)', async () => {
+    for (const state of ['applied', 'failed'] as const) {
+      const { r, player } = await inventoryWithCreation(state);
+      expect(r.body).toEqual({ holder_id: player.holderId, items: [] });
+    }
+  });
+});
+
+describe('GET /v1/collections y GET /v1/items (contrato, 5.3 y 5.4)', () => {
+  it('sin catalogo, listas vacias', async () => {
+    expect((await call({ method: 'GET', url: '/v1/collections' })).body).toEqual({ collections: [] });
+    expect((await call({ method: 'GET', url: '/v1/items' })).body).toEqual({ items: [] });
+  });
+
+  it('colecciones, la mas reciente primero, con la forma del contrato', async () => {
+    const first = await newCollection();
+    const second = (await call({ url: '/v1/collections', body: { name: 'Bestiario' } })).body['collection_id'];
+    const r = await call({ method: 'GET', url: '/v1/collections' });
+    expect(r.status).toBe(200);
+    expect(r.body).toEqual({
+      collections: [
+        { collection_id: second, name: 'Bestiario', created_at: expect.stringMatching(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/) },
+        { collection_id: first, name: 'Armeria', created_at: expect.any(String) },
+      ],
+    });
+  });
+
+  it('un create_item que caduca sigue en el listado con state failed, y nunca como settled', async () => {
+    const collection = await newCollection();
+    const expired = await newItem(collection);
+    const settled = await newItem(collection);
+    // Lo que hace el seguimiento cuando la altura finalizada pasa la cota sin ver la firma (V18).
+    transitionOperation(db, expired.body['operation_id'] as string, 'failed', { code: 'EXPIRED', message: 'caducada' });
+    transitionOperation(db, settled.body['operation_id'] as string, 'applied');
+    transitionOperation(db, settled.body['operation_id'] as string, 'settled');
+
+    const r = await call({ method: 'GET', url: '/v1/items' });
+    expect(r.status).toBe(200);
+    const items = r.body['items'] as Record<string, unknown>[];
+    expect(items.map((i) => [i['item_id'], i['state']])).toEqual([
+      [settled.body['item_id'], 'settled'],
+      [expired.body['item_id'], 'failed'],
+    ]);
+    expect(items[0]).toEqual({
+      item_id: settled.body['item_id'],
+      collection_id: collection,
+      ...SWORD,
+      operation_id: settled.body['operation_id'],
+      state: 'settled',
+      revision: 0,
+      edit: null,
+      created_at: expect.any(String),
+    });
+  });
+
+  it('filtra por collection_id; una coleccion inexistente es 404 y un parametro desconocido, 400', async () => {
+    const armeria = await newCollection();
+    const bestiario = (await call({ url: '/v1/collections', body: { name: 'Bestiario' } })).body['collection_id'] as string;
+    const sword = await newItem(armeria);
+    await newItem(bestiario);
+
+    const r = await call({ method: 'GET', url: `/v1/items?collection_id=${armeria}` });
+    expect((r.body['items'] as { item_id: string }[]).map((i) => i.item_id)).toEqual([sword.body['item_id']]);
+    expect((await call({ method: 'GET', url: '/v1/items?collection_id=col_nada' })).status).toBe(404);
+    const unknown = await call({ method: 'GET', url: '/v1/items?coleccion=x' });
+    expect(unknown.status).toBe(400);
+    expect(errorOf(unknown)).toBe('REJECTED');
+  });
+
+  it('son lecturas: exigen el read_token y rechazan el write_key', async () => {
+    for (const url of ['/v1/collections', '/v1/items']) {
+      expect((await call({ method: 'GET', url, token: WRITE })).status).toBe(401);
+      expect((await call({ method: 'GET', url, token: null })).status).toBe(401);
+    }
+  });
+});
+
+describe('limite de tasa de las lecturas (P14)', () => {
+  it('pasado el limite por IP, 429 RATE_LIMITED con Retry-After, tambien con credencial invalida', async () => {
+    await start(GAME_ID, 3);
+    for (let i = 0; i < 2; i++) expect((await call({ method: 'GET', url: '/v1/collections' })).status).toBe(200);
+    // Una credencial invalida tambien cuenta: el limite va antes, para que no sirva para probar tokens.
+    expect((await call({ method: 'GET', url: '/v1/items', token: 'x'.repeat(40) })).status).toBe(401);
+
+    const limited = await app.inject({ method: 'GET', url: '/v1/operations/opr_x', headers: { authorization: `Bearer ${READ}` } });
+    expect(limited.statusCode).toBe(429);
+    expect(Number(limited.headers['retry-after'])).toBeGreaterThanOrEqual(1);
+    expect(limited.json()).toEqual({ error: { code: 'RATE_LIMITED', message: expect.any(String), retryable: true } });
+  });
+
+  it('las escrituras no cuentan', async () => {
+    await start(GAME_ID, 1);
+    for (let i = 0; i < 3; i++) await newCollection();
+    expect((await call({ method: 'GET', url: '/v1/collections' })).status).toBe(200);
+    expect((await call({ method: 'GET', url: '/v1/collections' })).status).toBe(429);
   });
 });
 

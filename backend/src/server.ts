@@ -6,9 +6,14 @@
  *   POST /v1/items/{item_id}/transfer    escritura, 202 (bloque 4)
  *   GET  /v1/holders/{holder_id}/items   lectura (bloque 4)
  *   GET  /v1/operations/{operation_id}   lectura: lo que sondea el addon
+ *   GET  /v1/collections                 lectura (W1, contrato 5.3)
+ *   GET  /v1/items                       lectura (W1, contrato 5.4), con el estado de su creacion
  *
  * Lo demas responde `404`: `POST …/grants` y `PATCH /v1/items/{id}` quedan bajo la linea de corte
- * (propuesta, 8.1), y los listados de catalogo son del bloque W1.
+ * (propuesta, 8.1). La consola `/admin` (W1) esta en `admin.ts` y usa estos mismos manejadores.
+ *
+ * **Limite de tasa de las lecturas** (P14): por IP, antes de comprobar el `read_token`, para que
+ * tampoco sirva para probar tokens. Pasado el limite, `429` / `RATE_LIMITED` con `Retry-After`.
  *
  * **Orden de una escritura** (invariante 2 y revision del 12-nov-2026):
  *   1. si la clave ya esta aceptada, se devuelve lo guardado sin validar ni tocar la cadena;
@@ -25,14 +30,13 @@
  * otro fallo del nodo, `500` / `INTERNAL` (contrato, 6).
  *
  * Fuera de este modulo: el seguimiento `pending -> applied -> settled` y el segundo paso de un tipo
- * partido (`tracker.ts`); el limite de tasa del `read_token` y la consola `/admin` (W1).
+ * partido (`tracker.ts`).
  */
 import { createHash, timingSafeEqual } from 'node:crypto';
-import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest, type RouteHandlerMethod } from 'fastify';
 import {
   getSignatureFromTransaction,
   signTransactionMessageWithSigners,
-  type Address,
   type GetAccountInfoApi,
   type GetBlockHeightApi,
   type GetLatestBlockhashApi,
@@ -46,14 +50,18 @@ import {
 } from '@solana/kit';
 import { z } from 'zod';
 import { findGameAddress, findItemMintAddress } from './addresses.js';
+import { registerAdmin, type AdminOptions } from './admin.js';
+import { collectionExists, listCollections, listItems } from './catalog.js';
+import { DEFAULT_READ_RATE_LIMIT } from './config.js';
 import { errorBody, ERROR_HTTP_STATUS, IDEMPOTENCY_HEADER, RESERVED_QUALITY_KEY, type ErrorCode } from './contract.js';
 import { timestamp, type Db } from './db.js';
-import { resolveHolder, type HolderKeys, type HolderRef } from './holders.js';
+import { resolveHolder, type Holder, type HolderKeys, type HolderRef } from './holders.js';
 import { claim, findAccepted, isValidIdempotencyKey, type AcceptedResponse } from './idempotency.js';
 import { newId } from './ids.js';
 import { readHolderInventory, type InventoryRpc } from './inventory.js';
 import { EXTERNAL_ID_MAX } from './keys.js';
 import { createOperation, getOperation, recordSignature } from './operations.js';
+import { FixedWindowLimiter } from './rate-limit.js';
 import { rateLimitOf, send, simulate } from './submission.js';
 import { planItemCreation, planTransfer, type TransactionDraft } from './transactions.js';
 
@@ -79,6 +87,12 @@ export interface ServerOptions {
   readonly authority: TransactionSigner;
   readonly rpc: ChainRpc;
   readonly logger?: boolean;
+  /** Lecturas por minuto y por IP (P14). Por defecto, `DEFAULT_READ_RATE_LIMIT`. */
+  readonly readRateLimit?: number;
+  /** La consola `/admin`. Sin ella, sus rutas no existen (los tests de la API no la necesitan). */
+  readonly admin?: AdminOptions;
+  /** Reloj del limite de tasa y de las sesiones de la consola. Solo para tests. */
+  readonly now?: () => number;
 }
 
 /** Error con la forma del contrato (6). El `code` decide el estado HTTP. */
@@ -126,6 +140,8 @@ const itemBody = z.strictObject({
 
 const transferBody = z.strictObject({ from: holderRef, to: holderRef, amount });
 
+const itemsQuery = z.strictObject({ collection_id: z.string().min(1).optional() });
+
 // --- Credenciales (contrato, 2) ---
 
 const digest = (s: string): Buffer => createHash('sha256').update(s, 'utf8').digest();
@@ -159,6 +175,10 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   const game = await findGameAddress(gameId);
 
   const app = Fastify({ logger: options.logger ?? false });
+  const readLimiter = new FixedWindowLimiter(
+    { limit: options.readRateLimit ?? DEFAULT_READ_RATE_LIMIT, windowMs: 60_000 },
+    options.now,
+  );
 
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof ContractError) return sendError(reply, error.code, error.message);
@@ -185,6 +205,11 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     if (!bearerIs(request, writeDigest)) return sendError(reply, 'REJECTED', 'credencial de escritura invalida', 401);
   };
   const requireRead = async (request: FastifyRequest, reply: FastifyReply) => {
+    const verdict = readLimiter.take(request.ip);
+    if (!verdict.allowed) {
+      void reply.header('retry-after', verdict.retryAfterSeconds);
+      return sendError(reply, 'RATE_LIMITED', 'demasiadas lecturas: reintenta mas tarde');
+    }
     if (!bearerIs(request, readDigest)) return sendError(reply, 'REJECTED', 'credencial de lectura invalida', 401);
   };
 
@@ -228,7 +253,7 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     return reply.status(result.status).send(result.body);
   }
 
-  app.post('/v1/collections', { preHandler: requireWrite }, async (request, reply) =>
+  const createCollection: RouteHandlerMethod = async (request, reply) =>
     write(request, reply, async () => {
       const body = collectionBody.parse(request.body);
       return {
@@ -244,14 +269,12 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
           return { status: 201, body: { collection_id: collectionId }, operationId: null };
         },
       };
-    }),
-  );
+    });
 
-  app.post('/v1/items', { preHandler: requireWrite }, async (request, reply) =>
+  const createItem: RouteHandlerMethod = async (request, reply) =>
     write(request, reply, async () => {
       const body = itemBody.parse(request.body);
-      const collection = db.prepare('SELECT 1 FROM collections WHERE collection_id = ?').get(body.collection_id);
-      if (collection === undefined) throw new ContractError('NOT_FOUND', 'coleccion inexistente');
+      if (!collectionExists(db, body.collection_id)) throw new ContractError('NOT_FOUND', 'coleccion inexistente');
       const holder = holderOrNotFound(body.initial_grant.holder);
 
       const item = {
@@ -302,8 +325,23 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
           };
         },
       };
-    }),
-  );
+    });
+
+  const itemList: RouteHandlerMethod = async (request) => {
+    const query = itemsQuery.parse(request.query);
+    const collectionId = query.collection_id ?? null;
+    if (collectionId !== null && !collectionExists(db, collectionId)) {
+      throw new ContractError('NOT_FOUND', 'coleccion inexistente');
+    }
+    return { items: listItems(db, collectionId) };
+  };
+
+  const inventory = async (holder: Holder) => readHolderInventory(rpc, db, game, holder.address);
+
+  app.post('/v1/collections', { preHandler: requireWrite }, createCollection);
+  app.post('/v1/items', { preHandler: requireWrite }, createItem);
+  app.get('/v1/collections', { preHandler: requireRead }, async () => ({ collections: listCollections(db) }));
+  app.get('/v1/items', { preHandler: requireRead }, itemList);
 
   app.post<{ Params: { item_id: string } }>(
     '/v1/items/:item_id/transfer',
@@ -355,8 +393,7 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     { preHandler: requireRead },
     async (request) => {
       const holder = holderOrNotFound({ holder_id: request.params.holder_id });
-      const items = await readHolderInventory(rpc, db, game, holder.address as Address);
-      return { holder_id: holder.holderId, items };
+      return { holder_id: holder.holderId, items: await inventory(holder) };
     },
   );
 
@@ -369,6 +406,17 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
       return operation;
     },
   );
+
+  if (options.admin !== undefined) {
+    registerAdmin(app, options.admin, {
+      db,
+      createCollection,
+      createItem,
+      listItems: itemList,
+      inventory,
+      ...(options.now === undefined ? {} : { now: options.now }),
+    });
+  }
 
   return app;
 }
