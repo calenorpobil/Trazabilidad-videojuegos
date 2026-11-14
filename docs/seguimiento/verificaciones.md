@@ -493,7 +493,10 @@ la comprobación optimista del saldo y la simulación las paran antes de que lle
   cambia en `POST /admin/api/session` por una cookie `HttpOnly`, `SameSite=Strict`, `Path=/admin`, de 8 horas, `Secure`
   si llega por HTTPS. Sesiones en memoria: un reinicio obliga a entrar otra vez. 10 intentos de entrada por minuto y
   por IP. Sin sesión, las rutas de `/admin/api` dan `401`; **la página en sí se sirve sin sesión**, porque no lleva
-  datos y es la que pide la credencial. CSP `default-src 'self'`: el frontend no tiene nada en línea.
+  datos y es la que pide la credencial. **Decidido por el responsable** el mismo día, frente a responder `401` con la
+  pantalla de entrada o separar `/admin/login`: ninguna protege nada, porque el código de la página ya es público en el
+  repositorio. Se corrigió el texto de la propuesta (3), que decía «las rutas de `/admin`». CSP `default-src 'self'`: el
+  frontend no tiene nada en línea.
 - **Mismas funciones que la API:** crear colección y tipo son los mismos manejadores de `/v1`, con su idempotencia y su
   validación; la consola calcula la clave como SHA-256 de `operación:call_id`, igual que la maqueta. Los listados son
   los mismos de `catalog.ts`.

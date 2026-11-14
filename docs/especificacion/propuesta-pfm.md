@@ -257,7 +257,9 @@ Navegador (consola) ──cookie de sesión──▶ chain-backend (rutas /admin
   ninguna credencial de la API (`write_key`, `read_token`) pasa por el navegador.
 - **Acceso.** Una credencial de administrador propia, distinta de las dos anteriores, que se configura
   al arrancar (variable de entorno, nunca en el repositorio) y se cambia en `/admin` por una cookie de
-  sesión `HttpOnly` y `SameSite=Strict`. Sin cookie válida, las rutas de `/admin` responden `401`.
+  sesión `HttpOnly` y `SameSite=Strict`. Sin cookie válida, las rutas de datos de la consola (`/admin/api`)
+  responden `401`. La página y sus ficheros (`/admin`, `admin.js`, `admin.css`) se sirven sin sesión: no llevan
+  datos, su código ya es público en el repositorio, y es la página la que pide la credencial (14-nov-2026).
   Por defecto escucha sólo en `127.0.0.1`; exponerla es una decisión explícita de quien despliega.
 - **No es parte del contrato HTTP.** Las rutas `/admin` son internas del backend y no las usa el addon
   ni el servidor de juego.
