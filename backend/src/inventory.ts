@@ -11,6 +11,8 @@
  *   que no se invierte, asi que el `item_id` no se puede recuperar del mint. Y la propuesta (4.4)
  *   fija que `name`, `uri` y `qualities` se sirven de SQLite, sin leer la cadena en cada consulta.
  *   Un mint del juego que no esta en `items` no aparece.
+ * - **Solo tipos cuya creacion esta en `settled`** (W1). Un tipo cuya creacion fallo nunca aparece
+ *   (contrato, 5.4): su fila sigue en `items` con la operacion en `failed` (`catalog.ts`).
  *
  * `parseItemMint` es el unico sitio que interpreta los bytes de un mint. Su test usa los bytes de
  * un mint real de devnet (`tests/fixtures/devnet-item-mint.json`).
@@ -26,6 +28,7 @@ import {
   type Rpc,
 } from '@solana/kit';
 import { getMintDecoder, getTokenDecoder, TOKEN_2022_PROGRAM_ADDRESS } from '@solana-program/token-2022';
+import { SETTLED_ITEM } from './catalog.js';
 import type { Db } from './db.js';
 
 /** Clave reservada de `additional_metadata` donde `create_item` guarda el `collection_id`. */
@@ -147,7 +150,7 @@ export async function readHolderInventory(
   }
 
   const byMint = db.prepare<[string], ItemRow>(
-    'SELECT item_id, collection_id, name, symbol, uri, qualities FROM items WHERE mint = ?',
+    `SELECT item_id, collection_id, name, symbol, uri, qualities FROM items i WHERE mint = ? AND ${SETTLED_ITEM}`,
   );
   const items: InventoryItem[] = [];
   for (const [mint, amount] of amounts) {
