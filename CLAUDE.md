@@ -59,7 +59,7 @@ la propuesta; si no está en ella, no entra.
 | `addon/addons/godot_chain/` | El addon `godot-chain`, en GDScript puro. Hoy, un esqueleto |
 | `programs/chain-assets/` | Programa Anchor, con `Anchor.toml` y el workspace de Cargo en la raíz del repositorio |
 | `backend/` | TypeScript, Node >= 22. El servicio y su suite de tests |
-| `frontend/` | Dashboard web: consola de administración que sirve el backend, sin compilación. Aún no existe |
+| `frontend/` | Dashboard web: consola de administración que sirve el backend en `/admin`, sin compilación |
 | `rust/` | Workspace de Cargo de *Nidada*: `nidada-rules`, `nidada-ext` y `nidada-server` |
 | `examples/chain-demo/` | Proyecto Godot de la demo sencilla que ejecuta el hito. Aún no existe |
 | `examples/game-server/` | Servidor de juego mínimo del hito, en TypeScript. Aún no existe |
@@ -117,7 +117,11 @@ la propuesta; si no está en ella, no entra.
   `503`/`INSUFFICIENT_FUNDS` y `409` sin guardar la clave. Saldo de una cuenta existente en `planTransfer`. Un 429 del nodo da
   `RATE_LIMITED`. En devnet: tipo partido, `409` y `503` comprobados, y el `500` de V17 era un 429. En devnet no se llega a ver
   `applied`: allí finaliza casi al instante. Ver V18.
-- **Siguiente: W1.** Huecos menores en P14.
+- W1 (14-nov-2026, rama `cierre-q12`): **hecho.** `GET /v1/collections` y `GET /v1/items` con el estado de la operación
+  que creó cada tipo (un `create_item` caducado sigue listado como `failed`; el inventario sólo da tipos en `settled`),
+  límite de tasa por IP en las lecturas (P14, 120/min), y la consola `/admin` con `CHAIN_ADMIN_KEY`, cookie de sesión y
+  `frontend/` sacado de la maqueta: colecciones, tipos, catálogo, operaciones con enlace al explorador e inventario. Ver V19.
+- **Siguiente: A1.** Queda de P14 el `initialize_game` del despliegue (A3) y el límite del nombre de colección.
 - Requisitos de entrega del máster: propuesta, 0.1. Revísalos antes de planificar un bloque.
 - Ver `docs/seguimiento/verificaciones.md` para lo que hay que comprobar antes de OC1 y del
   bloque 3, y `docs/seguimiento/preguntas-tutor.md` para lo que bloquea el proyecto.
@@ -132,7 +136,7 @@ npm run lint          # eslint
 npm test              # vitest run
 npm run codegen       # cliente de chain-assets desde backend/idl/ (copia del IDL de WSL)
 CHAIN_DEVNET_KEYPAIR=<clave con fondos> npm run test:devnet   # devnet, FUERA de la CI
-npm start             # servidor HTTP; CHAIN_GAME_ID, semilla, CHAIN_WRITE_KEY, CHAIN_READ_TOKEN
+npm start             # servidor HTTP y consola en /admin; CHAIN_GAME_ID, semilla, CHAIN_WRITE_KEY, CHAIN_READ_TOKEN, CHAIN_ADMIN_KEY
 
 # Programa: en WSL (Debian), desde la raíz. Anchor no funciona nativo en Windows (V5).
 # target/ es un enlace a ~/build/chain-assets-target, en ext4: no lo borres, ahí está la

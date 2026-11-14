@@ -473,6 +473,45 @@ cada transacción, también en las dos del tipo partido:
 Las dos ramas de `Custom: 1` (sistema y Token-2022) siguen probadas sólo con logs construidos según el formato leído:
 la comprobación optimista del saldo y la simulación las paran antes de que lleguen a la cadena (P15).
 
+### V19 — Listados de catálogo, límite de tasa y consola `/admin` (bloque W1, P14, 14 de noviembre de 2026)
+
+- **Listados** (`src/catalog.ts`): `GET /v1/collections` y `GET /v1/items` (contrato, 5.3 y 5.4), de SQLite, el más
+  reciente primero (a igualdad de segundo, por orden de inserción). Un parámetro de consulta desconocido es `400`.
+- **El estado de un tipo es el de la operación que lo creó.** La fila de `items` se escribe al aceptar la petición y un
+  `create_item` que caduca la deja con su operación en `failed`. Por eso todo listado se une a `operations`:
+  `GET /v1/items` da todos los tipos con su `state`, también los `failed` (contrato, 5.4); el inventario de un tenedor
+  (`inventory.ts`) y el recuento de tipos de la consola sólo cuentan los de `settled`. El contrato pide que un tipo
+  fallido nunca aparezca en un inventario; se exige `settled` y no sólo «no `failed`», porque el inventario refleja el
+  estado liquidado (5.2). Un test comprueba que, sin ese filtro, un tipo en `applied` o `failed` con saldo aparecería.
+- **P14, límite de tasa del `read_token`:** por IP, no por token, porque el token es el mismo para todos los jugadores.
+  Ventana fija de un minuto en memoria (`src/rate-limit.ts`), **120 lecturas por minuto** por defecto
+  (`CHAIN_READ_RATE_LIMIT`). Se comprueba **antes** que la credencial, para que tampoco sirva para probar tokens.
+  Pasado el límite, `429` / `RATE_LIMITED` con `Retry-After` hasta la ventana siguiente. Las escrituras no cuentan.
+  Limitaciones: con varias réplicas cada una lleva su cuenta, y detrás de un proxy la IP es la del proxy (no se activa
+  `trustProxy`).
+- **Consola** (`src/admin.ts` y `frontend/`): `CHAIN_ADMIN_KEY` (32 caracteres o más, distinta de las otras dos) se
+  cambia en `POST /admin/api/session` por una cookie `HttpOnly`, `SameSite=Strict`, `Path=/admin`, de 8 horas, `Secure`
+  si llega por HTTPS. Sesiones en memoria: un reinicio obliga a entrar otra vez. 10 intentos de entrada por minuto y
+  por IP. Sin sesión, las rutas de `/admin/api` dan `401`; **la página en sí se sirve sin sesión**, porque no lleva
+  datos y es la que pide la credencial. CSP `default-src 'self'`: el frontend no tiene nada en línea.
+- **Mismas funciones que la API:** crear colección y tipo son los mismos manejadores de `/v1`, con su idempotencia y su
+  validación; la consola calcula la clave como SHA-256 de `operación:call_id`, igual que la maqueta. Los listados son
+  los mismos de `catalog.ts`.
+- **Operaciones en la consola:** una por su identificador y **las 50 últimas**, también las del servidor de juego, con
+  la firma registrada y su enlace (`CHAIN_EXPLORER_TX_URL`, por defecto el explorador de devnet). Es lo que pide el
+  hito (sección 7: «con enlace de cada operación a su transacción»), y sin lista no habría forma de llegar desde la
+  consola a una transferencia hecha en la demo. En un tipo partido el enlace es el del paso en curso: la tabla sólo
+  guarda una firma. Una transferencia no dice de qué tipo ni entre quién: `operations` no lo guarda.
+- **Inventario en la consola** por `holder_id` o por un `external_id` ya registrado; consultar no registra tenedores.
+- **Fuera, por 8.1:** entregar y transferir (recorte 5), importar catálogo y editar tipos (recorte 1). Fuera también la
+  simulación y las pantallas «futuras» de la maqueta.
+
+**Prueba manual** (14-nov-2026): `npm start` contra devnet con una semilla nueva y la consola en Chromium *headless*.
+Entrada con credencial mala y buena, colección creada desde el navegador con `ñ` y tilde, y crear un tipo responde
+`503` / `INSUFFICIENT_FUNDS` porque la autoridad derivada no tiene fondos (V18). Con `CHAIN_READ_RATE_LIMIT=5`, la sexta
+lectura es `429`. Ningún error de CSP en la consola del navegador, y sin desborde horizontal a 390 px. No se vio una
+operación real en la consola: hace falta una autoridad con fondos y su `initialize_game` (A3, P14).
+
 ---
 
 ## Pendiente
@@ -487,5 +526,5 @@ decidido el mismo día: `operations.last_valid_block_height` (V18).
 | P4 | Texto literal vigente de la regla de onboarding de Steam sobre blockchain, y las políticas actuales de Google Play y App Store | Último bloque (aviso del README) | Leer las políticas, citar con fecha |
 | P5 | Actualizar a la 4.7.2 el Godot de la máquina de desarrollo, que tiene la 4.7.1 | Fase A1 | Instalar y anotar |
 | P15 | Capturar logs reales de `Custom: 1` del programa de sistema y de Token-2022 para contrastar la clasificación (V18). Lo demás de `test:devnet` quedó comprobado el 14-nov-2026 | Nada | Sólo si sobra tiempo: simular a mano una transferencia por encima del saldo y una autoridad con fondos para la comisión pero no para la renta |
-| P14 | Huecos del contrato que salieron al escribir el servidor. `name` de `POST /v1/collections` no tiene límite: se exige no vacío y el tope es el del cuerpo (1 MB). El `read_token` «va limitado por tasa» (contrato, 2), pero ningún bloque lo asigna. `initialize_game` no tiene comando para crear el juego de un despliegue | W1 (límite de tasa) y A3 (crear el juego de la demo) | Decidir si se fija un límite al nombre; asignar el resto a su bloque |
+| P14 | Huecos del contrato que salieron al escribir el servidor. `name` de `POST /v1/collections` no tiene límite: se exige no vacío y el tope es el del cuerpo (1 MB). `initialize_game` no tiene comando para crear el juego de un despliegue. El límite de tasa del `read_token` quedó hecho en W1 (V19) | A3 (crear el juego de la demo) | Decidir si se fija un límite al nombre; `initialize_game` en A3 |
 | P12 | **Decisión pendiente del responsable:** alcance de OpenBao, que sugiere el tutor (Q12). A: guardar sólo la semilla en su almacén KV (~1 h). B: que la autoridad firme dentro de OpenBao con Transit (ed25519) y se rote con `rotate_authority` (~4 h; cambia 4.3). C: trabajo futuro en el README. Para B, verificar antes que Transit firma ed25519 puro sobre los bytes del mensaje, sin *prehash*. Leído el 12-nov-2026 en su documentación (2.7.x): Transit admite ed25519 para firmar y rotar, e importar claves; licencia MPL-2.0 y modo `server -dev` | Nada hasta que se decida; si es B, antes del último bloque | Decidir; si B, plazo de 4 h y vuelta a A si tras 2 h no hay una firma válida en devnet |
