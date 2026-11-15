@@ -56,7 +56,7 @@ la propuesta; si no está en ella, no entra.
 
 | Directorio | Contenido |
 |---|---|
-| `addon/addons/godot_chain/` | El addon `godot-chain`, en GDScript puro. Hoy, un esqueleto |
+| `addon/addons/godot_chain/` | El addon `godot-chain`, en GDScript puro. Modo LIVE hecho; el MOCK, en A2 |
 | `programs/chain-assets/` | Programa Anchor, con `Anchor.toml` y el workspace de Cargo en la raíz del repositorio |
 | `backend/` | TypeScript, Node >= 22. El servicio y su suite de tests |
 | `frontend/` | Dashboard web: consola de administración que sirve el backend en `/admin`, sin compilación |
@@ -121,7 +121,11 @@ la propuesta; si no está en ella, no entra.
   que creó cada tipo (un `create_item` caducado sigue listado como `failed`; el inventario sólo da tipos en `settled`),
   límite de tasa por IP en las lecturas (P14, 120/min), y la consola `/admin` con `CHAIN_ADMIN_KEY`, cookie de sesión y
   `frontend/` sacado de la maqueta: colecciones, tipos, catálogo, operaciones con enlace al explorador e inventario. Ver V19.
-- **Siguiente: A1.** Queda de P14 el `initialize_game` del despliegue (A3) y el límite del nombre de colección.
+- A1 (15-nov-2026, rama `cierre-q12`): **hecho**, sólo modo LIVE. `ChainConfig`, `ChainError`, `ChainHandle` y `Chain`
+  (`create_collection`, `create_item`, `transfer`, `inventory`), con pool de 4 `HTTPRequest`, un `Timer` a intervalo fijo y
+  la clave como SHA-256 de `operación:call_id`, igual que la consola. `transfer` no envía `from`: lo pone el servidor de
+  juego (A3). Probado con Godot headless contra un servidor falso, fuera del repositorio; la suite llega en A2.
+- **Siguiente: A2.** Queda de P14 el `initialize_game` del despliegue (A3) y el límite del nombre de colección.
 - Requisitos de entrega del máster: propuesta, 0.1. Revísalos antes de planificar un bloque.
 - Ver `docs/seguimiento/verificaciones.md` para lo que hay que comprobar antes de OC1 y del
   bloque 3, y `docs/seguimiento/preguntas-tutor.md` para lo que bloquea el proyecto.
