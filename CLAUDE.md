@@ -56,7 +56,7 @@ la propuesta; si no está en ella, no entra.
 
 | Directorio | Contenido |
 |---|---|
-| `addon/addons/godot_chain/` | El addon `godot-chain`, en GDScript puro. Modo LIVE hecho; el MOCK, en A2 |
+| `addon/addons/godot_chain/` | El addon `godot-chain`, en GDScript puro. Modos LIVE y MOCK. `addon/tests/` es su suite |
 | `programs/chain-assets/` | Programa Anchor, con `Anchor.toml` y el workspace de Cargo en la raíz del repositorio |
 | `backend/` | TypeScript, Node >= 22. El servicio y su suite de tests |
 | `frontend/` | Dashboard web: consola de administración que sirve el backend en `/admin`, sin compilación |
@@ -125,7 +125,11 @@ la propuesta; si no está en ella, no entra.
   (`create_collection`, `create_item`, `transfer`, `inventory`), con pool de 4 `HTTPRequest`, un `Timer` a intervalo fijo y
   la clave como SHA-256 de `operación:call_id`, igual que la consola. `transfer` no envía `from`: lo pone el servidor de
   juego (A3). Probado con Godot headless contra un servidor falso, fuera del repositorio; la suite llega en A2.
-- **Siguiente: A2.** Queda de P14 el `initialize_game` del despliegue (A3) y el límite del nombre de colección.
+- A2 (16-nov-2026, rama `cierre-q12`): **hecho.** Modo MOCK en `chain_mock.gd`: responde con la forma del contrato, en
+  memoria, y `Chain` recorre el mismo código que en LIVE. Sólo camino feliz, con idempotencia por `call_id`. El emisor de
+  una transferencia en MOCK es `ChainConfig.mock_sender`. `addon/` es también un proyecto Godot mínimo para la suite
+  (`addon/tests/run.gd`), y la CI la ejecuta en el trabajo `godot-headless`.
+- **Siguiente: A3 + A4** (demo y servidor de juego), y A5 con lo que falte de la CI de la sección 9. Queda de P14 el `initialize_game` del despliegue (A3) y el límite del nombre de colección.
 - Requisitos de entrega del máster: propuesta, 0.1. Revísalos antes de planificar un bloque.
 - Ver `docs/seguimiento/verificaciones.md` para lo que hay que comprobar antes de OC1 y del
   bloque 3, y `docs/seguimiento/preguntas-tutor.md` para lo que bloquea el proyecto.
@@ -148,6 +152,10 @@ npm start             # servidor HTTP y consola en /admin; CHAIN_GAME_ID, semill
 anchor build                                       # .so e IDL
 cargo test -p chain-assets                         # LiteSVM, sin red
 programs/chain-assets/scripts/devnet-smoke.sh      # devnet, a mano, fuera de la CI
+
+# Addon: suite en modo MOCK, sin red. Desde la raíz, con Godot 4.7.
+godot --headless --path addon --import             # sólo la primera vez; en Windows puede acabar con error
+godot --headless --path addon --script res://tests/run.gd
 
 cd ../rust            # Sólo Nidada. Git Bash o PowerShell, no WSL; ver rust/README.md
 cargo test

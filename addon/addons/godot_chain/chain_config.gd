@@ -24,19 +24,25 @@ enum Mode { LIVE, MOCK }
 @export var operation_timeout: float = 120.0
 ## Segundos entre dos consultas del estado de una operación. Intervalo fijo.
 @export var poll_interval: float = 1.0
+## `MOCK` responde en memoria y sin red, sólo con el camino feliz. No usa las URL, el
+## `read_token` ni `request_timeout`.
 @export var mode: Mode = Mode.LIVE
+## Sólo en modo MOCK: el jugador que hace las transferencias, que en LIVE decide el
+## servidor de juego. Un `hld_...` o el identificador que el juego da a su jugador.
+@export var mock_sender: String = ""
 
 
 ## Devuelve por qué la configuración no sirve, o una cadena vacía si sirve.
 func problem() -> String:
-	if not _is_http(write_url):
-		return "write_url debe empezar por http:// o https://"
-	if not _is_http(read_url):
-		return "read_url debe empezar por http:// o https://"
-	if read_token.is_empty():
-		return "falta read_token"
-	if request_timeout <= 0.0:
-		return "request_timeout debe ser mayor que 0"
+	if mode == Mode.LIVE:
+		if not _is_http(write_url):
+			return "write_url debe empezar por http:// o https://"
+		if not _is_http(read_url):
+			return "read_url debe empezar por http:// o https://"
+		if read_token.is_empty():
+			return "falta read_token"
+		if request_timeout <= 0.0:
+			return "request_timeout debe ser mayor que 0"
 	if operation_timeout < 0.0:
 		return "operation_timeout no puede ser negativo"
 	if poll_interval <= 0.0:

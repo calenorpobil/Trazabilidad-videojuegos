@@ -133,9 +133,31 @@ jobs:
       - name: Tests (LiteSVM, sin red)
         run: cargo test -p chain-assets --locked
 
-  # Pendiente: Godot en modo headless ejecutando la suite del addon en modo mock, sin
-  # red. Entra en la fase A2, que es cuando existe esa suite. Anadir aqui un trabajo
-  # que no ejecuta nada solo sirve para tener una casilla verde que no comprueba nada.
+  # Suite del addon en modo mock, sin red (fase A2). addon/ es a la vez el addon y un
+  # proyecto Godot minimo que registra el autoload, para poder ejecutarla.
+  godot-headless:
+    name: Addon (Godot headless)
+    runs-on: ubuntu-latest
+    env:
+      GODOT_VERSION: 4.7.2
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Descargar Godot
+        run: |
+          curl -fsSL -o godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip
+          mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" godot
+
+      # La importacion registra las clases con nombre (ChainConfig, ChainHandle,
+      # ChainError). Puede terminar con error sin pantalla, como en nidada-godot: no se
+      # detiene aqui, porque si las clases no quedan registradas la suite no compila.
+      - name: Importar el proyecto
+        run: ./godot --headless --path addon --import || echo "::warning::godot --import termino con codigo $?"
+
+      # Con tiempo maximo: tras un error de GDScript, Godot headless puede no salir.
+      - name: Suite del addon
+        run: timeout 120 ./godot --headless --path addon --script res://tests/run.gd
 
   # Nidada: el juego que sirve de banco de pruebas (docs/juego/plan.md). Su Rust vive
   # en rust/ y su GDExtension en examples/godot-demo, nunca en addon/: las guardias de

@@ -1,0 +1,12 @@
+; Proyecto minimo para ejecutar la suite del addon con Godot headless.
+; No es un juego: solo registra el autoload que en un juego registra el plugin.
+config_version=5
+
+[application]
+
+config/name="godot-chain tests"
+config/features=PackedStringArray("4.7")
+
+[autoload]
+
+Chain="*res://addons/godot_chain/chain.gd"
