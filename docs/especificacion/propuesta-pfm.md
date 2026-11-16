@@ -649,7 +649,10 @@ Tres formas expuestas, ni una más, en GDScript dentro de `addon/addons/godot_ch
 `Resource`, `Chain` sobre `Node`, `ChainHandle` sobre `RefCounted`).
 
 1. **`ChainConfig`** — `Resource`. `write_url`, `read_url`, `read_token`, `game_id`, timeouts,
-   intervalo de sondeo, `mode` (`LIVE` | `MOCK`).
+   intervalo de sondeo, `mode` (`LIVE` | `MOCK`) y `mock_sender`. Hay dos timeouts:
+   `request_timeout`, lo que se espera una respuesta, y `operation_timeout`, lo que se sigue una
+   operación antes de darla por fallida con `NETWORK` (120 s por defecto; con 0, sin límite, como
+   pide el contrato, 7). Reintentar tras ese `NETWORK` con el mismo `call_id` es seguro (A1).
 2. **`Chain`** — singleton autoload registrado por el plugin. Punto de entrada.
 3. **`ChainHandle`** — `RefCounted` devuelto por cada operación.
 
@@ -673,7 +676,7 @@ if not handle.is_finished():
 
 1. **`HTTPRequest` es un `Node`; el handle es `RefCounted`.** El handle no hace nada: es un buzón
    pasivo. El singleton posee el pool de `HTTPRequest`, mantiene referencia fuerte a los handles
-   pendientes y sondea en `_process`. El handle **no** referencia al singleton. Sin ciclos.
+   pendientes y sondea con un `Timer` (punto 3). El handle **no** referencia al singleton. Sin ciclos.
 2. **`await` sobre una señal ya emitida cuelga para siempre.** Documenta el patrón seguro
    (`if not handle.is_finished(): await handle.finished`) y garantiza estructuralmente que un handle
    recién creado no puede resolverse dentro del mismo bloque síncrono.
@@ -701,6 +704,10 @@ if not handle.is_finished():
 `ChainConfig` con `mode = MOCK` resuelve contra una máquina de estados en GDScript, dentro del addon, en
 memoria y sin red. Sólo cubre el camino feliz: `mock_force`, que permitía probar la rama de reversión, queda
 recortado (8.1).
+
+`transfer` no lleva emisor: en `LIVE` lo añade el servidor de juego, que sabe qué jugador hace la petición.
+En `MOCK` no hay servidor de juego, y el emisor es `mock_sender`, un `hld_…` o el identificador del jugador en
+el juego. Sin él, una transferencia en `MOCK` falla con `REJECTED` (A2).
 
 Esto sustituye al `mock-backend` de la propuesta original. Coste: el mock puede divergir del backend
 real, y no hay tests de conformidad que lo impidan. Queda anotado en 12.6.
