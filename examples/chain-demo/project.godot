@@ -1,0 +1,18 @@
+; Demo sencilla del hito (propuesta, 7): una escena que ejecuta las funciones del addon.
+; addons/godot_chain es una copia de addon/addons/godot_chain; la CI comprueba que no difieren.
+config_version=5
+
+[application]
+
+config/name="godot-chain demo"
+config/description="Demo del hito de godot-chain: colección, objeto, entrega y transferencia."
+run/main_scene="res://main.tscn"
+config/features=PackedStringArray("4.7")
+
+[autoload]
+
+Chain="*res://addons/godot_chain/chain.gd"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/godot_chain/plugin.cfg")

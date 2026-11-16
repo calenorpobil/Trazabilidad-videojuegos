@@ -30,15 +30,21 @@ jobs:
       - uses: actions/checkout@v4
 
       # Invariante de diseno convertido en test automatico: ningun concepto de cadena
-      # cruza al addon. Si esto falla, la costura entre el juego y la infraestructura
-      # esta rota, y es un fallo de diseno, no de estilo.
-      - name: Ningun concepto de cadena en addon/
+      # cruza al addon ni a la demo del hito, que es un juego que lo usa (propuesta, 9).
+      # Si esto falla, la costura entre el juego y la infraestructura esta rota, y es un
+      # fallo de diseno, no de estilo.
+      - name: Ningun concepto de cadena en addon/ ni en examples/chain-demo/
         run: |
-          if grep -rniE '(solana|pubkey|lamport|blockhash|base58|spl|mint)' addon/; then
-            echo "::error::Vocabulario de cadena filtrado en addon/. Ver CLAUDE.md, invariante 3."
+          if grep -rniE '(solana|pubkey|lamport|blockhash|base58|spl|mint)' addon/ examples/chain-demo/; then
+            echo "::error::Vocabulario de cadena filtrado en addon/ o en examples/chain-demo/. Ver CLAUDE.md, invariante 3."
             exit 1
           fi
-          echo "addon/ limpio."
+          echo "addon/ y examples/chain-demo/ limpios."
+
+      # La demo lleva una copia del addon, como la llevaria cualquier juego. Tiene que ser
+      # identica a la de addon/: si no, la demo prueba otra cosa.
+      - name: La copia del addon en la demo es identica
+        run: diff -r addon/addons/godot_chain examples/chain-demo/addons/godot_chain
 
       # El addon es GDScript puro. Un manifiesto de dependencias o un binario ahi
       # significa que alguien ha metido algo que no deberia.
@@ -83,6 +89,34 @@ jobs:
 
       - name: Licencias
         run: npm run licenses
+
+  # Servidor de juego de ejemplo del hito (A3): autoriza, registra antes de llamar y
+  # reenvia. Sus tests usan un backend falso, sin red externa.
+  game-server:
+    name: Servidor de juego (ejemplo)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: examples/game-server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: examples/game-server/package-lock.json
+
+      - run: npm ci
+
+      - name: Tipos
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
+
+      - name: Vulnerabilidades
+        run: npm audit --audit-level=high
 
   # Programa on-chain chain-assets (propuesta, 4.7): anchor build y los tests con LiteSVM,
   # sin red. El despliegue en devnet es manual y no entra aqui.

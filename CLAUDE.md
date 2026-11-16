@@ -61,8 +61,8 @@ la propuesta; si no está en ella, no entra.
 | `backend/` | TypeScript, Node >= 22. El servicio y su suite de tests |
 | `frontend/` | Dashboard web: consola de administración que sirve el backend en `/admin`, sin compilación |
 | `rust/` | Workspace de Cargo de *Nidada*: `nidada-rules`, `nidada-ext` y `nidada-server` |
-| `examples/chain-demo/` | Proyecto Godot de la demo sencilla que ejecuta el hito. Aún no existe |
-| `examples/game-server/` | Servidor de juego mínimo del hito, en TypeScript. Aún no existe |
+| `examples/chain-demo/` | Proyecto Godot de la demo sencilla que ejecuta el hito, con una copia del addon que la CI compara con `addon/` |
+| `examples/game-server/` | Servidor de juego mínimo del hito, en TypeScript: autoriza, registra y reenvía las escrituras |
 | `examples/godot-demo/` | Proyecto Godot de *Nidada*, fuera del hito |
 | `examples/Proyecto finalizado/` | Proyecto de ejemplo del curso. Ignorado por git: **nunca lo publiques** |
 | `docs/especificacion/` | Qué se construye: propuesta, contrato HTTP y maqueta de la consola |
@@ -129,7 +129,12 @@ la propuesta; si no está en ella, no entra.
   memoria, y `Chain` recorre el mismo código que en LIVE. Sólo camino feliz, con idempotencia por `call_id`. El emisor de
   una transferencia en MOCK es `ChainConfig.mock_sender`. `addon/` es también un proyecto Godot mínimo para la suite
   (`addon/tests/run.gd`), y la CI la ejecuta en el trabajo `godot-headless`.
-- **Siguiente: A3 + A4** (demo y servidor de juego), y A5 con lo que falte de la CI de la sección 9. Queda de P14 el `initialize_game` del despliegue (A3) y el límite del nombre de colección.
+- A3 + A4 (16-nov-2026, rama `cierre-q12`): **hechos.** `examples/game-server` (fastify y better-sqlite3) registra cada
+  escritura en `actions`, por su `Idempotency-Key`, antes de llamar; la reenvía con el `write_key` y la clave intacta, y pone el
+  emisor de un `transfer` (rechaza un `from` del juego). `examples/chain-demo`: una escena con un botón por operación, los
+  inventarios de A y B y el estado de cada operación, en MOCK si no hay `CHAIN_DEMO_READ_TOKEN`. `npm run init-game` crea el
+  juego de un despliegue (P14). Hito probado de extremo a extremo en devnet, con la consola: ver V20.
+- **Siguiente: A5**, con lo que falte de la CI de la sección 9, y después los entregables. Queda de P14 el límite del nombre de colección.
 - Requisitos de entrega del máster: propuesta, 0.1. Revísalos antes de planificar un bloque.
 - Ver `docs/seguimiento/verificaciones.md` para lo que hay que comprobar antes de OC1 y del
   bloque 3, y `docs/seguimiento/preguntas-tutor.md` para lo que bloquea el proyecto.
@@ -144,6 +149,7 @@ npm run lint          # eslint
 npm test              # vitest run
 npm run codegen       # cliente de chain-assets desde backend/idl/ (copia del IDL de WSL)
 CHAIN_DEVNET_KEYPAIR=<clave con fondos> npm run test:devnet   # devnet, FUERA de la CI
+npm run init-game     # initialize_game del despliegue, una vez; mismas variables que npm start
 npm start             # servidor HTTP y consola en /admin; CHAIN_GAME_ID, semilla, CHAIN_WRITE_KEY, CHAIN_READ_TOKEN, CHAIN_ADMIN_KEY
 
 # Programa: en WSL (Debian), desde la raíz. Anchor no funciona nativo en Windows (V5).
@@ -152,6 +158,11 @@ npm start             # servidor HTTP y consola en /admin; CHAIN_GAME_ID, semill
 anchor build                                       # .so e IDL
 cargo test -p chain-assets                         # LiteSVM, sin red
 programs/chain-assets/scripts/devnet-smoke.sh      # devnet, a mano, fuera de la CI
+
+# Hito: servidor de juego y demo (pasos en examples/chain-demo/README.md).
+cd examples/game-server && npm ci && npm run typecheck && npm test
+GAME_SERVER_WRITE_KEY=<write_key> npm start          # 127.0.0.1:8788
+CHAIN_DEMO_READ_TOKEN=<read_token> godot --path examples/chain-demo   # sin el token, modo MOCK
 
 # Addon: suite en modo MOCK, sin red. Desde la raíz, con Godot 4.7.
 godot --headless --path addon --import             # sólo la primera vez; en Windows puede acabar con error

@@ -544,6 +544,45 @@ Entrada con credencial mala y buena, colección creada desde el navegador con `�
 lectura es `429`. Ningún error de CSP en la consola del navegador, y sin desborde horizontal a 390 px. No se vio una
 operación real en la consola: hace falta una autoridad con fondos y su `initialize_game` (A3, P14).
 
+### V20 — Servidor de juego, demo e `initialize_game` del despliegue (A3 + A4, P14, 16 de noviembre de 2026)
+
+- **Servidor de juego** (`examples/game-server`, fastify 5.12.8 y better-sqlite3 13.0.3, como el backend). Reenvía las tres
+  escrituras del addon y nada más (`404` a `…/grants` y a las lecturas). Antes de llamar, guarda la acción en `actions`: la
+  clave, la ruta y el cuerpo ya autorizado. Lo que recibe del juego es la `Idempotency-Key`, no el `call_id`. La clave es la
+  huella de `(operación, call_id)`, así que hace de identificador de la acción (propuesta, 4.4). Con una clave ya aceptada (2xx)
+  devuelve lo guardado sin llamar. Con una sin aceptar, reenvía la acción tal como se registró, no los datos nuevos. Si el
+  backend no responde: `500` / `INTERNAL`, y la acción queda guardada para el reintento.
+- **Autorización de la demo:** el emisor de un `transfer` es siempre `GAME_SERVER_PLAYER` (`player-a`), y un `from` puesto por el
+  juego es `400` / `REJECTED`. Un juego real lo sacaría de la sesión del jugador. El addon no tiene credencial hacia el servidor
+  de juego (A1), así que nada impide que otro cliente le hable: limitación aceptada de la demo.
+- **Desviación de 4.4 en la demo:** el `call_id` lo genera la escena en cada pulsación, no el servidor de juego. Es nuevo por
+  acción y el mismo en los reintentos de red, que hace `Chain`. No sobrevive a cerrar la demo: es la limitación 12.10.
+- **Demo** (`examples/chain-demo`): una escena con la interfaz hecha por código, un botón por operación, los inventarios de A y
+  B y una fila por operación con su `operation_id` y los estados por los que pasa. Sólo escribe estado (colección, tipo,
+  `holder_id`) en `settled`. B se nombra por `player-b` hasta su primera transferencia. Sin `CHAIN_DEMO_READ_TOKEN`, arranca
+  en MOCK con `mock_sender = player-a`. Lleva una copia del addon, y la CI comprueba con `diff -r` que es idéntica. La guardia
+  de vocabulario cubre también `examples/chain-demo/`, y por eso el proyecto no tiene sección `[display]`.
+- **P14, `initialize_game`:** `npm run init-game` (`backend/scripts/init-game.ts`), con las variables de `npm start`. Imprime
+  la autoridad y su saldo. Si el juego existe con esa autoridad, no hace nada; si existe con otra, falla. Simula antes de enviar,
+  y sin fondos da el comando para financiar. En Windows, `process.exit()` con sockets abiertos dispara un *assert* de libuv:
+  el script fija `process.exitCode`.
+
+**Prueba en devnet** (16-nov-2026, Godot 4.7.1 en Windows, P5). Despliegue `chain-demo`, autoridad
+`9FNZj74UELCEQ7Mfvj6EZFUSqb5nF6BaBep87pgHFz92` financiada con 0,3 SOL. `initialize_game`:
+`3dqHg5xvXu6mSG9gRWbRGu9qXdyatStRwRXWjPUPkW14cZunVgjXNhgeDtc9Fh4QyLVY2M2JDtx96Qyi3DZqyfby`; repetirlo no hace nada. La escena se
+condujo con un script que llama a los mismos métodos que los botones, en modo LIVE, con ventana y captura:
+
+| Paso | Operación | Estados en la escena | Firma (una por transacción, sin error) |
+|---|---|---|---|
+| Crear colección | — | `pending → settled` | — |
+| Crear objeto, 3 para A | `opr_xT7ZfMBq06krws8I` | `pending → applied → settled` | `56GGjdHV49nuyTBVgcxVWCJcVLzojQx8r244RCFPwFfmSKnkFL5La2WFzS7qQ47K5aJL1yi46EunREdu7edTRbr1` |
+| Transferir 1 de A a B | `opr_OajH19BNSL0bKsLr` | `pending → applied → settled` | `qpPUpzLVPsmmcbd3RJGbjarqfdRvs2CxD6VoWSEBx5EXFMDTVpLfeR3XnY7sNQToUU3gFQrsoT98AUEhrF52tVN` |
+
+Inventarios en pantalla: A con 2 y B con 1, con sus cualidades. El servidor de juego registró las tres acciones, la
+transferencia con `from: player-a`. La consola `/admin` lista las dos operaciones con su enlace al explorador y la
+transferencia como `player-a → player-b`, y da el inventario de `player-b`. No se pulsaron los botones a mano: queda para la
+grabación del vídeo.
+
 ---
 
 ## Pendiente
@@ -558,5 +597,5 @@ decidido el mismo día: `operations.last_valid_block_height` (V18).
 | P4 | Texto literal vigente de la regla de onboarding de Steam sobre blockchain, y las políticas actuales de Google Play y App Store | Último bloque (aviso del README) | Leer las políticas, citar con fecha |
 | P5 | Actualizar a la 4.7.2 el Godot de la máquina de desarrollo, que tiene la 4.7.1 | Fase A1 | Instalar y anotar |
 | P15 | Capturar logs reales de `Custom: 1` del programa de sistema y de Token-2022 para contrastar la clasificación (V18). Lo demás de `test:devnet` quedó comprobado el 14-nov-2026 | Nada | Sólo si sobra tiempo: simular a mano una transferencia por encima del saldo y una autoridad con fondos para la comisión pero no para la renta |
-| P14 | Huecos del contrato que salieron al escribir el servidor. `name` de `POST /v1/collections` no tiene límite: se exige no vacío y el tope es el del cuerpo (1 MB). `initialize_game` no tiene comando para crear el juego de un despliegue. El límite de tasa del `read_token` quedó hecho en W1 (V19) | A3 (crear el juego de la demo) | Decidir si se fija un límite al nombre; `initialize_game` en A3 |
+| P14 | El `name` de `POST /v1/collections` no tiene límite: se exige que no esté vacío, y el tope es el del cuerpo (1 MB). El límite de tasa del `read_token` quedó hecho en W1 (V19) y `initialize_game`, en A3 (`npm run init-game`, V20) | Nada | Decidir si se fija un límite al nombre |
 | P12 | **Decisión pendiente del responsable:** alcance de OpenBao, que sugiere el tutor (Q12). A: guardar sólo la semilla en su almacén KV (~1 h). B: que la autoridad firme dentro de OpenBao con Transit (ed25519) y se rote con `rotate_authority` (~4 h; cambia 4.3). C: trabajo futuro en el README. Para B, verificar antes que Transit firma ed25519 puro sobre los bytes del mensaje, sin *prehash*. Leído el 12-nov-2026 en su documentación (2.7.x): Transit admite ed25519 para firmar y rotar, e importar claves; licencia MPL-2.0 y modo `server -dev` | Nada hasta que se decida; si es B, antes del último bloque | Decidir; si B, plazo de 4 h y vuelta a A si tras 2 h no hay una firma válida en devnet |
