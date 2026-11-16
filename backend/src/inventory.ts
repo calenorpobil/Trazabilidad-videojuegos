@@ -1,6 +1,7 @@
 /**
- * Inventario de un tenedor (contrato, 5.2), sin `holder_id`: el tenedor entra como `Address`
- * porque resolver el `holder_id` espera a la Q12.
+ * Inventario de un tenedor (contrato, 5.2). El tenedor entra como `Address`: quien llama ya ha
+ * resuelto el `holder_id` con `resolveHolder` (`holders.ts`), asi que este modulo no conoce los
+ * identificadores opacos.
  *
  * De donde sale cada dato (decidido el 9-nov-2026, bloque 4):
  * - **Saldos, de la cadena**, con compromiso `finalized`: el inventario refleja el estado liquidado
