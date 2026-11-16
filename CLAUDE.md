@@ -134,7 +134,9 @@ la propuesta; si no está en ella, no entra.
   emisor de un `transfer` (rechaza un `from` del juego). `examples/chain-demo`: una escena con un botón por operación, los
   inventarios de A y B y el estado de cada operación, en MOCK si no hay `CHAIN_DEMO_READ_TOKEN`. `npm run init-game` crea el
   juego de un despliegue (P14). Hito probado de extremo a extremo en devnet, con la consola: ver V20.
-- **Siguiente: A5**, con lo que falte de la CI de la sección 9, y después los entregables. Queda de P14 el límite del nombre de colección.
+- A5 (16-nov-2026, rama `cierre-q12`): **hecho.** La CI cubre la sección 9 entera. El trabajo `vocab-guard` comprueba además
+  que `addon/` no tiene hilos ni otra vía de red que `HTTPRequest` (invariante 4), y busca binarios por contenido, no por extensión.
+- **Siguiente: los entregables de 0.1** (README, diagramas, capturas, vídeo). Queda de P14 el límite del nombre de colección.
 - Requisitos de entrega del máster: propuesta, 0.1. Revísalos antes de planificar un bloque.
 - Ver `docs/seguimiento/verificaciones.md` para lo que hay que comprobar antes de OC1 y del
   bloque 3, y `docs/seguimiento/preguntas-tutor.md` para lo que bloquea el proyecto.

@@ -23,7 +23,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  guard:
+  vocab-guard:
     name: Guardia de vocabulario
     runs-on: ubuntu-latest
     steps:
@@ -46,15 +46,33 @@ jobs:
       - name: La copia del addon en la demo es identica
         run: diff -r addon/addons/godot_chain examples/chain-demo/addons/godot_chain
 
-      # El addon es GDScript puro. Un manifiesto de dependencias o un binario ahi
-      # significa que alguien ha metido algo que no deberia.
+      # El addon es GDScript puro (invariante 4). Un manifiesto de dependencias o un
+      # binario ahi significa que alguien ha metido algo que no deberia. Los binarios se
+      # buscan por contenido, no por extension: grep -I los trata como sin coincidencias.
       - name: Ninguna dependencia ni binario en addon/
         run: |
-          if find addon/ -type f \( -name 'package.json' -o -name '*.dll' -o -name '*.so' -o -name '*.dylib' -o -name '*.gdextension' \) | grep .; then
+          if find addon/ -type f \( -name 'package.json' -o -name 'Cargo.toml' -o -name '*.gdextension' \) | grep .; then
             echo "::error::addon/ debe ser GDScript puro y sin dependencias."
             exit 1
           fi
+          binaries=$(find addon/ -type f -size +0c -exec grep -IL '' {} +)
+          if [ -n "$binaries" ]; then
+            echo "$binaries"
+            echo "::error::addon/ no puede llevar binarios."
+            exit 1
+          fi
           echo "addon/ sin dependencias ni binarios."
+
+      # Invariante 4: el HTTP pasa por HTTPRequest y todo ocurre en el hilo principal
+      # (propuesta, 6, punto 3). Ni hilos ni otra via de red.
+      - name: Sin hilos ni red propia en addon/
+        run: |
+          if grep -rnwE 'Thread|Mutex|Semaphore|WorkerThreadPool|StreamPeerTCP|StreamPeerTLS|PacketPeerUDP|WebSocketPeer' addon/ \
+             || grep -rnE 'HTTPClient\.new' addon/; then
+            echo "::error::addon/ usa hilos o una via de red que no es HTTPRequest. Ver CLAUDE.md, invariante 4."
+            exit 1
+          fi
+          echo "addon/ sin hilos y con HTTPRequest como unica via de red."
 
   backend:
     name: Backend

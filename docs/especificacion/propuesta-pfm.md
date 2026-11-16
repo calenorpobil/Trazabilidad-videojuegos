@@ -825,8 +825,9 @@ GitHub Actions, un solo runner Linux, sin matriz de compilación.
 |---|---|
 | `backend` | `tsc --noEmit`, `eslint`, `vitest run` (incluye los vectores fijos de derivación de claves y el **test del invariante de firmante único**: ninguna transacción construida requiere más de una firma), `npm audit --audit-level=high` y revisión de licencias |
 | `program` | `anchor build` y los tests de `chain-assets`, sin devnet |
-| `vocab-guard` | **Guardia de vocabulario:** `grep -riE '(solana|pubkey|lamport|blockhash|base58|spl|mint)'` sobre `addon/` y `examples/chain-demo/` debe devolver vacío. Si falla, la costura está rota. También comprueba que `addon/` no tenga dependencias ni binarios |
+| `vocab-guard` | **Guardia de vocabulario:** `grep -riE '(solana|pubkey|lamport|blockhash|base58|spl|mint)'` sobre `addon/` y `examples/chain-demo/` debe devolver vacío. Si falla, la costura está rota. También comprueba que `addon/` no tenga dependencias ni binarios (éstos, por contenido), que no use hilos ni otra vía de red que `HTTPRequest` (invariante 4), y que la copia del addon en `examples/chain-demo/` sea idéntica a `addon/` (A3) |
 | `godot-headless` | Ejecuta la suite del addon en modo mock, sin red, con Godot *headless* |
+| `game-server` | El servidor de juego de ejemplo (A3): `tsc --noEmit`, `vitest run` contra un backend falso y `npm audit --audit-level=high` |
 | `nidada-*` | Los trabajos de *Nidada* (Rust y Godot), que siguen como están. Fuera del hito |
 
 **No entran en la CI** los tests que tocan devnet. Éstos dependen de una red externa y de un faucet con límite: van en un script manual,
