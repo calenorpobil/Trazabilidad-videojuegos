@@ -13,6 +13,8 @@ const CREATE_COLLECTION := "create_collection"
 const CREATE_ITEM := "create_item"
 const TRANSFER := "transfer"
 const INVENTORY := "inventory"
+## Traduce el identificador que el juego da a su jugador a su `holder_id` (contrato, 5.5).
+const HOLDER := "holder"
 const OPERATION := "operation"
 
 var _collections: Dictionary = {}  # collection_id -> nombre
@@ -32,6 +34,8 @@ func respond(route: String, target: String, payload: Dictionary, key: String) ->
 			answer = _poll(target)
 		INVENTORY:
 			answer = _inventory(target)
+		HOLDER:
+			answer = _holder(target)
 		_:
 			# Marcar primero: una clave ya aceptada devuelve lo mismo y no repite nada.
 			if _accepted.has(key):
@@ -123,6 +127,14 @@ func _inventory(holder_id: String) -> Array:
 			item["amount"] = amount
 			items.append(item)
 	return [200, {"holder_id": holder_id, "items": items}]
+
+
+## Como el servidor: sólo traduce, no da de alta. Un jugador que ninguna escritura ha
+## nombrado no existe.
+func _holder(external_id: String) -> Array:
+	if not _holders.has(external_id):
+		return _error(404, ChainError.NOT_FOUND, "el jugador no existe")
+	return [200, {"holder_id": _holders[external_id], "external_id": external_id}]
 
 
 ## El `holder_id` de una referencia del contrato, o vacío si nombra un `holder_id` que

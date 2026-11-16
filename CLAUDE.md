@@ -136,6 +136,10 @@ la propuesta; si no está en ella, no entra.
   juego de un despliegue (P14). Hito probado de extremo a extremo en devnet, con la consola: ver V20.
 - A5 (16-nov-2026, rama `cierre-q12`): **hecho.** La CI cubre la sección 9 entera. El trabajo `vocab-guard` comprueba además
   que `addon/` no tiene hilos ni otra vía de red que `HTTPRequest` (invariante 4), y busca binarios por contenido, no por extensión.
+- Catálogo en la consola (16-nov-2026, rama `cierre-q12`): **hecho.** El juego no crea colecciones ni tipos: los crea
+  el estudio en `/admin`, con la entrega inicial a A. El servidor de juego responde `403` a la creación. Contrato 5.5:
+  `GET /v1/holders?external_id=…`, y `Chain.inventory()` acepta el identificador del juego. La demo da 1 a B por tipo.
+  Ver la revisión del 16 de noviembre en la propuesta y V21.
 - **Siguiente: los entregables de 0.1** (README, diagramas, capturas, vídeo). Queda de P14 el límite del nombre de colección.
 - Requisitos de entrega del máster: propuesta, 0.1. Revísalos antes de planificar un bloque.
 - Ver `docs/seguimiento/verificaciones.md` para lo que hay que comprobar antes de OC1 y del

@@ -397,6 +397,47 @@ describe('POST /v1/items/{item_id}/transfer', () => {
   });
 });
 
+describe('GET /v1/holders?external_id= (contrato, 5.5)', () => {
+  const holderCount = () => (db.prepare('SELECT COUNT(*) AS n FROM holders').get() as { n: number }).n;
+
+  it('traduce un external_id registrado a su holder_id', async () => {
+    const created = await newItem(await newCollection(), { external_id: 'player-42' });
+    expect(created.status).toBe(202);
+
+    const r = await call({ method: 'GET', url: '/v1/holders?external_id=player-42' });
+    expect(r.status).toBe(200);
+    expect(r.body).toEqual({ holder_id: created.body['holder_id'], external_id: 'player-42' });
+    expect(r.body['holder_id']).toBe(derivePlayer(SEED, GAME_ID, 'player-42').holderId);
+  });
+
+  it('un external_id sin registrar es 404, y la lectura no lo registra', async () => {
+    const r = await call({ method: 'GET', url: '/v1/holders?external_id=player-77' });
+    expect(r.status).toBe(404);
+    expect(errorOf(r)).toBe('NOT_FOUND');
+    expect(holderCount()).toBe(0);
+  });
+
+  it('acepta caracteres que hay que codificar en la URL', async () => {
+    resolveHolder(db, { masterSeed: SEED, gameId: GAME_ID }, { external_id: 'jugador ñ/1' });
+    const r = await call({ method: 'GET', url: `/v1/holders?external_id=${encodeURIComponent('jugador ñ/1')}` });
+    expect(r.status).toBe(200);
+    expect(r.body['external_id']).toBe('jugador ñ/1');
+  });
+
+  it('validacion estricta: sin external_id, vacio, demasiado largo o con otro parametro es 400', async () => {
+    for (const query of ['', '?external_id=', `?external_id=${'x'.repeat(65)}`, '?external_id=a&otro=1', '?holder_id=hld_x']) {
+      const r = await call({ method: 'GET', url: `/v1/holders${query}` });
+      expect(r.status, query).toBe(400);
+      expect(errorOf(r)).toBe('REJECTED');
+    }
+  });
+
+  it('exige el read_token, no el write_key', async () => {
+    expect((await call({ method: 'GET', url: '/v1/holders?external_id=player-42', token: WRITE })).status).toBe(401);
+    expect((await call({ method: 'GET', url: '/v1/holders?external_id=player-42', token: null })).status).toBe(401);
+  });
+});
+
 describe('GET /v1/holders/{holder_id}/items', () => {
   it('un holder_id sin registrar es 404', async () => {
     expect((await call({ method: 'GET', url: '/v1/holders/hld_nada/items' })).status).toBe(404);

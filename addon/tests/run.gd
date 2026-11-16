@@ -20,6 +20,7 @@ func _run() -> void:
 	await _test_collection()
 	await _test_item_signals()
 	await _test_transfer()
+	await _test_inventory_by_player()
 	await _test_rejections()
 	await _test_same_call_id()
 	await _test_finished_handle_is_safe()
@@ -197,6 +198,25 @@ func _test_transfer() -> void:
 	var emptied: ChainHandle = _chain.inventory(a_id)
 	await _wait(emptied)
 	check(emptied.state == ChainHandle.SETTLED and emptied.result["items"].is_empty(), "inventario vacío: lista vacía")
+
+
+## El juego nombra a su jugador por su identificador: `Chain` pregunta antes su holder_id.
+func _test_inventory_by_player() -> void:
+	_chain.configure(_mock_config())
+	var item: ChainHandle = await _seed(3, "p")
+	var handle: ChainHandle = _chain.inventory("player-a")
+	check(not handle.is_finished(), "inventario por jugador: no se resuelve en el bloque que lo crea")
+	await _wait(handle)
+	check(handle.state == ChainHandle.SETTLED and handle.result.get("holder_id") == item.result["holder_id"],
+		"inventario por jugador: devuelve su holder_id")
+	var items: Array = handle.result.get("items", [])
+	check(items.size() == 1 and items[0]["item_id"] == item.result["item_id"] and items[0]["amount"] == 3,
+		"inventario por jugador: sus objetos")
+	for i in 2:
+		handle = _chain.inventory("player-nuevo")
+		await _wait(handle)
+		check(handle.error != null and handle.error.code == ChainError.NOT_FOUND,
+			"jugador sin registrar: NOT_FOUND, y consultar no lo da de alta (%d)" % i)
 
 
 func _test_rejections() -> void:

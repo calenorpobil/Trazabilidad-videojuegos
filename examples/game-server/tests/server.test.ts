@@ -76,20 +76,6 @@ describe('reenvío', () => {
     expect(request?.body).toEqual({ to: { external_id: 'player-b' }, amount: 1, from: { external_id: 'player-a' } });
   });
 
-  it('reenvía colecciones y tipos tal cual', async () => {
-    answer = { status: 201, body: { collection_id: 'col_1' } };
-    const collection = await post('/v1/collections', { name: 'Armería' }, 'k1');
-    expect(collection.statusCode).toBe(201);
-    expect(seen[0]?.body).toEqual({ name: 'Armería' });
-
-    const item = { collection_id: 'col_1', name: 'Espada', symbol: 'SWORD', initial_grant: { holder: { external_id: 'player-a' }, amount: 3 } };
-    answer = { status: 202, body: { operation_id: 'opr_2', item_id: 'itm_2', holder_id: 'hld_a' } };
-    const created = await post('/v1/items', item, 'k2');
-    expect(created.statusCode).toBe(202);
-    expect(seen[1]?.url).toBe('/v1/items');
-    expect(seen[1]?.body).toEqual(item);
-  });
-
   it('registra la acción antes de llamar al backend', async () => {
     await post('/v1/items/itm_1/transfer', { to: { holder_id: 'hld_b' }, amount: 2 });
 
@@ -105,7 +91,7 @@ describe('reenvío', () => {
       body: { error: { code: 'RATE_LIMITED', message: 'despacio', retryable: true } },
       headers: { 'retry-after': '10' },
     };
-    const response = await post('/v1/collections', { name: 'x' });
+    const response = await post('/v1/items/itm_1/transfer', { to: { external_id: 'player-b' }, amount: 1 });
 
     expect(response.statusCode).toBe(429);
     expect(response.headers['retry-after']).toBe('10');
@@ -127,8 +113,25 @@ describe('autorización', () => {
     expect(db.prepare('SELECT COUNT(*) AS n FROM actions').get()).toEqual({ n: 0 });
   });
 
+  it('no reenvía la creación de colecciones ni de tipos: el catálogo lo crea el estudio', async () => {
+    const collection = await post('/v1/collections', { name: 'Armería' });
+    const item = await post('/v1/items', {
+      collection_id: 'col_1',
+      name: 'Espada',
+      symbol: 'SWORD',
+      initial_grant: { holder: { external_id: 'player-a' }, amount: 1000 },
+    });
+
+    for (const response of [collection, item]) {
+      expect(response.statusCode).toBe(403);
+      expect(response.json().error.code).toBe('REJECTED');
+    }
+    expect(seen).toHaveLength(0);
+    expect(db.prepare('SELECT COUNT(*) AS n FROM actions').get()).toEqual({ n: 0 });
+  });
+
   it('exige Idempotency-Key', async () => {
-    const response = await post('/v1/collections', { name: 'x' }, null);
+    const response = await post('/v1/items/itm_1/transfer', { to: { external_id: 'player-b' }, amount: 1 }, null);
 
     expect(response.statusCode).toBe(400);
     expect(response.json().error.code).toBe('REJECTED');
@@ -174,12 +177,12 @@ describe('backend caído', () => {
     await backend.close();
     await start('http://127.0.0.1:9');
 
-    const response = await post('/v1/collections', { name: 'x' });
+    const response = await post('/v1/items/itm_1/transfer', { to: { external_id: 'player-b' }, amount: 1 });
 
     expect(response.statusCode).toBe(500);
     expect(response.json().error).toEqual({ code: 'INTERNAL', message: 'el backend no responde', retryable: true });
     expect(db.prepare('SELECT route, status_code FROM actions WHERE key = ?').get(KEY)).toEqual({
-      route: '/v1/collections',
+      route: '/v1/items/itm_1/transfer',
       status_code: null,
     });
   });

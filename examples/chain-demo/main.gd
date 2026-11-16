@@ -1,32 +1,25 @@
 extends Control
 
-## La escena del hito (propuesta, 7): un botón por operación, los inventarios de los jugadores A y B,
-## y el estado de cada operación. Sin arte y sin reglas de juego.
+## La escena del hito (propuesta, 7): los inventarios de los jugadores A y B, un botón para dar
+## una unidad de cada tipo de A a B, y el estado de cada operación. Sin arte y sin reglas de juego.
 ##
-## Las escrituras van al servidor de juego (`examples/game-server`), que decide que quien transfiere es
-## el jugador A; las lecturas van directas al backend. Este proyecto sólo habla con `Chain`.
+## El catálogo no se crea aquí: la colección y el tipo, con su entrega inicial a A, los crea el
+## estudio desde la consola `/admin` (revisión del 16 de noviembre de 2026). El juego sólo lee y
+## transfiere. Las transferencias van al servidor de juego (`examples/game-server`), que decide que
+## quien da es el jugador A; las lecturas van directas al backend.
 ##
 ## Configuración por variables de entorno:
 ##   CHAIN_DEMO_READ_TOKEN  el `read_token` del backend. Sin él, la demo arranca en modo MOCK
 ##   CHAIN_DEMO_WRITE_URL   el servidor de juego; por defecto http://127.0.0.1:8788
 ##   CHAIN_DEMO_READ_URL    el backend; por defecto http://127.0.0.1:8787
 ##
-## El estado del juego (la colección, el tipo y los jugadores) sólo se guarda en `settled`; `applied`
-## sólo se enseña (invariante 5). Nada se guarda al cerrar: cada ejecución empieza por crear la colección.
+## Los inventarios sólo se releen en `settled`; `applied` sólo se enseña (invariante 5).
 
 const PLAYER_A := "player-a"
 const PLAYER_B := "player-b"
-const ITEM_AMOUNT := 3
 
-var _collection_id := ""
-var _item_id := ""
-var _holder_a := ""
-var _holder_b := ""
-
-var _item_button: Button
-var _transfer_button: Button
-var _inventory_a: Label
-var _inventory_b: Label
+var _inventory_a: VBoxContainer
+var _inventory_b: VBoxContainer
 var _operations: VBoxContainer
 ## Una fila por operación: `label`, `title`, `handle` y `trail`, los estados por los que ha pasado.
 var _rows: Array[Dictionary] = []
@@ -36,9 +29,9 @@ func _ready() -> void:
 	var config := _config()
 	Chain.configure(config)
 	_build(config)
-	_update_buttons()
-	_show_inventory(_inventory_a, PLAYER_A, [])
-	_show_inventory(_inventory_b, PLAYER_B, [])
+	if config.mode == ChainConfig.Mode.MOCK:
+		await _seed_mock()
+	refresh_inventories()
 
 
 ## El identificador de la operación llega al aceptarla, sin señal: se repinta mientras está en curso.
@@ -48,64 +41,25 @@ func _process(_delta: float) -> void:
 			_paint(row)
 
 
-# --- Operaciones: una por botón ---------------------------------------------------------
+# --- Lo que hace el jugador ---------------------------------------------------------------
 
-func create_collection() -> ChainHandle:
-	var handle := Chain.create_collection("Armería de la demo", _call_id("collection"))
-	_track("Crear colección", handle)
-	_after_collection(handle)
-	return handle
-
-
-func create_item() -> ChainHandle:
-	var qualities := {"rarity": "common", "damage": "12"}
-	var handle := Chain.create_item(
-		_collection_id, "Espada de hierro", "SWORD", "", qualities, PLAYER_A, ITEM_AMOUNT, _call_id("item"))
-	_track("Crear objeto: %d para A" % ITEM_AMOUNT, handle)
-	_after_item(handle)
-	return handle
-
-
-func transfer_one() -> ChainHandle:
-	# Antes de su primera transferencia, B no tiene `holder_id`: se le nombra por su identificador.
-	var recipient := _holder_b if not _holder_b.is_empty() else PLAYER_B
-	var handle := Chain.transfer(_item_id, 1, recipient, _call_id("transfer"))
-	_track("Transferir 1 de A a B", handle)
+## Da una unidad del tipo `item_id` a B. Quien da lo decide el servidor de juego: el jugador A.
+func give_one(item_id: String, item_name: String) -> ChainHandle:
+	var handle := Chain.transfer(item_id, 1, PLAYER_B, _call_id("transfer"))
+	_track("Dar 1 «%s» a B" % item_name, handle)
 	_after_transfer(handle)
 	return handle
 
 
 func refresh_inventories() -> void:
-	await _refresh(_inventory_a, PLAYER_A, _holder_a)
-	await _refresh(_inventory_b, PLAYER_B, _holder_b)
-
-
-# --- Lo que se hace al acabar cada una: sólo en `settled` --------------------------------
-
-func _after_collection(handle: ChainHandle) -> void:
-	if not handle.is_finished():
-		await handle.finished
-	if handle.state == ChainHandle.SETTLED:
-		_collection_id = handle.result["collection_id"]
-		_item_id = ""
-	_update_buttons()
-
-
-func _after_item(handle: ChainHandle) -> void:
-	if not handle.is_finished():
-		await handle.finished
-	if handle.state == ChainHandle.SETTLED:
-		_item_id = handle.result["item_id"]
-		_holder_a = handle.result["holder_id"]
-		await refresh_inventories()
-	_update_buttons()
+	await _refresh(_inventory_a, PLAYER_A, true)
+	await _refresh(_inventory_b, PLAYER_B, false)
 
 
 func _after_transfer(handle: ChainHandle) -> void:
 	if not handle.is_finished():
 		await handle.finished
 	if handle.state == ChainHandle.SETTLED:
-		_holder_b = handle.result["to_holder_id"]
 		await refresh_inventories()
 
 
@@ -115,37 +69,84 @@ static func _call_id(kind: String) -> String:
 	return "%s-%d-%d" % [kind, int(Time.get_unix_time_from_system()), randi() % 1000000]
 
 
-# --- Inventarios ------------------------------------------------------------------------
-
-func _refresh(label: Label, player: String, holder_id: String) -> void:
-	if holder_id.is_empty():
-		_show_inventory(label, player, [])
+## En MOCK no hay consola: la demo se crea un tipo de prueba en memoria para tener algo que dar.
+## En LIVE, `create_collection` y `create_item` no se usan; el servidor de juego los rechaza.
+func _seed_mock() -> void:
+	var collection := Chain.create_collection("Armería de prueba", _call_id("collection"))
+	_track("Datos de prueba: colección", collection)
+	if not collection.is_finished():
+		await collection.finished
+	if collection.state != ChainHandle.SETTLED:
 		return
-	var handle := Chain.inventory(holder_id)
+	var item := Chain.create_item(collection.result["collection_id"], "Espada de hierro", "SWORD", "",
+		{"rarity": "common", "damage": "12"}, PLAYER_A, 3, _call_id("item"))
+	_track("Datos de prueba: 3 espadas para A", item)
+	if not item.is_finished():
+		await item.finished
+
+
+# --- Inventarios --------------------------------------------------------------------------
+
+func _refresh(box: VBoxContainer, player: String, can_give: bool) -> void:
+	var handle := Chain.inventory(player)
 	if not handle.is_finished():
 		await handle.finished
-	if handle.state == ChainHandle.FAILED:
-		label.text = "%s\n\nNo se pudo leer: %s" % [player, handle.error]
-		return
-	_show_inventory(label, player, handle.result.get("items", []))
+	if handle.state == ChainHandle.SETTLED:
+		_show_inventory(box, player, handle.result.get("holder_id", ""), handle.result.get("items", []), can_give)
+	elif handle.error.code == ChainError.NOT_FOUND:
+		# Nunca ha recibido nada: el servidor todavía no lo conoce.
+		_show_inventory(box, player, "", [], can_give)
+	else:
+		_show_message(box, player, "No se pudo leer: %s" % handle.error)
 
 
-func _show_inventory(label: Label, player: String, items: Array) -> void:
-	var lines := PackedStringArray([player, ""])
+func _show_inventory(box: VBoxContainer, player: String, holder_id: String, items: Array, can_give: bool) -> void:
+	_clear(box)
+	_add_label(box, "%s   %s" % [player, holder_id]).add_theme_font_size_override("font_size", 18)
 	if items.is_empty():
-		lines.append("(sin objetos)")
+		_add_label(box, "(sin objetos)")
 	for item: Dictionary in items:
-		lines.append("%d × %s (%s)" % [item["amount"], item["name"], item["symbol"]])
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 12)
+		box.add_child(row)
+		var lines := PackedStringArray(["%d × %s (%s)   %s" % [item["amount"], item["name"], item["symbol"], item["item_id"]]])
 		var qualities: Dictionary = item.get("qualities", {})
 		for key: String in qualities:
 			lines.append("    %s: %s" % [key, qualities[key]])
-	label.text = "\n".join(lines)
+		var text := _add_label(row, "\n".join(lines))
+		text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		if can_give:
+			var button := Button.new()
+			button.text = "Dar 1 a B"
+			button.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+			button.pressed.connect(give_one.bind(item["item_id"], item["name"]))
+			row.add_child(button)
 
 
-# --- Estado de las operaciones ----------------------------------------------------------
+func _show_message(box: VBoxContainer, player: String, message: String) -> void:
+	_clear(box)
+	_add_label(box, player).add_theme_font_size_override("font_size", 18)
+	_add_label(box, message)
+
+
+static func _clear(box: VBoxContainer) -> void:
+	for child in box.get_children():
+		box.remove_child(child)
+		child.queue_free()
+
+
+static func _add_label(parent: Control, text: String) -> Label:
+	var label := Label.new()
+	label.text = text
+	parent.add_child(label)
+	return label
+
+
+# --- Estado de las operaciones ------------------------------------------------------------
 
 func _track(title: String, handle: ChainHandle) -> void:
 	var label := Label.new()
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_operations.add_child(label)
 	_operations.move_child(label, 0)
 	var index := _rows.size()
@@ -174,12 +175,7 @@ func _paint(row: Dictionary) -> void:
 	row["label"].text = "%s   %s   %s" % [row["title"], operation, " → ".join(row["trail"])]
 
 
-func _update_buttons() -> void:
-	_item_button.disabled = _collection_id.is_empty()
-	_transfer_button.disabled = _item_id.is_empty()
-
-
-# --- Configuración e interfaz -----------------------------------------------------------
+# --- Configuración e interfaz -------------------------------------------------------------
 
 static func _config() -> ChainConfig:
 	var config := ChainConfig.new()
@@ -217,50 +213,55 @@ func _build(config: ChainConfig) -> void:
 
 	var mode := Label.new()
 	if config.mode == ChainConfig.Mode.MOCK:
-		mode.text = "Modo MOCK: en memoria y sin red (define CHAIN_DEMO_READ_TOKEN para el modo LIVE)."
+		mode.text = "Modo MOCK: en memoria y sin red, con un tipo de prueba (define CHAIN_DEMO_READ_TOKEN para el modo LIVE)."
 	else:
-		mode.text = "Modo LIVE. Escrituras: servidor de juego en %s. Lecturas: %s." % [config.write_url, config.read_url]
+		mode.text = ("Modo LIVE. Transferencias: servidor de juego en %s. Lecturas: %s.\n"
+			+ "Los objetos se crean desde la consola del backend, en /admin.") % [config.write_url, config.read_url]
 	column.add_child(mode)
 
-	var buttons := HBoxContainer.new()
-	buttons.add_theme_constant_override("separation", 12)
-	column.add_child(buttons)
-	_button(buttons, "1. Crear colección", create_collection)
-	_item_button = _button(buttons, "2. Crear objeto (%d para A)" % ITEM_AMOUNT, create_item)
-	_transfer_button = _button(buttons, "3. Transferir 1 de A a B", transfer_one)
-	_button(buttons, "Releer inventarios", refresh_inventories)
+	var refresh := Button.new()
+	refresh.text = "Releer inventarios"
+	refresh.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	refresh.pressed.connect(refresh_inventories)
+	column.add_child(refresh)
 
+	# Si los inventarios no caben, se recorren con su barra; las operaciones guardan siempre su sitio abajo.
+	var inventory_scroll := ScrollContainer.new()
+	inventory_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	inventory_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	column.add_child(inventory_scroll)
 	var inventories := HBoxContainer.new()
+	inventories.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	inventories.add_theme_constant_override("separation", 16)
-	column.add_child(inventories)
+	inventory_scroll.add_child(inventories)
 	_inventory_a = _panel(inventories)
 	_inventory_b = _panel(inventories)
+	_show_message(_inventory_a, PLAYER_A, "Leyendo…")
+	_show_message(_inventory_b, PLAYER_B, "Leyendo…")
 
 	var heading := Label.new()
 	heading.text = "Operaciones (la más reciente arriba)"
 	column.add_child(heading)
 
 	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.custom_minimum_size = Vector2(0, 120)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	column.add_child(scroll)
 	_operations = VBoxContainer.new()
 	_operations.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(_operations)
 
 
-static func _button(parent: Control, text: String, action: Callable) -> Button:
-	var button := Button.new()
-	button.text = text
-	button.pressed.connect(func() -> void: action.call())
-	parent.add_child(button)
-	return button
-
-
-static func _panel(parent: Control) -> Label:
+static func _panel(parent: Control) -> VBoxContainer:
 	var panel := PanelContainer.new()
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	panel.custom_minimum_size = Vector2(0, 180)
+	panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	parent.add_child(panel)
-	var label := Label.new()
-	panel.add_child(label)
-	return label
+	var margin := MarginContainer.new()
+	for side in ["left", "right", "top", "bottom"]:
+		margin.add_theme_constant_override("margin_" + side, 12)
+	panel.add_child(margin)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 8)
+	margin.add_child(box)
+	return box

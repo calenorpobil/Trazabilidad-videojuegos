@@ -3,9 +3,12 @@
  * único que tiene el `write_key`, y quien decide qué puede hacer cada jugador. El addon le manda las
  * escrituras; las lecturas van directas del juego al backend, con el `read_token`, y no pasan por aquí.
  *
- *   POST /v1/collections                 se reenvía tal cual
- *   POST /v1/items                       se reenvía tal cual
- *   POST /v1/items/{item_id}/transfer    el emisor lo pone el servidor: el jugador de la demo
+ *   POST /v1/items/{item_id}/transfer    se reenvía; el emisor lo pone el servidor: el jugador de la demo
+ *   POST /v1/collections, POST /v1/items `403` / `REJECTED`: el catálogo lo crea el estudio
+ *
+ * **El juego no crea colecciones ni tipos** (propuesta, revisión del 16 de noviembre de 2026). Eso es del
+ * estudio, desde la consola `/admin`, que también hace la entrega inicial. Un servidor que reenviara la
+ * creación pedida por el cliente dejaría a cualquier jugador crearse los objetos que quisiera.
  *
  * Cada escritura sigue el mismo orden:
  *   1. exige `Idempotency-Key` y autoriza: el juego no puede elegir el emisor de una transferencia;
@@ -137,9 +140,10 @@ export function buildServer(options: ServerOptions): FastifyInstance {
     return reply.status(response.status).send(body);
   }
 
-  app.post('/v1/collections', async (request, reply) => relay(request, reply, '/v1/collections', (body) => body));
-
-  app.post('/v1/items', async (request, reply) => relay(request, reply, '/v1/items', (body) => body));
+  const catalogIsForTheStudio = async (_request: FastifyRequest, reply: FastifyReply) =>
+    sendError(reply, 403, 'REJECTED', 'el juego no crea colecciones ni tipos: lo hace el estudio desde la consola');
+  app.post('/v1/collections', catalogIsForTheStudio);
+  app.post('/v1/items', catalogIsForTheStudio);
 
   app.post<{ Params: { item_id: string } }>('/v1/items/:item_id/transfer', async (request, reply) =>
     relay(request, reply, `/v1/items/${encodeURIComponent(request.params.item_id)}/transfer`, (body) => {

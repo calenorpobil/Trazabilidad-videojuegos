@@ -8,6 +8,7 @@
  *   GET  /v1/operations/{operation_id}   lectura: lo que sondea el addon
  *   GET  /v1/collections                 lectura (W1, contrato 5.3)
  *   GET  /v1/items                       lectura (W1, contrato 5.4), con el estado de su creacion
+ *   GET  /v1/holders?external_id=...     lectura (contrato 5.5): el holder_id de un jugador ya registrado
  *
  * Lo demas responde `404`: `POST …/grants` y `PATCH /v1/items/{id}` quedan bajo la linea de corte
  * (propuesta, 8.1). La consola `/admin` (W1) esta en `admin.ts` y usa estos mismos manejadores.
@@ -55,7 +56,7 @@ import { collectionExists, listCollections, listItems } from './catalog.js';
 import { DEFAULT_READ_RATE_LIMIT } from './config.js';
 import { errorBody, ERROR_HTTP_STATUS, IDEMPOTENCY_HEADER, RESERVED_QUALITY_KEY, type ErrorCode } from './contract.js';
 import { timestamp, type Db } from './db.js';
-import { resolveHolder, type Holder, type HolderKeys, type HolderRef } from './holders.js';
+import { findHolderIdByExternalId, resolveHolder, type Holder, type HolderKeys, type HolderRef } from './holders.js';
 import { claim, findAccepted, isValidIdempotencyKey, type AcceptedResponse } from './idempotency.js';
 import { newId } from './ids.js';
 import { readHolderInventory, type InventoryRpc } from './inventory.js';
@@ -141,6 +142,8 @@ const itemBody = z.strictObject({
 const transferBody = z.strictObject({ from: holderRef, to: holderRef, amount });
 
 const itemsQuery = z.strictObject({ collection_id: z.string().min(1).optional() });
+
+const holderQuery = z.strictObject({ external_id: text(1, EXTERNAL_ID_MAX) });
 
 // --- Credenciales (contrato, 2) ---
 
@@ -388,6 +391,14 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
         };
       }),
   );
+
+  // Solo traduce: un external_id que ninguna escritura ha nombrado es 404, y no se registra (contrato, 5.5).
+  app.get('/v1/holders', { preHandler: requireRead }, async (request) => {
+    const { external_id: externalId } = holderQuery.parse(request.query);
+    const holderId = findHolderIdByExternalId(db, externalId);
+    if (holderId === null) throw new ContractError('NOT_FOUND', 'jugador sin registrar: ninguna escritura lo ha nombrado');
+    return { holder_id: holderId, external_id: externalId };
+  });
 
   app.get<{ Params: { holder_id: string } }>(
     '/v1/holders/:holder_id/items',

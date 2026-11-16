@@ -113,14 +113,20 @@ func transfer(item_id: String, amount: int, recipient: String, call_id: String) 
 
 
 ## Lee lo que tiene un jugador. `result["items"]` es una lista de diccionarios con
-## `item_id`, `collection_id`, `name`, `symbol`, `uri`, `qualities` y `amount`. Sólo
-## refleja lo ya final: una operación en curso puede no verse todavía.
-func inventory(holder_id: String) -> ChainHandle:
+## `item_id`, `collection_id`, `name`, `symbol`, `uri`, `qualities` y `amount`, y
+## `result["holder_id"]` es su `holder_id`. Sólo refleja lo ya final: una operación en
+## curso puede no verse todavía.
+##
+## `holder` es un `hld_...` o el identificador que el juego da a su jugador. Con el
+## segundo, `Chain` pregunta antes su `holder_id`. Un jugador que nunca ha recibido nada
+## falla con `NOT_FOUND`: para el juego, no tiene objetos.
+func inventory(holder: String) -> ChainHandle:
 	var handle := ChainHandle.new()
 	var problem := _config_problem()
 	if not problem.is_empty():
 		return _fail_later(handle, ChainError.CONFIG, problem)
-	_enqueue(_new_job(handle, Mock.INVENTORY, holder_id))
+	var route := Mock.INVENTORY if holder.begins_with(_HOLDER_PREFIX) else Mock.HOLDER
+	_enqueue(_new_job(handle, route, holder))
 	return handle
 
 
@@ -241,6 +247,8 @@ func _url(job: _Job) -> String:
 			return "%s/v1/items/%s/transfer" % [_base(config.write_url), target]
 		Mock.INVENTORY:
 			return "%s/v1/holders/%s/items" % [_base(config.read_url), target]
+		Mock.HOLDER:
+			return "%s/v1/holders?external_id=%s" % [_base(config.read_url), target]
 	return "%s/v1/operations/%s" % [_base(config.read_url), target]
 
 
@@ -298,10 +306,13 @@ func _on_completed(result: int, status: int, headers: PackedStringArray, body: P
 ## Una respuesta, venga de la red o del modo MOCK.
 func _on_response(job: _Job, status: int, data: Variant, retry_after: float) -> void:
 	if status >= 200 and status < 300 and data is Dictionary:
-		if job.route == Mock.OPERATION:
-			_on_polled(job, data)
-		else:
-			_on_accepted(job, data)
+		match job.route:
+			Mock.OPERATION:
+				_on_polled(job, data)
+			Mock.HOLDER:
+				_on_resolved(job, data)
+			_:
+				_on_accepted(job, data)
 		return
 	var error := ChainError.from_response(status, data)
 	# Durante el seguimiento, un fallo pasajero del servidor no dice nada de la
@@ -331,6 +342,18 @@ func _on_accepted(job: _Job, data: Dictionary) -> void:
 	# Sin operación que seguir: una colección creada o un inventario leído.
 	job.handle._accept(_with_whole_amounts(data))
 	_settle(job)
+
+
+## Ya se sabe el `holder_id`: el mismo trabajo pasa a leer el inventario, sin esperar
+## al siguiente tic.
+func _on_resolved(job: _Job, data: Dictionary) -> void:
+	var holder_id: Variant = data.get("holder_id")
+	if not holder_id is String or not holder_id.begins_with(_HOLDER_PREFIX):
+		_fail(job, ChainError.new(ChainError.INTERNAL, "respuesta sin holder_id"))
+		return
+	job.route = Mock.INVENTORY
+	job.target = holder_id
+	_advance(job)
 
 
 func _on_polled(job: _Job, data: Dictionary) -> void:

@@ -583,6 +583,47 @@ transferencia con `from: player-a`. La consola `/admin` lista las dos operacione
 transferencia como `player-a → player-b`, y da el inventario de `player-b`. No se pulsaron los botones a mano: queda para la
 grabación del vídeo.
 
+### V21 — El catálogo pasa a la consola y el contrato gana `GET /v1/holders` (16 de noviembre de 2026)
+
+Decisión del responsable al probar la demo (propuesta, revisión del 16 de noviembre). Al pulsar varias veces «Crear
+objeto», el inventario de A mostraba varios tipos «Espada de hierro» de 3 unidades, y la transferencia sólo movía el
+último. Era correcto según el modelo, porque cada creación es un tipo distinto, pero dejaba ver que el juego creaba
+catálogo, algo que la sección 3 rechaza.
+
+- **Servidor de juego:** `POST /v1/collections` y `POST /v1/items` responden `403` / `REJECTED` sin registrar ni
+  llamar. Sólo reenvía transferencias.
+- **Contrato, 5.5:** `GET /v1/holders?external_id=…` (`read_token`, mismo límite de tasa). Traduce un `external_id` ya
+  registrado a su `holder_id` **sin registrarlo** (`findHolderIdByExternalId`, `holders.ts`); sin registrar, `404`.
+  Validación estricta: el parámetro es obligatorio, de 1 a 64 caracteres, y no admite otro. Cinco tests nuevos.
+- **Addon:** `Chain.inventory()` acepta un `hld_…` o el identificador del juego. Con el segundo, el mismo trabajo
+  resuelve primero (ruta `holder` del mock) y después lee, sin esperar al siguiente tic. `create_collection` y
+  `create_item` no cambian. Test nuevo en la suite: inventario por jugador, y `NOT_FOUND` sin dar de alta.
+- **Demo:** sin botones de crear. Al abrirse lee `player-a` y `player-b` por su identificador; cada tipo de A tiene
+  su «Dar 1 a B» y muestra su `item_id`, porque dos tipos pueden llamarse igual. Un jugador sin registrar se ve «sin
+  objetos». En MOCK la demo se crea un tipo de prueba con `create_collection` y `create_item`, que el mock sí atiende.
+
+**Prueba en devnet** (16-nov-2026, juego `chain-demo`). Colección y tipo «Escudo de roble» (`SHIELD`, `rarity: rare`,
+`defense: 8`, 3 para `player-a`) creados por la API de la consola, como su formulario. El servidor de juego nuevo
+rechaza `POST /v1/collections` con `403`. `GET /v1/holders?external_id=player-a` da su `holder_id`, y con `player-z`,
+`404`. Desde la escena, en LIVE:
+
+| Paso | Operación | Estados | Firma (una por transacción, sin error) |
+|---|---|---|---|
+| Tipo creado en la consola | `opr_B22DtPke7R97xoRl` | `settled` | `5rt35nNrsuTMBzrQAadn1ERNyxDbqTK7Y2aTryRht11aUkyFzBg7eZiYGzAoWYpcHtVaLfVvBgt22CQReUcvHtXa` |
+| Dar 1 a B | `opr_x0tdHp2J9rvPsRov` | `pending → applied → settled` | `aa8cuYxtnshu6ZXUdNwjUDeQn7Jx2b1zPPTLDvnkHUd2rDGyr1yuDBGvvD4d4yqaayKjrydnEoucWWqjzPjZFwy` |
+| Dar 1 a B | `opr_cWpokN7RwNFwdhUz` | `pending → applied → settled` | `3c8tnUAmGYHHCWBC7XweAwEfxLdMRs5HQNQje8x1W9PtAYd2yUwPLnYTXaJvYUobo9nU2pKfX4yBPZSQV2mmp4bC` |
+| Dar 1 a B | `opr_49m7POfZs8gabWEE` | `pending → applied → settled` | `3LvuTTKhv3Q6wuGvMswaCcD7qiQ9Feq5q2L9va7CJboH7yiC29MAyi8WbZehVrcqmuhNjHVoNvKosxzoGsVXZS5u` |
+| Dar 1 a B, sin escudos | — | `failed` (`INSUFFICIENT_BALANCE`) | — |
+
+El escudo pasó de 3 a 0 en A y de 0 a 3 en B; los tipos «Espada de hierro» de A no se movieron. El quinto intento,
+sin unidades, falla antes de la cadena con `409`, y la escena lo muestra como no reintentable.
+
+- **Disposición:** con cuatro tipos en A, los paneles empujaban la lista de operaciones fuera de la ventana. Los
+  inventarios van ahora en una zona con barra propia, y las operaciones tienen siempre 120 px abajo y parten línea.
+- **Texto que no es UTF-8:** una petición de prueba hecha con `curl` desde Git Bash mandó «í» en Latin-1, y el backend
+  guardó el nombre de la colección con el carácter de reemplazo («Armer�a (consola)»). No es un fallo del contrato, pero
+  el backend acepta UTF-8 inválido sin quejarse. La consola, desde el navegador, siempre manda UTF-8.
+
 ---
 
 ## Pendiente

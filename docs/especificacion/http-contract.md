@@ -332,6 +332,28 @@ Parámetro opcional: `?collection_id=col_...`. Con un identificador que no exist
 - Es una lectura con `read_token`, y por tanto de acceso público de facto como el resto
   (limitación 12.5): el catálogo ya es público en la cadena.
 
+### 5.5 `GET /v1/holders?external_id=…`
+
+Añadido el 16-nov-2026. Lectura (`read_token`). Traduce el identificador que el juego da a su jugador al
+`holder_id` con el que se leen sus objetos (5.2). Hace falta porque la creación de tipos pasó a la consola de
+administración: el juego ya no recibe el `holder_id` en la respuesta de una escritura propia (propuesta,
+revisión del 16 de noviembre de 2026).
+
+```
+GET /v1/holders?external_id=player-42
+```
+→ `200`
+```json
+{ "holder_id": "hld_9fK2...", "external_id": "player-42" }
+```
+
+- `external_id` es obligatorio, de 1 a 64 caracteres (4.1). Cualquier otro parámetro: `400` / `REJECTED`.
+- **Sólo traduce, no registra.** Un `external_id` que ninguna escritura ha nombrado todavía es `404` /
+  `NOT_FOUND`: ese jugador no tiene ni ha tenido objetos. Una lectura nunca crea un tenedor.
+- Es una lectura con `read_token`, de acceso público de facto (limitación 12.5). Con ella basta conocer el
+  `external_id` de un jugador para leer su inventario, cuando antes hacía falta su `holder_id`. Se acepta: los
+  inventarios ya eran legibles por cualquiera con el token, y el límite de tasa es el mismo.
+
 ---
 
 ## 6. Errores
@@ -405,7 +427,9 @@ cerrado con la opción más simple, y quedan listados para que el cambio sea vis
 1. **Cómo se nombra a un tenedor.** La propuesta usa `hld_` en el lado Godot y
    `external_id` en el lado del servidor. Se admite una referencia con cualquiera de
    los dos, y toda escritura devuelve el `holder_id` resuelto. Evita añadir un endpoint
-   de resolución, que habría sido alcance nuevo.
+   de resolución, que habría sido alcance nuevo. **Revisado el 16-nov-2026:** se añade la
+   lectura de resolución (5.5), porque con la creación de tipos en la consola el juego ya
+   no recibe el `holder_id` de sus jugadores en ninguna escritura propia.
 2. **`game_id` no es un campo de petición.** Es configuración del despliegue, porque
    el multi-tenant está fuera de alcance (sección 11).
 3. **`POST /v1/items` exige `initial_grant`.** La propuesta dice que ese endpoint
@@ -430,3 +454,4 @@ cerrado con la opción más simple, y quedan listados para que el cambio sea vis
 | 2026-10-11 | Secciones 5.3 y 5.4: `GET /v1/collections` y `GET /v1/items` (listados de catálogo para la web de administración). Sólo lecturas nuevas; ninguna ruta existente cambia. Fuera del hito: bajo la línea de corte. Sección 2: se aclara que las rutas `/admin` de la consola no son parte del contrato. |
 | 2026-11-08 | Sección 4.3: `POST /v1/items` rechaza con `400` / `REJECTED` un tipo que no cabe en una transacción aunque cumpla los límites. Medido en OC1: sólo ocurre con casi todos los campos al máximo. Sin cambio de forma en ningún endpoint. |
 | 2026-11-12 | Sección 4.1: `external_id` de 1 a 64 caracteres (hueco 9.6). Sin cambio de forma en ningún endpoint. |
+| 2026-11-16 | Sección 5.5: `GET /v1/holders?external_id=…`, lectura que traduce un `external_id` ya registrado a su `holder_id`, sin registrarlo. Decisión del responsable al pasar la creación de tipos a la consola (propuesta, revisión del 16 de noviembre). Sólo una lectura nueva; ninguna ruta existente cambia. Revisa el hueco 9.1. |

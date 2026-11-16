@@ -125,6 +125,24 @@ El responsable cierra también dos huecos:
    pagar, `503` / `INSUFFICIENT_FUNDS`, y si no hay saldo, `409`, sin guardar la clave (`verificaciones.md`, V18). El
    contrato no cambia.
 
+### Revisión del 16 de noviembre de 2026
+
+Al probar la demo de A3 + A4, el responsable decide que **el juego no crea colecciones ni tipos**. El
+catálogo es del estudio: la colección y el tipo, con su entrega inicial al jugador A, se crean desde la
+consola `/admin`, que ya lo permitía (W1). El juego sólo lee inventarios y pide transferencias. Era la
+arquitectura que defendía la sección 3 («un juego que mintea desde el cliente es un juego donde cualquiera
+se mintea lo que quiera»), y la demo la contradecía: su servidor de juego reenviaba la creación que pedía el
+cliente, sin comprobar nada. Cambian las secciones 3, 5, 6, 7 y 8.1, y la limitación 12.5.
+
+1. **El servidor de juego rechaza crear** colecciones y tipos: `403` / `REJECTED`. Sólo reenvía transferencias.
+2. **`create_collection` y `create_item` se quedan en el addon**, sin cambios. En `LIVE` no sirven con el servidor
+   de juego del ejemplo; la demo sólo las usa en `MOCK`, para tener un tipo de prueba sin consola.
+3. **El contrato gana una lectura**, `GET /v1/holders?external_id=…` (contrato, 5.5). Sin ella, el juego no podía
+   saber el `holder_id` de su jugador, porque ya no lo recibe en la respuesta de una escritura propia.
+   `Chain.inventory()` acepta ahora también el identificador del juego, y lo traduce antes de leer.
+4. **La demo** muestra los inventarios de A y B y un botón «Dar 1 a B» por cada tipo que tiene A, en vez de un
+   botón por operación. Así se ve a qué tipo afecta cada transferencia aunque varios tipos compartan nombre.
+
 ### 0.1 Requisitos de entrega del máster
 
 Hasta el 4 de noviembre eran supuestos. Ahora salen de las instrucciones generales de entrega del TFM,
@@ -265,7 +283,8 @@ Navegador (consola) ──cookie de sesión──▶ chain-backend (rutas /admin
   ni el servidor de juego.
 - **Qué hace en el hito (5-nov-2026):** es el dashboard web de la entrega. Crear colecciones y tipos,
   consultar operaciones e inventarios y listar el catálogo, con enlace de cada operación a su transacción
-  en un explorador. Entregar y transferir se hacen desde la demo. Sale de la maqueta `docs/especificacion/mockup-admin/index.html`,
+  en un explorador. La entrega al jugador A es la inicial del tipo, desde aquí; transferir se hace desde la
+  demo (revisión del 16 de noviembre de 2026). Sale de la maqueta `docs/especificacion/mockup-admin/index.html`,
   que hoy simula el servidor. Su código vive en `frontend/`, como HTML y JavaScript sin paso de compilación,
   y lo sirve el backend.
 - **Fuera del hito:** importar un catálogo y editar un tipo (8.1). El servidor de juego sigue siendo quien
@@ -622,6 +641,7 @@ Vocabulario **sin cadena**. Si un endpoint necesita decir «blockhash», la cost
 | `GET` | `/v1/holders/{holder_id}/items` | lectura | `[ { item_id, name, qualities, amount } ]` |
 | `GET` | `/v1/collections` | lectura | `{ collections: [...] }` — para la web de administración |
 | `GET` | `/v1/items` | lectura | `{ items: [...] }`, filtrable por `collection_id` — para la web de administración |
+| `GET` | `/v1/holders?external_id=…` | lectura | `{ holder_id, external_id }` — el `holder_id` de un jugador ya registrado, sin registrarlo (16-nov-2026) |
 
 Las escrituras exigen `write_key` + `Idempotency-Key`. Las lecturas, `read_token`.
 
@@ -712,18 +732,27 @@ el juego. Sin él, una transferencia en `MOCK` falla con `REJECTED` (A2).
 Esto sustituye al `mock-backend` de la propuesta original. Coste: el mock puede divergir del backend
 real, y no hay tests de conformidad que lo impidan. Queda anotado en 12.6.
 
+### Catálogo e inventario (16-nov-2026)
+
+El juego no crea catálogo: `create_collection` y `create_item` siguen en `Chain`, pero el servidor de juego del
+ejemplo los rechaza en `LIVE`, y la demo sólo los usa en `MOCK`. `inventory(holder)` acepta un `hld_…` o el
+identificador del jugador en el juego; con el segundo, `Chain` pregunta antes su `holder_id` (contrato, 5.5). Un
+jugador que nunca ha recibido nada da `NOT_FOUND`, que para el juego es «sin objetos».
+
 ---
 
 ## 7. Hito mínimo demostrable
 
-> En devnet, desde un proyecto Godot 4 y **pasando por un servidor de juego de ejemplo**: crear una
-> colección, crear un objeto con cualidades de tipo, entregarlo al jugador A, transferir una unidad
-> del jugador A al jugador B, y ver el inventario de ambos actualizado en pantalla. Lo mismo se puede
-> consultar desde el **dashboard web**, con enlace de cada operación a su transacción en un explorador. La
-> entrega al jugador A es la cantidad inicial de `POST /v1/items` (8.1).
+> En devnet: desde el **dashboard web**, crear una colección y un objeto con cualidades de tipo, entregado
+> al jugador A. Desde un proyecto Godot 4 y **pasando por un servidor de juego de ejemplo**, transferir una
+> unidad del jugador A al jugador B y ver el inventario de ambos actualizado en pantalla. El dashboard
+> enlaza cada operación a su transacción en un explorador. La entrega al jugador A es la cantidad inicial
+> de `POST /v1/items` (8.1). Revisado el 16 de noviembre de 2026: antes, la colección y el objeto se creaban
+> desde el juego.
 
-**Se demuestra con una demo sencilla** (`examples/chain-demo/`): una sola escena de Godot, con un botón
-por operación, los inventarios de A y B, y el estado `applied`/`settled` de cada operación. Sin arte, sin
+**Se demuestra con una demo sencilla** (`examples/chain-demo/`): una sola escena de Godot, con los
+inventarios de A y B, un botón para dar una unidad de cada tipo de A a B, y el estado `applied`/`settled`
+de cada operación. Sin arte, sin
 reglas de juego y sin *Nidada*: su único fin es probar con facilidad las funciones de la cadena. Las
 transacciones se enseñan en un explorador desde el dashboard, con las firmas que registra el backend, nunca
 desde `addon/`.
@@ -781,7 +810,8 @@ el README:
    porque `POST /items` la usa. El contrato no cambia: el endpoint queda sin implementar.
 3. `mock_force` y la parte del modo mock que prueba reversiones: fuera. Se conserva el mock básico.
 4. Backoff del sondeo: fuera. Intervalo fijo con `Timer`.
-5. Entregar y transferir desde el dashboard: fuera. Se hacen desde la demo.
+5. Transferir desde el dashboard: fuera. Se hace desde la demo. Entregar, sólo la entrega inicial al crear un
+   tipo desde el dashboard (revisión del 16 de noviembre de 2026).
 
 **Si aun así no llega**, el siguiente recorte son las pantallas del dashboard que no salgan en el vídeo ni en las
 capturas.
@@ -890,7 +920,8 @@ que nadie —empezando por el tribunal— las descubra por sorpresa.
    transferible para siempre. Un futuro objeto ligado a la cuenta exigiría mints nuevos.
 5. **El `read_token` es público de facto.** Va en el binario del juego; cualquiera puede extraerlo y
    consultar el inventario de cualquier jugador de ese juego. Es el precio de que las lecturas no
-   pasen por el servidor de juego.
+   pasen por el servidor de juego. Desde el 16 de noviembre de 2026 basta con conocer el identificador del
+   jugador en el juego, no su `holder_id` (contrato, 5.5).
 6. **El modo mock puede divergir del backend real.** No hay tests de conformidad que lo impidan,
    porque eso exigía dos implementaciones del contrato mantenidas en paralelo.
 7. **Una sola instancia del backend.** SQLite en fichero; escalar horizontalmente rompería la
@@ -898,7 +929,7 @@ que nadie —empezando por el tribunal— las descubra por sorpresa.
 8. **El identificador de jugador debe ser inmutable.** Si cambia, sus objetos quedan bajo una clave
    derivada que nadie reclama y no hay forma de recuperarlos salvo con el permanent delegate.
 9. **Recortes por calendario (8.1).** El cliente sondea a intervalo fijo, sin backoff; el mock no prueba
-   la rama de reversión; y el dashboard no entrega, ni transfiere, ni edita. El hito se ha probado sólo en
+   la rama de reversión; y el dashboard sólo entrega al crear un tipo, y no transfiere ni edita. El hito se ha probado sólo en
    escritorio.
 10. **El `call_id` es responsabilidad del juego.** `Chain` no puede saber si dos llamadas iguales son
     la misma acción reintentada o dos acciones distintas. Si el juego reutiliza un `call_id` para una

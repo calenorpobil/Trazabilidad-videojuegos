@@ -24,6 +24,17 @@ export interface HolderKeys {
   readonly gameId: string;
 }
 
+/**
+ * El `holder_id` de un `external_id` ya registrado, o `null`. A diferencia de `resolveHolder`, no
+ * registra: es lo que usa la lectura de resolucion (contrato, 5.5), y una lectura no crea tenedores.
+ */
+export function findHolderIdByExternalId(db: Db, externalId: string): string | null {
+  const row = db.prepare('SELECT holder_id FROM holders WHERE external_id = ?').get(externalId) as
+    | { holder_id: string }
+    | undefined;
+  return row?.holder_id ?? null;
+}
+
 /** Devuelve el tenedor, o `null` si es un `holder_id` sin registrar. Pensada para ir dentro de una transaccion SQLite. */
 export function resolveHolder(db: Db, keys: HolderKeys, ref: HolderRef, now: Date = new Date()): Holder | null {
   if ('holder_id' in ref) {
