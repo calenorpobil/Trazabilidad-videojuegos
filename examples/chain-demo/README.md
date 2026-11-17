@@ -41,7 +41,8 @@ export CHAIN_DEMO_READ_TOKEN=$CHAIN_READ_TOKEN        # el juego sólo tiene el 
 2. **Backend.** `cd backend && npm start`. Escucha en `127.0.0.1:8787`.
 3. **Crear el objeto en la consola.** Entra en `http://127.0.0.1:8787/admin` con `CHAIN_ADMIN_KEY`. Crea una
    colección y, dentro, un tipo con sus cualidades y una entrega inicial a `player-a`. Espera a que su
-   operación llegue a `settled`.
+   operación llegue a `settled`. Para probar, `npm run seed-demo` en `examples/game-server/` crea una colección
+   y tres tipos de una vez, y repetirlo no duplica nada.
 4. **Servidor de juego.** `cd examples/game-server && npm ci && npm start`. Escucha en `127.0.0.1:8788`.
    El jugador que da es `player-a` (`GAME_SERVER_PLAYER`).
 5. **Demo.** Ejecuta el proyecto con `CHAIN_DEMO_READ_TOKEN` en el entorno. Muestra lo que tienen `player-a`

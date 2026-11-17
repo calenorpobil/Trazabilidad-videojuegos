@@ -168,6 +168,7 @@ programs/chain-assets/scripts/devnet-smoke.sh      # devnet, a mano, fuera de la
 # Hito: servidor de juego y demo (pasos en examples/chain-demo/README.md).
 cd examples/game-server && npm ci && npm run typecheck && npm test
 GAME_SERVER_WRITE_KEY=<write_key> npm start          # 127.0.0.1:8788
+npm run seed-demo     # datos de demo por la API: una colección y tres tipos para player-a; repetible (SEED_TAG)
 CHAIN_DEMO_READ_TOKEN=<read_token> godot --path examples/chain-demo   # sin el token, modo MOCK
 
 # Addon: suite en modo MOCK, sin red. Desde la raíz, con Godot 4.7.

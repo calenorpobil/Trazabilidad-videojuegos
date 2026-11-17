@@ -171,6 +171,10 @@ godot --path examples/chain-demo        # el juego
 godot -e --path examples/chain-demo     # o el editor, y Play desde él
 ```
 
+`godot` es la ruta al ejecutable de Godot, salvo que lo tengas en el `PATH` o con un alias. En Windows, por ejemplo,
+`/c/ruta/Godot_v4.7.2-stable_win64.exe --path examples/chain-demo`, desde la raíz del repositorio. Con
+`alias godot='/c/ruta/Godot_v4.7.2-stable_win64.exe'` en `~/.bashrc`, los comandos de esta guía funcionan tal cual.
+
 Hay que lanzarla **desde esa terminal**: Godot sólo ve `CHAIN_DEMO_READ_TOKEN` si hereda su entorno. Abierta desde
 un acceso directo, arranca en modo MOCK. La segunda línea de la ventana dice en qué modo está.
 
@@ -179,6 +183,11 @@ un acceso directo, arranca en modo MOCK. La segunda línea de la ventana dice en
 1. **En la consola** (`http://127.0.0.1:8787/admin`, ver más abajo), crea una colección y, dentro, un tipo con sus
    cualidades y una entrega inicial a `player-a`, por ejemplo 3 unidades. Espera a que su operación llegue a
    `settled`. La demo no puede crear objetos: el servidor de juego lo rechaza con `403`.
+
+   **Para probar sin la consola**, con el backend arrancado, `npm run seed-demo` en `examples/game-server/` crea la
+   colección «Armería de la demo» y tres tipos para `player-a`: 3 espadas, 2 escudos y 5 pociones. Espera a que
+   lleguen a `settled`. Es repetible: ejecutarlo otra vez no duplica nada. `SEED_TAG=otra npm run seed-demo` crea
+   otro juego de datos. En el vídeo, la creación se enseña desde la consola.
 2. **En la demo**, pulsa «Releer inventarios». A muestra el tipo nuevo, con su identificador `itm_…`.
 3. **Pulsa «Dar 1 a B»** en esa línea. La transferencia aparece en la lista de operaciones y pasa por
    `pending → applied → settled`; al final se releen los dos inventarios. Se puede repetir mientras A tenga
