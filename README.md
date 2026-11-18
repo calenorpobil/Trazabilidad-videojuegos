@@ -261,6 +261,10 @@ Son decisiones, no defectos:
 10. **Quien tenga la autoridad de actualización del programa controla todos los juegos.**
     En devnet se conserva para poder corregir errores; un despliegue real tendría que
     congelarla o que cada estudio desplegara su propio programa.
+11. **Cada tipo que recibe un jugador por primera vez cuesta un depósito que no se recupera.**
+    La autoridad paga la cuenta de tenencia, 0,00152 SOL, y en v1 no se puede cerrar: hacerlo
+    exige la firma del jugador, que sería una segunda firma. El coste crece con jugadores × tipos
+    distintos por jugador, no con las unidades (`docs/seguimiento/verificaciones.md`, V22).
 
 ## Procedimiento de rotación ante compromiso de la semilla
 

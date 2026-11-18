@@ -624,6 +624,19 @@ sin unidades, falla antes de la cadena con `409`, y la escena lo muestra como no
   guardó el nombre de la colección con el carácter de reemplazo («Armer�a (consola)»). No es un fallo del contrato, pero
   el backend acepta UTF-8 inválido sin quejarse. La consola, desde el navegador, siempre manda UTF-8.
 
+### V22 — La renta de mainnet coincide con la de devnet (18 de noviembre de 2026)
+
+`getMinimumBalanceForRentExemption` da lo mismo en `api.mainnet-beta.solana.com` y en
+`api.devnet.solana.com`: 650.240 lamports para 0 bytes y 1.513.840 para los 170 bytes de la cuenta de
+tenencia. Son 5.080 lamports por byte, contando 128 bytes de cabecera, y casan con todas las cifras de
+V9 y V12. **Los costes medidos en devnet valen en mainnet.**
+
+El coste del sistema crece con *jugadores × tipos distintos por jugador*: cada vez que un jugador recibe
+por primera vez un tipo, la autoridad paga su cuenta de tenencia, 0,00152 SOL con la comisión. Las
+unidades y las transferencias siguientes sólo pagan la comisión, 0,000005 SOL. Derivar la clave de un
+jugador y crear una colección no cuestan nada en la cadena. Ese depósito no se recupera en v1: cerrar
+la cuenta exige que esté vacía y la firma del jugador, que sería una segunda firma (invariante 1).
+
 ---
 
 ## Pendiente
