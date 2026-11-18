@@ -277,6 +277,26 @@ Escrito, no implementado:
 Es una carrera: quien tenga la semilla comprometida también puede ejecutar
 `rotate_authority`, y si lo hace primero, el estudio pierde el juego.
 
+## Recortes
+
+Aplicados por la línea de corte (propuesta, 8.1) porque el calendario no da para más:
+
+- **Editar un tipo e importar un catálogo.** No hay `PATCH /v1/items/{id}` (contrato 4.6), ni
+  la instrucción `update_item`, ni la importación de `catalog.json`. Una vez creado un tipo, su `name`,
+  su `uri` y sus `qualities` no se pueden cambiar en v1. El diseño lo deja abierto: la PDA del juego
+  es la autoridad de actualización de los metadatos, así que no quedaron fijados para siempre, y la
+  edición está descrita en la propuesta (sección 3, «Catálogo declarativo»). `symbol`, colección y entrega
+  inicial no serán editables nunca: cambiarlos exige un tipo nuevo.
+- **Entregar unidades después de crear un tipo.** `POST /v1/items/{item_id}/grants` sigue en el
+  contrato, pero sin implementar. `POST /v1/items` ya emite la cantidad inicial, y para eso conserva la
+  instrucción `grant` del programa.
+- **Probar reversiones en el modo MOCK.** No hay `mock_force`: el mock sólo cubre el camino feliz, así
+  que en MOCK no se puede ver una operación que acaba en `failed`.
+- **Backoff en el sondeo.** El addon consulta el estado de las operaciones a intervalo fijo, con un
+  `Timer`.
+- **Transferir desde la consola.** Las transferencias se piden desde la demo de Godot, a través del
+  servidor de juego. La consola sólo entrega unidades al crear un tipo, con la entrega inicial.
+
 ## Trabajo futuro
 
 - **Entrar a la consola con una wallet.** El jugador no tiene wallet, porque esa es la premisa del
