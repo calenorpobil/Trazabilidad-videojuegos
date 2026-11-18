@@ -88,6 +88,22 @@ inicial a un jugador) lo crea el estudio desde la consola `/admin`, y el servido
 rechaza la creación con un `403`. Cada pieza tiene su credencial y con ella su papel; el
 programa no define roles propios (ver `docs/vision-general/guia.md`).
 
+### Cómo obtiene objetos un jugador
+
+**Lo previsto.** Quien decide que un jugador se ha ganado un objeto es el servidor de juego: comprueba
+con su lógica que ha ganado la partida o completado la misión y llama a `POST /v1/items/{item_id}/grants`,
+que emite unidades nuevas para él. Ese endpoint está recortado en v1 (ver «Recortes»).
+
+**Lo que hay en v1.** Las unidades sólo se emiten con la entrega inicial, al crear el tipo en `/admin`,
+y después se mueven con transferencias. En la demo, el jugador A hace de almacén: recibe la entrega
+inicial, y «Dar 1 a B» es como B adquiere objetos.
+
+**Cómo lo haría un estudio con v1: una reserva.** Crea cada tipo con la entrega inicial a un tenedor
+`game-reserve` y, cuando su servidor decide que un jugador ha ganado algo, transfiere desde la reserva.
+El contrato y el backend ya lo admiten, porque `transfer` acepta cualquier emisor; el servidor de
+juego del ejemplo no, porque siempre pone como emisor al jugador que pide. Cuesta lo mismo que una
+emisión, pero las existencias quedan limitadas a la entrega inicial.
+
 ## Tecnologías
 
 | Pieza | Tecnologías |
@@ -240,7 +256,11 @@ Son decisiones, no defectos:
 
 1. **La cadena certifica catálogo y propiedad, no estado individual.** Los activos son
    fungibles: las unidades son indistinguibles y nada sobrevive a la transferencia
-   salvo la cantidad.
+   salvo la cantidad. Las `qualities` describen el tipo, no el ejemplar. Si un objeto tiene
+   que diferenciarse (durabilidad, nivel, encantamiento), hay tres salidas: un tipo por
+   variante, que sirve si hay pocas; guardar el estado de cada ejemplar en el servidor de
+   juego, que no viaja con una transferencia; o un mint por objeto (NFT), que es otro modelo
+   y queda fuera del proyecto.
 2. **La semilla maestra vive en un fichero, no en un HSM.** Quien lea ese fichero
    controla todos los activos del juego.
 3. **El jugador no posee de verdad.** Las claves las custodia el backend, el delegado
@@ -265,6 +285,31 @@ Son decisiones, no defectos:
     La autoridad paga la cuenta de tenencia, 0,00152 SOL, y en v1 no se puede cerrar: hacerlo
     exige la firma del jugador, que sería una segunda firma. El coste crece con jugadores × tipos
     distintos por jugador, no con las unidades (`docs/seguimiento/verificaciones.md`, V22).
+
+## Coste en la cadena
+
+Lo paga todo la autoridad del juego. Medido en devnet; la renta de mainnet es la misma (V22).
+
+| Operación | Coste |
+|---|---|
+| Derivar la clave de un jugador, crear una colección, leer | 0 |
+| `initialize_game`, una vez por juego | 0,00105 SOL |
+| Crear un tipo típico, con su entrega inicial | 0,00465 SOL |
+| Primera unidad de un tipo para un jugador | 0,00152 SOL, depósito no recuperable |
+| Cualquier otra transferencia | 0,000005 SOL |
+
+Casi todo el gasto son los depósitos de las cuentas de tenencia, uno por jugador y tipo. Un estudio
+con 20.000 jugadores que tengan de media 10 tipos distintos pagaría unos 304 SOL en depósitos y 0,1
+SOL por cada 20.000 transferencias. Lo que lo reduce es crear menos cuentas:
+
+- **Entregar sólo a quien juega.** En vez de transferir a todos, el servidor de juego apunta lo que
+  corresponde a cada jugador y lo transfiere cuando entra. Los jugadores inactivos no cuestan nada;
+  a cambio, hasta entonces ese objeto sólo existe en su base de datos.
+- **Menos tipos distintos por jugador.** Cantidades en vez de variedad (cinco pociones de un tipo, no
+  cinco tipos de poción), y fuera de la cadena lo que no se intercambia ni necesita certificarse.
+
+Agrupar transferencias en una transacción sólo ahorra comisiones, y cerrar cuentas vacías para
+recuperar el depósito exige la firma del jugador (limitación 11).
 
 ## Procedimiento de rotación ante compromiso de la semilla
 
@@ -311,6 +356,16 @@ Aplicados por la línea de corte (propuesta, 8.1) porque el calendario no da par
   sobre los activos, `chain-assets` necesitaría un rol de administrador separado de la autoridad, con
   su propia instrucción. Si esa wallet firmara junto a la autoridad, se rompería la regla de un único
   firmante. Y si sustituyera a la autoridad, el servidor de juego ya no podría hacer transferencias.
+- **Reparto masivo desde `game-reserve` en la consola.** Una transferencia por jugador, con la clave
+  de idempotencia `reparto_<campaña>:<holder_id>` para que un reparto cortado se pueda reanudar sin
+  entregar dos veces. Hay que resolver antes cuatro cosas: el backend sólo conoce a los jugadores que
+  alguna operación ha nombrado, el nodo RPC público limita la tasa, hay que comprobar antes que la
+  reserva y la autoridad alcanzan para todos, y la consola tiene que mostrar el avance de N
+  operaciones. Con 20.000 jugadores que aún no tengan el tipo, cuesta unos 30 SOL cada vez.
+- **Tokens comprimidos (*ZK Compression*).** Guardar las cuentas de tenencia comprimidas evitaría el
+  depósito por cuenta, que es casi todo el coste. **Sin verificar:** falta leer su documentación
+  vigente y comprobar si admite las extensiones Token-2022 que usa `chain-assets`. Cambiaría el
+  programa, los constructores del backend y las lecturas del inventario.
 
 ## Licencia
 
