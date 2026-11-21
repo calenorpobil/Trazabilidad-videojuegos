@@ -5,13 +5,19 @@ noviembre de 2026 contra las instrucciones de entrega y la documentación del m�
 definen lo que se valora y lo que se exige. Sólo queda aquí lo que esos documentos no
 resuelven.
 
-## Abiertas, por orden de importancia
+## Abiertas
 
-| # | Pregunta | Por qué se pregunta | Si la respuesta es la que no esperamos |
-|---|---|---|---|
-| Q4 | ¿Hay memoria escrita o defensa, además del vídeo? | «Memoria» sólo aparece en dos sitios: el paso 9 de «Próximos pasos» del enunciado (70, línea 790) y los flujos de estudio del índice (10, líneas 223, 280, 308, 336 y 364: «Escribir memoria TFM (4-6 horas)»). Las instrucciones de entrega (20) no la nombran: ni en los entregables obligatorios, ni en la rúbrica, ni en el checklist final. La defensa no aparece en ninguno. **Por eso el plan no la incluye** | Unas 4-6 h sin presupuestar, ya sin margen |
-| Q11 | ¿Los avances intermedios son obligatorios, y con qué fechas? | Las instrucciones (20, sección 6.1, líneas 573-574) citan el avance 1 (diseño y programa inicial, «semana 1») y el avance 2 (MVP y código en GitHub, «semana 3»), sin fechas reales. No aparecen en los entregables obligatorios, ni en la rúbrica, ni en el checklist final. La entrega final es el 30 de noviembre de 2026 | Habría que adelantar el programa y el MVP, que hoy se terminan el 21 y el 28 de noviembre |
+Ninguna desde el 21 de noviembre de 2026.
 
+## Resueltas por el tutor, 21 de noviembre de 2026
+
+Se le preguntó si hay que entregar memoria escrita (la mencionan los documentos 70 y 10 del curso, pero no
+los vídeos) y si hay entregas intermedias (las instrucciones citan entregables en las semanas 1 y 3).
+
+| # | Pregunta | Respuesta |
+|---|---|---|
+| Q4 | ¿Hay memoria escrita o defensa, además del vídeo? | **No.** «La entrega es actualizar el repo y hacer un vídeo de 5 minutos» |
+| Q11 | ¿Los avances intermedios son obligatorios, y con qué fechas? | **No.** La misma respuesta: sólo el repositorio actualizado y el vídeo, el 30 de noviembre de 2026 |
 
 ## Resueltas por la documentación
 

@@ -143,6 +143,12 @@ cliente, sin comprobar nada. Cambian las secciones 3, 5, 6, 7 y 8.1, y la limita
 4. **La demo** muestra los inventarios de A y B y un botón «Dar 1 a B» por cada tipo que tiene A, en vez de un
    botón por operación. Así se ve a qué tipo afecta cada transferencia aunque varios tipos compartan nombre.
 
+### Revisión del 21 de noviembre de 2026
+
+El tutor responde a la Q4 y a la Q11: «la entrega es actualizar el repo y hacer un vídeo de 5 minutos».
+**No hay memoria escrita, ni defensa, ni avances intermedios.** Lo que esta propuesta mandaba anotar «en la
+memoria» va al README o a `docs/seguimiento/verificaciones.md`. Cambian las secciones 8, 9, 10, 12, 13 y 14.
+
 ### 0.1 Requisitos de entrega del máster
 
 Hasta el 4 de noviembre eran supuestos. Ahora salen de las instrucciones generales de entrega del TFM,
@@ -798,7 +804,8 @@ sin ella no hay hito que enseñar.
 | A3 + A4 | `examples/game-server/` mínimo y `examples/chain-demo/`: la escena del hito, en escritorio | Corte vertical y escena de *Nidada* (10 h) | 3 |
 
 **Respecto a la documentación del máster.** No fija un límite: orienta entre 30 y 55 h según el TFM. Esa cifra
-incluye la memoria, 4-6 h, que este plan no presupuesta (**Q4**, sección 14).
+incluye una memoria de 4-6 h que aquí no hace falta: la entrega es el repositorio y el vídeo (Q4, revisión
+del 21 de noviembre).
 
 ### 8.1 Línea de corte
 
@@ -866,8 +873,8 @@ al desplegar. Las de desarrollo se auditan en un paso aparte que no bloquea. Mot
 La alternativa, `npm audit fix --force`, bajaba `vitest` de la 5 a la 3.
 
 **No entran en la CI** los tests que tocan devnet. Éstos dependen de una red externa y de un faucet con límite: van en un script manual,
-`npm run test:devnet`, y su ejecución se documenta con capturas o firmas de transacción en la
-memoria.
+`npm run test:devnet`, y su ejecución se documenta con capturas o firmas de transacción en
+`docs/seguimiento/verificaciones.md`.
 
 ---
 
@@ -881,7 +888,7 @@ Un plan B sin disparador es una excusa. Cada uno tiene condición de activación
 | El entorno de Anchor no funciona en la máquina de desarrollo (Windows, disco casi lleno) | 1 h dentro de OC1 sin `anchor build` | Compilar en WSL con espacio liberado, o en la CI con el trabajo `program` |
 | El cliente generado del IDL sobre `@solana/kit` cuesta más de lo previsto | 2 h dentro del bloque 3 sin llamar al programa desde el backend | Cambiar a `@solana/web3.js@1` + `@coral-xyz/anchor`, que tienen más material publicado. **Decidir antes de acabar el bloque 3, nunca después** |
 | El faucet de devnet se agota | Dos peticiones de airdrop rechazadas seguidas | Validador local (`solana-test-validator`) con `--clone` del programa Token-2022 para desarrollo; devnet sólo para la demo final |
-| El vídeo o la memoria se comen el desarrollo | 26 de noviembre sin hito completo | Recortar las pantallas del dashboard (8.1) y grabar el vídeo con lo que funcione. El vídeo no se retrasa |
+| El vídeo se come el desarrollo | 26 de noviembre sin hito completo | Recortar las pantallas del dashboard (8.1) y grabar el vídeo con lo que funcione. El vídeo no se retrasa |
 
 ---
 
@@ -912,7 +919,7 @@ No implementar, no diseñar, no dejar hooks especulativos:
 
 ## 12. Limitaciones aceptadas conscientemente
 
-Son decisiones, no defectos. Deben aparecer en el README y en la memoria con este mismo tono, para
+Son decisiones, no defectos. Deben aparecer en el README y en el vídeo con este mismo tono, para
 que nadie —empezando por el tribunal— las descubra por sorpresa.
 
 1. **La cadena certifica catálogo y propiedad, no estado individual.** Al ser los activos fungibles,
@@ -962,7 +969,7 @@ que nadie —empezando por el tribunal— las descubra por sorpresa.
 
 ## 13. Verificar antes de escribir código
 
-No decidas estos puntos: compruébalos, y anota en la memoria lo que encuentres **con la fecha**.
+No decidas estos puntos: compruébalos, y anota en `docs/seguimiento/verificaciones.md` lo que encuentres **con la fecha**.
 
 **Ya verificado el 25 de agosto de 2026:**
 
@@ -1056,12 +1063,11 @@ Solana sobre la extensión de metadatos y el código de la interfaz `token-metad
 ## 14. Preguntas para el tutor, que no debes responder tú
 
 La lista viva, con lo que ya han resuelto las instrucciones de entrega, está en
-`docs/seguimiento/preguntas-tutor.md`. Siguen abiertas:
+`docs/seguimiento/preguntas-tutor.md`. **No queda ninguna abierta.**
 
-- **Q4:** si hay memoria escrita o defensa, además del vídeo.
-- **Q11:** si los avances intermedios son obligatorios. La entrega final es el 30 de noviembre.
-
-La **Q12** quedó resuelta el 12 de noviembre: basta el modelo custodial (revisión del 12 de noviembre).
+La **Q12** quedó resuelta el 12 de noviembre: basta el modelo custodial (revisión del 12 de noviembre). La **Q4**
+y la **Q11**, el 21 de noviembre: la entrega es el repositorio actualizado y un vídeo de 5 minutos, sin memoria,
+defensa ni avances intermedios (revisión del 21 de noviembre).
 
 ---
 
