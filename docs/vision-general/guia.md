@@ -4,6 +4,8 @@
 
 - [Qué es](#qué-es)
 - [Quién participa](#quién-participa)
+- [Credenciales y semilla](#credenciales-y-semilla)
+- [El hueco del ejemplo: quién es el jugador](#el-hueco-del-ejemplo-quién-es-el-jugador)
 - [Los roles sin roles en la cadena](#los-roles-sin-roles-en-la-cadena)
 - [Quién manda sobre los activos](#quién-manda-sobre-los-activos)
 - [Cómo llama el backend al programa](#cómo-llama-el-backend-al-programa)
@@ -14,15 +16,86 @@
 
 ## Quién participa
 
-Cada actor tiene su propia credencial. El programa `chain-assets` sólo conoce a la autoridad del juego; el resto de permisos los aplica el backend, salvo los del jugador, que no tiene ninguno.
+Cada actor tiene su propia credencial, salvo la autoridad, que tiene una clave, y el jugador, que no tiene nada
+(ver [Credenciales y semilla](#credenciales-y-semilla)). El programa `chain-assets` sólo conoce a la autoridad del juego; el resto de permisos los aplica el backend, salvo los del jugador, que no tiene ninguno.
 
-| Actor | Credencial | Qué puede hacer | Dónde vive |
+| Actor | Credencial o clave | Qué puede hacer | Dónde vive |
 |---|---|---|---|
 | **Autoridad del juego** | Clave derivada de la semilla maestra | Firmar y pagar todas las transacciones, y cambiar de autoridad con `rotate_authority` | Backend |
 | **Servidor de juego** | `write_key` | Pedir transferencias; la creación la rechaza con `403` | Servidor del estudio |
 | **Administrador del estudio** | Credencial propia y cookie de sesión | Crear colecciones y tipos, con la entrega inicial, desde el dashboard | Navegador, contra el backend |
 | **Cliente del juego** | `read_token` | Sólo leer inventarios y operaciones; es público de facto | Binario del juego |
 | **Jugador** | Ninguna | Tener activos, identificado con un `hld_…`; no firma nada | Dirección derivada |
+
+## Credenciales y semilla
+
+Son dos cosas distintas, y conviene no mezclarlas:
+
+- Una **credencial** es un permiso para *pedirle algo al backend*. Es un texto secreto compartido: quien
+  lo presenta, entra por las rutas que le corresponden. No sirve de nada fuera del backend.
+- La **semilla maestra** no es una credencial: no se presenta ante nadie ni abre ninguna ruta. Es el
+  material del que el backend *deriva las claves*: la de la autoridad, que firma en la cadena, y las
+  direcciones de los jugadores.
+
+### Las tres credenciales
+
+| Credencial | La tiene | Qué abre | Dónde se comprueba |
+|---|---|---|---|
+| `write_key` (`CHAIN_WRITE_KEY`) | El servidor de juego, como `GAME_SERVER_WRITE_KEY` (`examples/game-server/src/main.ts`) | Las escrituras del contrato | `backend/src/server.ts`, al principio de cada escritura |
+| `read_token` (`CHAIN_READ_TOKEN`) | El juego: va en el binario (`addon/addons/godot_chain/chain_config.gd`) | Sólo lecturas: inventarios, catálogo y operaciones. Tiene un límite por IP, porque se considera público (`backend/src/rate-limit.ts`) | `backend/src/server.ts`, al principio de cada lectura |
+| `CHAIN_ADMIN_KEY` | El equipo del estudio | La consola `/admin`. Se cambia por una cookie de sesión | `backend/src/admin.ts`, en `POST /admin/api/session` |
+
+El backend se protege de que se mezclen:
+
+- **Tienen que ser distintas.** El backend no arranca si dos coinciden (`backend/src/config.ts`): quien
+  extraiga el `read_token` del binario no puede así escribir ni entrar en la consola.
+- **La consola no reparte credenciales de la API.** El navegador del estudio nunca recibe el `write_key`
+  ni el `read_token`.
+- **Se comparan en tiempo constante**, sobre su SHA-256 (`timingSafeEqual`), para que el tiempo de
+  respuesta no dé pistas.
+
+### La semilla maestra
+
+Llega al backend por `CHAIN_MASTER_SEED` o por un fichero, `CHAIN_MASTER_SEED_FILE`, que en Linux y macOS debe
+tener permisos `0600` (`backend/src/config.ts`). El backend deriva de ella, con HKDF
+(`backend/src/keys.ts`):
+
+```
+semilla maestra ──"authority"──────► clave de la autoridad: firma y paga todas las transacciones
+               └──"player:<id>"────► clave de cada jugador: sólo da su dirección, nunca firma
+```
+
+Nunca sale del backend: ni el servidor de juego, ni el juego ni la consola la ven.
+
+### Qué pasa si se filtra cada una
+
+| Se filtra | Consecuencia | Remedio |
+|---|---|---|
+| `read_token` | Cualquiera lee los inventarios del juego. Se da por hecho: es público | Ninguno necesario; el límite por IP frena el abuso |
+| `write_key` | Cualquiera escribe como el servidor de juego, y con más poder: el backend acepta cualquier emisor en una transferencia y también la creación de tipos con su entrega inicial, porque el `403` lo pone el servidor de juego, no el backend | Cambiar `CHAIN_WRITE_KEY` en el backend y en el servidor de juego. La cadena no se toca |
+| `CHAIN_ADMIN_KEY` | Cualquiera crea colecciones y tipos desde la consola, y con ellos emite unidades | Cambiarla y reiniciar el backend. La cadena no se toca |
+| **Semilla maestra** | **Quien la tenga controla todos los activos del juego**: deriva la clave de la autoridad y firma lo que quiera | El procedimiento de rotación del README, que es una carrera contra quien la tiene |
+
+Por eso son de naturaleza distinta: una credencial filtrada se cambia y se olvida; la semilla filtrada
+compromete el juego entero. Es la limitación 2 del README, y lo que mejoraría guardarla en OpenBao
+(`docs/seguimiento/verificaciones.md`, P12).
+
+## El hueco del ejemplo: quién es el jugador
+
+Entre el juego y el servidor de juego **no hay credencial**. El servidor de juego de ejemplo
+(`examples/game-server/src/server.ts`) acepta todas las peticiones que le llegan y pone siempre como
+emisor de una transferencia al jugador configurado en `GAME_SERVER_PLAYER` (por defecto, `player-a`).
+No sabe quién le escribe.
+
+Es a propósito: saber qué jugador hace cada petición es la **autenticación del estudio**, no de la
+librería. Cada juego ya tiene la suya: cuentas propias, Steam, la consola o el servicio que use. El
+servidor de juego es el sitio donde encaja: valida la sesión del jugador, decide si la acción está
+permitida y pone como emisor a *ese* jugador, en vez de uno fijo. `godot-chain` deja el hueco y no
+impone ningún sistema de cuentas.
+
+Sin esa autenticación, cualquiera que llegue al servidor de juego puede mover los objetos del jugador
+configurado. Por eso el ejemplo escucha por defecto sólo en `127.0.0.1` (`GAME_SERVER_HOST`), y por eso es un ejemplo y no un servidor
+para producción (README, limitación 12).
 
 ## Los roles sin roles en la cadena
 

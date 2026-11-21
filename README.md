@@ -285,6 +285,12 @@ Son decisiones, no defectos:
     La autoridad paga la cuenta de tenencia, 0,00152 SOL, y en v1 no se puede cerrar: hacerlo
     exige la firma del jugador, que sería una segunda firma. El coste crece con jugadores × tipos
     distintos por jugador, no con las unidades (`docs/seguimiento/verificaciones.md`, V22).
+12. **El servidor de juego de ejemplo acepta todas las peticiones.** No autentica al jugador:
+    pone siempre como emisor de una transferencia al configurado en `GAME_SERVER_PLAYER`, y
+    cualquiera que llegue a él puede mover sus objetos. El hueco es a propósito: saber qué
+    jugador hace cada petición es la autenticación del estudio (sus cuentas, Steam…), y el
+    servidor de juego es donde la conecta. Por eso escucha por defecto sólo en `127.0.0.1`
+    (`docs/vision-general/guia.md`, «El hueco del ejemplo»).
 
 ## Coste en la cadena
 
