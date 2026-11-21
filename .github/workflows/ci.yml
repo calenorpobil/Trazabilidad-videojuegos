@@ -6,12 +6,12 @@ name: CI
 #
 # Los tests que tocan devnet NO entran aqui: dependen de una red externa y de un
 # faucet con limite. Van en `npm run test:devnet`, ejecutado a mano, y su resultado
-# se documenta en la memoria.
+# se documenta en docs/seguimiento/verificaciones.md.
 
 on:
   push:
-    # nidada-j5 es la rama por defecto en GitHub y la linea de trabajo del PFM.
-    branches: [main, nidada-j5]
+    # main es la rama por defecto en GitHub y en GitLab, y la que se entrega (21-nov-2026).
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
