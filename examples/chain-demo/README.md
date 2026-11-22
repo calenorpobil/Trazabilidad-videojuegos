@@ -47,7 +47,9 @@ export CHAIN_DEMO_READ_TOKEN=$CHAIN_READ_TOKEN        # el juego sólo tiene el 
    El jugador que da es `player-a` (`GAME_SERVER_PLAYER`).
 5. **Demo.** Ejecuta el proyecto con `CHAIN_DEMO_READ_TOKEN` en el entorno. Muestra lo que tienen `player-a`
    y `player-b`; cada tipo de A tiene su botón «Dar 1 a B». `CHAIN_DEMO_WRITE_URL` y `CHAIN_DEMO_READ_URL`
-   cambian las direcciones por defecto.
+   cambian las direcciones por defecto. `CHAIN_DEMO_GAME_ID` y `CHAIN_DEMO_STUDIO` dicen a qué juego y estudio
+   está conectada, en la escena y en el título de la ventana: con dos estudios abiertos a la vez, cada demo
+   se distingue. Sólo se muestran; no viajan en ninguna petición.
 
 Las transacciones se ven en la consola: cada operación enlaza a su transacción en el explorador. La demo no
 las enseña, porque no sabe qué hay debajo.

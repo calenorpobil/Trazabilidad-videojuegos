@@ -12,6 +12,8 @@ extends Control
 ##   CHAIN_DEMO_READ_TOKEN  el `read_token` del backend. Sin él, la demo arranca en modo MOCK
 ##   CHAIN_DEMO_WRITE_URL   el servidor de juego; por defecto http://127.0.0.1:8788
 ##   CHAIN_DEMO_READ_URL    el backend; por defecto http://127.0.0.1:8787
+##   CHAIN_DEMO_GAME_ID     el juego al que se conecta (su CHAIN_GAME_ID). Sólo se muestra: no viaja
+##   CHAIN_DEMO_STUDIO      el nombre del estudio, opcional. Sólo se muestra
 ##
 ## Los inventarios sólo se releen en `settled`; `applied` sólo se enseña (invariante 5).
 
@@ -187,6 +189,7 @@ static func _config() -> ChainConfig:
 	config.write_url = _env("CHAIN_DEMO_WRITE_URL", "http://127.0.0.1:8788")
 	config.read_url = _env("CHAIN_DEMO_READ_URL", "http://127.0.0.1:8787")
 	config.read_token = token
+	config.game_id = OS.get_environment("CHAIN_DEMO_GAME_ID")
 	return config
 
 
@@ -210,6 +213,22 @@ func _build(config: ChainConfig) -> void:
 	title.text = "godot-chain: demo del hito"
 	title.add_theme_font_size_override("font_size", 24)
 	column.add_child(title)
+
+	# Juego y estudio: con dos demos abiertas, cada una dice a cuál está conectada.
+	var studio := OS.get_environment("CHAIN_DEMO_STUDIO")
+	var identity := Label.new()
+	if config.mode == ChainConfig.Mode.MOCK:
+		identity.text = "Juego: ninguno (modo MOCK)"
+	elif config.game_id.is_empty():
+		identity.text = "Juego: sin indicar (define CHAIN_DEMO_GAME_ID)"
+	else:
+		identity.text = "Juego: %s" % config.game_id
+	if not studio.is_empty():
+		identity.text += "   ·   Estudio: %s" % studio
+	identity.add_theme_font_size_override("font_size", 18)
+	column.add_child(identity)
+	if not config.game_id.is_empty():
+		get_window().title = "godot-chain · %s" % (("%s · %s" % [studio, config.game_id]) if not studio.is_empty() else config.game_id)
 
 	var mode := Label.new()
 	if config.mode == ChainConfig.Mode.MOCK:

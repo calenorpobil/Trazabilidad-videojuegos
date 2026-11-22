@@ -422,6 +422,8 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   if (options.admin !== undefined) {
     registerAdmin(app, options.admin, {
       gameId: options.gameId,
+      gameAddress: game,
+      authorityAddress: authority.address,
       db,
       createCollection,
       createItem,

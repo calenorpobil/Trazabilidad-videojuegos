@@ -16,6 +16,10 @@
  *   una cookie de sesion. Nunca en el repositorio.
  * - `CHAIN_EXPLORER_TX_URL`: plantilla del enlace de una operacion a su transaccion, con
  *   `{signature}`. Por defecto, el explorador de devnet. El enlace solo lo ve la consola.
+ * - `CHAIN_EXPLORER_ADDRESS_URL`: lo mismo para una cuenta, con `{address}`: la cuenta `Game`, la
+ *   autoridad y el programa, en la vista «Despliegue».
+ * - `CHAIN_STUDIO_NAME`: nombre del estudio, opcional y solo para mostrarlo. No va a la cadena ni al
+ *   contrato: el juego lo identifica `CHAIN_GAME_ID`.
  *
  * `CHAIN_READ_RATE_LIMIT`: lecturas por minuto y por IP con el `read_token` (P14). Por defecto 120:
  * el addon sondea una operacion con un intervalo fijo (8.1, recorte 4), y una pantalla con varias
@@ -48,6 +52,8 @@ export interface Config {
   readonly adminKey: string;
   readonly readRateLimit: number;
   readonly explorerTxUrl: string;
+  readonly explorerAddressUrl: string;
+  readonly studioName: string | null;
   readonly authority: AuthorityConfig;
 }
 
@@ -57,6 +63,9 @@ export class ConfigError extends Error {
 
 export const DEVNET_RPC_URL = 'https://api.devnet.solana.com';
 export const DEVNET_EXPLORER_TX_URL = 'https://explorer.solana.com/tx/{signature}?cluster=devnet';
+export const DEVNET_EXPLORER_ADDRESS_URL = 'https://explorer.solana.com/address/{address}?cluster=devnet';
+/** Longitud maxima de `CHAIN_STUDIO_NAME`, en caracteres. */
+export const STUDIO_NAME_MAX = 64;
 export const DEFAULT_READ_RATE_LIMIT = 120;
 
 /** Longitud minima de `write_key` y `read_token`: lo bastante para no adivinarse. */
@@ -98,6 +107,15 @@ const schema = z
       .string()
       .refine((u) => u.startsWith('https://') && u.includes('{signature}'), 'https:// y con {signature}')
       .default(DEVNET_EXPLORER_TX_URL),
+    CHAIN_EXPLORER_ADDRESS_URL: z
+      .string()
+      .refine((u) => u.startsWith('https://') && u.includes('{address}'), 'https:// y con {address}')
+      .default(DEVNET_EXPLORER_ADDRESS_URL),
+    CHAIN_STUDIO_NAME: z
+      .string()
+      .trim()
+      .refine((n) => [...n].length >= 1 && [...n].length <= STUDIO_NAME_MAX, `de 1 a ${STUDIO_NAME_MAX} caracteres`)
+      .optional(),
     CHAIN_AUTHORITY_SIGNER: z.enum(['seed', 'transit']).default('seed'),
     CHAIN_BAO_ADDR: z
       .string()
@@ -190,6 +208,8 @@ export function loadConfig(
     adminKey: e.CHAIN_ADMIN_KEY,
     readRateLimit: e.CHAIN_READ_RATE_LIMIT,
     explorerTxUrl: e.CHAIN_EXPLORER_TX_URL,
+    explorerAddressUrl: e.CHAIN_EXPLORER_ADDRESS_URL,
+    studioName: e.CHAIN_STUDIO_NAME ?? null,
     authority:
       e.CHAIN_AUTHORITY_SIGNER === 'seed'
         ? { kind: 'seed' }

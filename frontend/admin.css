@@ -32,6 +32,8 @@ button { font: inherit; cursor: pointer; }
 .app { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
 nav { background: var(--panel); border-right: 1px solid var(--line); padding: 16px 12px; }
 nav .brand { font-weight: 600; padding: 0 8px 12px; }
+nav .identity { font-weight: 400; margin-top: 4px; overflow-wrap: anywhere; }
+nav .identity:empty { display: none; }
 nav .group { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 14px 8px 4px; }
 nav button { display: flex; width: 100%; align-items: center; gap: 8px; text-align: left; background: none; border: 0; border-radius: 6px; padding: 7px 8px; color: var(--ink); }
 nav button:hover { background: var(--code-bg); }

@@ -7,7 +7,8 @@
  * que la API.
  *
  * Qué hace (hito, 5-nov-2026): crear colecciones y tipos, listar el catálogo, consultar operaciones
- * con enlace a su transacción en un explorador, y consultar inventarios. Entregar y transferir se
+ * con enlace a su transacción en un explorador, consultar inventarios y ver qué despliegue es (juego,
+ * estudio y sus cuentas en la cadena, en «Despliegue»). Entregar y transferir se
  * hacen desde la demo; importar un catálogo y editar tipos quedan bajo la línea de corte (8.1).
  */
 "use strict";
@@ -293,14 +294,50 @@ views.inventory = {
   }
 };
 
+/* Qué despliegue es: el juego, el estudio y sus cuentas en la cadena. Distingue dos consolas abiertas a la vez. */
+views.deployment = {
+  title: "Despliegue", sub: "Qué juego sirve este backend, de qué estudio, y sus cuentas en la cadena.",
+  render: () => `<div class="card" id="dep"><p class="muted">Cargando…</p></div>
+    <p class="muted small">El juego lo identifica su <span class="mono">game_id</span>, del que sale la cuenta Game. El nombre del estudio sólo se muestra: no va a la cadena.</p>`,
+  async mount() {
+    const d = await loadDeployment();
+    const account = (label, a, extra = "") => `<tr><th>${esc(label)}</th><td>${a.explorer_url
+      ? `<a href="${esc(a.explorer_url)}" target="_blank" rel="noopener noreferrer" class="mono">${esc(a.address)}</a>`
+      : `<span class="mono">${esc(a.address)}</span>`}${extra}</td></tr>`;
+    setHtml($("#dep"), `<table>
+      <tr><th>Juego</th><td class="mono">${esc(d.game_id)}</td></tr>
+      <tr><th>Estudio</th><td>${d.studio_name ? esc(d.studio_name) : `<span class="muted">sin nombre (CHAIN_STUDIO_NAME)</span>`}</td></tr>
+      ${account("Cuenta Game", d.game)}
+      ${account("Autoridad", d.authority, d.authority.signer ? `<div class="muted small">Firma: ${esc(d.authority.signer)}</div>` : "")}
+      ${account("Programa", d.program, `<div class="muted small">chain-assets, compartido por todos los juegos</div>`)}
+    </table>`);
+  }
+};
+
+/* El despliegue se pide una vez por sesión: no cambia mientras el backend sigue en marcha. */
+let deployment = null;
+async function loadDeployment() {
+  if (!deployment) deployment = (await api("GET", "/deployment")).body;
+  return deployment;
+}
+async function showIdentity() {
+  try {
+    const d = await loadDeployment();
+    const name = d.studio_name ? `${d.studio_name} · ${d.game_id}` : d.game_id;
+    setHtml($("#identity"), `<span class="mono">${esc(d.game_id)}</span>${d.studio_name ? `<br>${esc(d.studio_name)}` : ""}`);
+    document.title = `${name} · Administración de activos`;
+  } catch (e) { reportError(e); }
+}
+
 /* ---------- Navegación ---------- */
 const NAV = [
   ["Catálogo", [["collections", "Colecciones"], ["items", "Tipos de ítem"], ["catalog", "Listado de catálogo"]]],
   ["Seguimiento", [["operations", "Operaciones"], ["inventory", "Inventario"]]],
+  ["Juego", [["deployment", "Despliegue"]]],
 ];
 let currentView = null;
 function buildNav() {
-  $("#nav").innerHTML = `<div class="brand">Administración de activos</div>` + NAV.map(([g, items]) =>
+  $("#nav").innerHTML = `<div class="brand">Administración de activos<div class="identity muted small" id="identity"></div></div>` + NAV.map(([g, items]) =>
     `<div class="group">${esc(g)}</div>` + items.map(([id, label]) => `<button type="button" data-view="${id}">${esc(label)}</button>`).join("")).join("");
 }
 function go(id) {
@@ -325,6 +362,7 @@ function showLogin() {
 }
 function showApp() {
   $("#login").hidden = true; $("#app").hidden = false;
+  showIdentity();
   const start = location.hash.slice(1);
   go(views[start] ? start : "catalog");
 }
@@ -346,6 +384,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
   $("#logout").addEventListener("click", async () => {
     await api("DELETE", "/session").catch(() => {});
+    deployment = null;
     showLogin();
   });
   try { await api("GET", "/session"); showApp(); } catch { showLogin(); }

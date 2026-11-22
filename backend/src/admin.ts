@@ -14,6 +14,8 @@
  *                                          un transfer, entre quien
  *   GET    /admin/api/operations/{id}      una, con enlace a su transaccion
  *   GET    /admin/api/holders/{ref}/items  inventario por holder_id o por external_id ya registrado
+ *   GET    /admin/api/deployment           que despliegue es: juego, estudio, cuenta `Game`, autoridad,
+ *                                          quien firma y programa, con sus enlaces al explorador
  *
  * **No es parte del contrato HTTP** (contrato, 2): ni el addon ni el servidor de juego usan estas
  * rutas. Por eso pueden mostrar la firma registrada y su enlace al explorador, que el contrato nunca
@@ -47,6 +49,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest, RouteHandlerMethod 
 import { z } from 'zod';
 import { listCollections } from './catalog.js';
 import { errorBody, type ErrorCode, type OperationState } from './contract.js';
+import { CHAIN_ASSETS_PROGRAM_ADDRESS } from './generated/index.js';
 import type { Db } from './db.js';
 import type { Holder } from './holders.js';
 import type { InventoryItem } from './inventory.js';
@@ -57,6 +60,12 @@ export interface AdminOptions {
   readonly key: string;
   /** Plantilla del enlace a una transaccion, con `{signature}`. */
   readonly explorerTxUrl: string;
+  /** Plantilla del enlace a una cuenta, con `{address}`. Sin ella, la vista «Despliegue» va sin enlaces. */
+  readonly explorerAddressUrl?: string;
+  /** `CHAIN_STUDIO_NAME`, solo para mostrarlo. */
+  readonly studioName?: string | null;
+  /** De donde sale la firma de la autoridad (`authority.ts`). Nunca lleva secretos. */
+  readonly signer?: string;
   /** Duracion de una sesion. Por defecto, 8 horas. */
   readonly sessionMs?: number;
   /** Intentos de entrada por minuto y por IP. Por defecto, 10. */
@@ -92,6 +101,10 @@ export interface AdminDeps {
   readonly db: Db;
   /** Da nombre a la cookie de sesion. */
   readonly gameId: string;
+  /** La PDA `Game` del juego. */
+  readonly gameAddress: string;
+  /** La autoridad con que firma este backend. */
+  readonly authorityAddress: string;
   readonly createCollection: RouteHandlerMethod;
   readonly createItem: RouteHandlerMethod;
   readonly listItems: RouteHandlerMethod;
@@ -309,6 +322,18 @@ export function registerAdmin(app: FastifyInstance, options: AdminOptions, deps:
   }
 
   // --- Datos: las mismas funciones que la API ---
+
+  const addressUrl = (address: string) =>
+    options.explorerAddressUrl === undefined
+      ? null
+      : options.explorerAddressUrl.replace('{address}', encodeURIComponent(address));
+  app.get('/admin/api/deployment', { preHandler: requireSession }, async () => ({
+    game_id: deps.gameId,
+    studio_name: options.studioName ?? null,
+    game: { address: deps.gameAddress, explorer_url: addressUrl(deps.gameAddress) },
+    authority: { address: deps.authorityAddress, explorer_url: addressUrl(deps.authorityAddress), signer: options.signer ?? null },
+    program: { address: CHAIN_ASSETS_PROGRAM_ADDRESS, explorer_url: addressUrl(CHAIN_ASSETS_PROGRAM_ADDRESS) },
+  }));
 
   app.get('/admin/api/collections', { preHandler: requireSession }, async () => ({
     collections: listCollections(db, true),

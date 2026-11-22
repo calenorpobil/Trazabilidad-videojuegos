@@ -36,6 +36,9 @@ const app = await buildServer({
   admin: {
     key: config.adminKey,
     explorerTxUrl: config.explorerTxUrl,
+    explorerAddressUrl: config.explorerAddressUrl,
+    studioName: config.studioName,
+    signer: loaded.description,
     ...(allowedHosts === undefined ? {} : { allowedHosts }),
   },
 });

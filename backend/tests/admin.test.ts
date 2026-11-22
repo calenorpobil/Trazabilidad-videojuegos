@@ -6,6 +6,8 @@ import type { FastifyInstance } from 'fastify';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { loopbackHosts, sessionCookie } from '../src/admin.js';
 import { openDatabase, type Db } from '../src/db.js';
+import { findGameAddress } from '../src/addresses.js';
+import { CHAIN_ASSETS_PROGRAM_ADDRESS } from '../src/generated/index.js';
 import { deriveAuthority } from '../src/keys.js';
 import { transitionOperation } from '../src/operations.js';
 import { buildServer, type ChainRpc } from '../src/server.js';
@@ -38,7 +40,14 @@ beforeEach(async () => {
     readToken: READ,
     authority: await authoritySigner(deriveAuthority(SEED, GAME_ID)),
     rpc: chainRpc(fakeChain()) as ChainRpc,
-    admin: { key: ADMIN, explorerTxUrl: 'https://explorer.test/tx/{signature}?cluster=devnet', loginLimit: 3 },
+    admin: {
+      key: ADMIN,
+      explorerTxUrl: 'https://explorer.test/tx/{signature}?cluster=devnet',
+      explorerAddressUrl: 'https://explorer.test/address/{address}?cluster=devnet',
+      studioName: 'Estudio de prueba',
+      signer: 'semilla',
+      loginLimit: 3,
+    },
     now: () => clock.t,
   });
 });
@@ -144,6 +153,26 @@ describe('sesion', () => {
     expect(cookie.startsWith(`${COOKIE}=`)).toBe(true);
     // La de otro juego, con el mismo valor, no vale aqui.
     expect((await admin(cookie.replace(COOKIE, sessionCookie('otro')), 'GET', '/admin/api/session')).status).toBe(401);
+  });
+});
+
+describe('despliegue', () => {
+  it('dice que juego y estudio es, con sus cuentas y enlaces; sin sesion es 401', async () => {
+    expect((await admin(null, 'GET', '/admin/api/deployment')).status).toBe(401);
+    const r = await admin(await session(), 'GET', '/admin/api/deployment');
+    expect(r.status).toBe(200);
+    const game = await findGameAddress(GAME_ID);
+    const authority = deriveAuthority(SEED, GAME_ID).address;
+    expect(r.body).toEqual({
+      game_id: GAME_ID,
+      studio_name: 'Estudio de prueba',
+      game: { address: game, explorer_url: `https://explorer.test/address/${game}?cluster=devnet` },
+      authority: { address: authority, explorer_url: `https://explorer.test/address/${authority}?cluster=devnet`, signer: 'semilla' },
+      program: {
+        address: CHAIN_ASSETS_PROGRAM_ADDRESS,
+        explorer_url: `https://explorer.test/address/${CHAIN_ASSETS_PROGRAM_ADDRESS}?cluster=devnet`,
+      },
+    });
   });
 });
 

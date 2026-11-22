@@ -47,6 +47,15 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ ...base, CHAIN_EXPLORER_TX_URL: 'http://explorer.test/{signature}' })).toThrow(ConfigError);
   });
 
+  it('el nombre del estudio es opcional y corto; el enlace a una cuenta lleva {address}', () => {
+    expect(loadConfig(base).studioName).toBeNull();
+    expect(loadConfig(base).explorerAddressUrl).toBe('https://explorer.solana.com/address/{address}?cluster=devnet');
+    expect(loadConfig({ ...base, CHAIN_STUDIO_NAME: '  Estudio B  ' }).studioName).toBe('Estudio B');
+    expect(() => loadConfig({ ...base, CHAIN_STUDIO_NAME: 'x'.repeat(65) })).toThrow(/CHAIN_STUDIO_NAME/);
+    expect(() => loadConfig({ ...base, CHAIN_STUDIO_NAME: '   ' })).toThrow(/CHAIN_STUDIO_NAME/);
+    expect(() => loadConfig({ ...base, CHAIN_EXPLORER_ADDRESS_URL: 'https://explorer.test/' })).toThrow(ConfigError);
+  });
+
   it('por defecto firma la semilla; con transit pide OpenBao entero', () => {
     expect(loadConfig(base).authority).toEqual({ kind: 'seed' });
     expect(() => loadConfig({ ...base, CHAIN_AUTHORITY_SIGNER: 'transit' })).toThrow(/CHAIN_BAO_ADDR/);
