@@ -436,6 +436,18 @@ Aplicados por la línea de corte (propuesta, 8.1) porque el calendario no da par
   sobre los activos, `chain-assets` necesitaría un rol de administrador separado de la autoridad, con
   su propia instrucción. Si esa wallet firmara junto a la autoridad, se rompería la regla de un único
   firmante. Y si sustituyera a la autoridad, el servidor de juego ya no podría hacer transferencias.
+- **Entrar a la consola con una cuenta de OpenBao.** Una alternativa a `CHAIN_ADMIN_KEY`, compartida
+  por todo el estudio. En OpenBao, cada persona tiene su cuenta (`userpass` u OIDC), con una política
+  que le permite leer `godot-chain/consola/<game_id>`, una ruta que no guarda nada y sólo sirve de
+  etiqueta. La consola pide usuario y contraseña, y el backend los reenvía a
+  `auth/userpass/login/<usuario>`. Con el token que recibe, pregunta a `sys/capabilities-self` si
+  puede leer esa ruta, y después lo anula (`auth/token/revoke-self`). Si puede, emite la cookie de
+  sesión de siempre; si no, responde `403`. Así cada persona tiene su acceso, se puede retirar sin
+  repartir una clave nueva, OpenBao registra quién entró y el acceso se da juego por juego. El
+  backend no necesita otro token: el de Transit sigue firmando sólo con la autoridad, y ninguna
+  cuenta de la consola puede firmar. Falta resolver una cosa: si se retira el acceso a alguien, la
+  cookie que ya tiene sigue valiendo hasta que caduque, que hoy son 8 horas. Transit no sirve para
+  esto, porque no identifica a nadie: firma con claves que no salen de OpenBao.
 - **Reparto masivo desde `game-reserve` en la consola.** Una transferencia por jugador, con la clave
   de idempotencia `reparto_<campaña>:<holder_id>` para que un reparto cortado se pueda reanudar sin
   entregar dos veces. Hay que resolver antes cuatro cosas: el backend sólo conoce a los jugadores que
