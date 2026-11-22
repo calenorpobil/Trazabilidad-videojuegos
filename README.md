@@ -141,6 +141,7 @@ emisión, pero las existencias quedan limitadas a la entrega inicial.
 | `docs/especificacion/http-contract.md` | **Contrato HTTP, congelado.** El artefacto del que cuelga todo |
 | `docs/vision-general/guia.md` | Explicación legible del proyecto: actores, roles y quién manda sobre los activos |
 | `docs/vision-general/lanzar-el-proyecto.md` | Cómo levantar el hito paso a paso, en devnet o sin red |
+| `docs/vision-general/manual-del-estudio.md` | Manual para un estudio que adopta `godot-chain`: qué recibe, cómo lo integra, lo opera y qué falta para jugadores reales |
 | `docs/seguimiento/verificaciones.md` | Hechos comprobados, con fecha, y lo que falta por comprobar |
 | `docs/seguimiento/preguntas-tutor.md` | Lo que bloquea el proyecto y no decide quien implementa |
 | `docs/juego/` | Diseño y plan de *Nidada* |
@@ -151,21 +152,58 @@ emisión, pero las existencias quedan limitadas a la entrega inicial.
 extremo en devnet: el estudio crea el catálogo en la consola, la demo de Godot lee los
 inventarios y pide transferencias, y cada operación pasa por `pending → applied → settled`
 (`docs/seguimiento/verificaciones.md`, V20 y V21). La CI cubre la sección 9 de la propuesta.
-De los entregables del máster faltan las capturas en devnet y el vídeo
-(`docs/seguimiento/entregables.md`).
+De los entregables del máster falta el vídeo (`docs/seguimiento/entregables.md`).
 
 ***Nidada*:** fases J1 (cuidado) y J5 (amigos y visitas) hechas, en escritorio. Es un
 proyecto aparte, fuera del hito, y no usa `godot-chain`. Plan en `docs/juego/plan.md`.
 
 ## Capturas
 
+De la consola `/admin` y del explorador de Solana, en devnet, con el juego `estudio-b`.
+
+### 1. Dashboard principal
+
+![Listado de catálogo en la consola](screenshots/1%20-%20Dashboard%20principal.png)
+
+*El listado de catálogo: cinco tipos en dos colecciones, con sus cualidades y la operación que creó cada
+uno, todas en `settled`.*
+
+### 2. Formulario de registro
+
+![Formulario de un tipo nuevo](screenshots/2%20-%20Formulario%20de%20registro.png)
+
+*Un tipo nuevo: colección, nombre, símbolo, cualidades y existencias iniciales para `game-reserve`. Del
+identificador de llamada sale la `Idempotency-Key`, para que repetir el envío no cree dos tipos.*
+
+### 3. Visualización de datos
+
+![Inventario de player-a](screenshots/3%20-%20Visualizaci%C3%B3n%20de%20datos.png)
+
+*El inventario de `player-a`, leído de la cadena: sólo aparecen los tipos en `settled`.*
+
+### 4. Transacción confirmada
+
+![Una transferencia en la consola y en el explorador](screenshots/4%20-%20Transacci%C3%B3n%20confirmada.png)
+
+*A la izquierda, una transferencia de «Moneda 2» de `player-a` a `player-b`, que ha pasado por
+`pending → applied → settled`. A la derecha, su transacción en el Explorer de Solana: correcta,
+finalizada y pagada por la autoridad del juego.*
+
+### 5. Verificación exitosa
+
+![El inventario de la consola, comprobado en el explorador](screenshots/5%20-%20Verificaci%C3%B3n%20exitosa.png)
+
+*La comprobación sin fiarse del backend. A la izquierda, el inventario de `player-a` en la consola, con
+su cuenta en la cadena y el mint de cada tipo enlazados. A la derecha, la pestaña Tokens de la
+transferencia anterior en el explorador. Coinciden la cuenta del jugador (`CzZ1M5…`), el mint de
+«Moneda 2» (`HojYaK…`) y el saldo: 299 después de dar 1 a `player-b`.*
+
+### La demo, sin red
+
 ![La demo en modo MOCK](screenshots/demo-mock.png)
 
 *La demo de Godot en modo MOCK, sin backend ni red: inventarios de A y B, el botón «Dar 1 a B» y el estado
 de cada operación.*
-
-Las capturas de la consola `/admin` y de las transacciones en el explorador, en devnet, se añaden antes de
-la entrega.
 
 ## Vídeo
 

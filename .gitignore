@@ -32,8 +32,10 @@ examples/Proyecto finalizado/
 build/
 recursos/
 
-# Exportaciones de documentos: la fuente es el .md
+# Exportaciones de documentos: la fuente es el .md. Salvo las que acompañan a la entrega del máster
 docs/**/*.pdf
+!docs/diagramas.pdf
+!docs/vision-general/manual-del-estudio.pdf
 
 # Documentos superados: sólo contexto local
 docs/archivo/
