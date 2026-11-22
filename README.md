@@ -244,11 +244,26 @@ npm start
 ```
 
 Para rotar más adelante: parar el backend, `curl -H "$H" -X POST $B/transit/keys/chain-authority/rotate`,
-financiar la dirección nueva, `npm run rotate-authority` y arrancar. En producción, el token del
-backend debería poder sólo firmar (`transit/sign/chain-authority`) y leer la clave pública
-(`transit/keys/chain-authority`), y la rotación debería ir en otra política. Las políticas no se
-han probado en este proyecto: el modo dev usa el token raíz. Prueba en devnet:
+financiar la dirección nueva, `npm run rotate-authority` y arrancar. Prueba en devnet:
 `docs/seguimiento/verificaciones.md`, V23.
+
+**Como lo tendría un estudio.** OpenBao con almacenamiento `raft` en un volumen (OpenBao 2.7 ya no
+tiene `file`), inicializado con claves de desellado (`POST /v1/sys/init`) y desellado tras cada
+arranque. El backend no usa el token raíz, sino uno con una política que sólo le deja firmar y leer
+la clave pública, y la rotación va en otra política, la del operador:
+
+```hcl
+# chain-backend
+path "transit/sign/chain-authority" { capabilities = ["update"] }
+path "transit/keys/chain-authority" { capabilities = ["read"] }
+
+# chain-operator
+path "transit/keys/chain-authority/rotate" { capabilities = ["update"] }
+path "transit/keys/chain-authority"        { capabilities = ["read"] }
+```
+
+Probado con un segundo estudio en devnet, incluidos un reinicio y el desellado (V24). Si se pierden las
+claves de desellado o el volumen, se pierde la clave de la autoridad, y con ella el juego.
 
 ## Desarrollo
 

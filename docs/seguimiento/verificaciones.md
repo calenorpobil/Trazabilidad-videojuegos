@@ -676,6 +676,57 @@ también sin fondos en la autoridad nueva, y se negó dando la orden `solana tra
   `rotate_authority` en `single-signer.test.ts`; y en `server.test.ts`, que con OpenBao caído la escritura da
   `500` sin enviar nada ni guardar la clave, y el reintento con la misma clave sale. 229 tests en verde.
 
+### V24 — Un segundo estudio con OpenBao persistente y políticas (22 de noviembre de 2026)
+
+Un despliegue completo de otro estudio, como lo montaría uno real: juego `estudio-b`, con su semilla, sus
+credenciales y sus bases SQLite, todo fuera del repositorio. Backend en el puerto 8887 y servidor de juego en el
+8888, junto al despliegue de `chain-demo-2` (8787 y 8788) y con el mismo programa `chain-assets`. Sin cambios de
+código.
+
+**OpenBao persistente.** `openbao/openbao:2.7.2` en Docker, en WSL, sin modo dev:
+
+- **El almacenamiento `file` ya no existe en OpenBao 2.7:** el servidor no arranca («unknown storage type
+  file»). El persistente es `raft`, que pide `node_id` en `storage` y `cluster_addr`. Datos en un volumen
+  de Docker; configuración JSON montada como fichero. Pasada por `BAO_LOCAL_CONFIG` desde Git Bash, llegó
+  estropeada.
+- Inicializado con `POST /v1/sys/init`: 3 claves de desellado, umbral 2. Las claves y el token raíz se
+  guardan fuera del repositorio.
+- Sin TLS, porque escucha sólo en `127.0.0.1`, que es lo que admite `CHAIN_BAO_ADDR` sobre http.
+
+**Políticas.** El backend no usa el token raíz: usa un token con la política `chain-backend`. La rotación va
+aparte, con la política `chain-operator`. Las dos están en el README, en «Autoridad en OpenBao».
+
+| Token | Leer la clave | Firmar | Rotar | Exportar la clave | Leer políticas |
+|---|---|---|---|---|---|
+| `chain-backend` | 200 | 200 | 403 | 403 | 403 |
+| `chain-operator` | 200 | 403 | — | — | — |
+
+La rotación con el token del operador no se ejecutó: sólo se comprobó que ese token no firma.
+
+**En devnet.** `init-game` con `CHAIN_AUTHORITY_SIGNER=transit` creó el juego directamente con la versión 1 de
+la clave (`3t3mDFgPoL38eVWDA9dCPEXyTnij9NoaJi4LW9pkRtJC`), sin pasar por la semilla:
+`ozxADzcB2ExxgwWRz7uqpHm93BJhNDWbXvajDJLRBQXU4PUymz4pD95cF9qwaguAE35rbpwwEPirpihivCSuavD`. Después, todo
+llegó a `settled` y lo firmó OpenBao:
+
+| Operación | Transacción |
+|---|---|
+| `seed-demo`: Espada de hierro, 3 para A | `5Bmnhq8cKLRp2khmy6tBJFVKAkhzT7mB6FkEobqBvoEUyWPE54cZjsYp2WHxRAqx9Haah74RGe3DpgSK7ezFnVUn` |
+| `seed-demo`: Escudo de roble, 2 para A | `3UzmPvYrhKU9xrJov2AxG1KiYQgwNW6YMEPa6sraWoMabxg1fUfw5wGwQwXXLHa6Pm8eL9m6oYwpPNMia1xWsH2L` |
+| `seed-demo`: Poción de vida, 5 para A | `Ny6vi1ohBoNdSKhyiR9EeQ7kc1c9BqWDPnMVkGiJraUMx7UUKFQ1H67GrQafeD7o1tVWjZ9wiNYM3zyiSdyPjqH` |
+| Transferencia de A a B, por el servidor de juego | `4R37L3qLPm339TwL11mDz7pUyd9p6vBRuuBbjUpY74zTjT3h8H9mQUynD9KQZtK1kpoRPAHwu4YoKf74wMesrkJv` |
+| Transferencia tras el reinicio y el desellado | `poHuFqan8xCEs5MGmkFUvmw6LFeEzg2vCjrEULDB9Wnz7Fk98fhwy1y86g9MQPN3N8HbZBydwbiAm7K5gyTxSCF` |
+
+- **Aislamiento.** El mismo `player-a` tiene `holder_id` distinto en cada estudio (`hld_CzZ1M5AUD3pjZpQV` en B,
+  `hld_AhwnU9E6Cp4dq2wH` en `chain-demo-2`), porque cada uno tiene su semilla y su juego. El `read_token` de B
+  recibe `401` en el backend de `chain-demo-2`.
+- **Reinicio de OpenBao.** Al pararlo y arrancarlo vuelve sellado. Una transferencia en ese estado da `500`
+  `INTERNAL` (en el log: «OpenBao responde 503… Vault is sealed») sin crear operación ni guardar la clave. Tras
+  desellarlo con otras dos claves (la 1 y la 3), el reintento con **la misma** `Idempotency-Key` sale y llega a
+  `settled`, con la misma clave de firma y sin reiniciar el backend.
+- **Operación.** WSL se apaga cuando no le queda ningún proceso, y con él el contenedor. Hay que arrancarlo
+  desde un proceso que siga en marcha y desellarlo cada vez. Los tokens tienen un TTL de 720 h: pasado ese
+  plazo el backend deja de poder firmar hasta que se emite otro.
+
 ---
 
 ## Pendiente

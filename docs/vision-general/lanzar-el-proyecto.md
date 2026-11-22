@@ -23,7 +23,7 @@ demo sólo lee inventarios y pide transferencias: éstas van al servidor de jueg
 lecturas van directas al backend. La demo no sabe que hay una cadena debajo: las transacciones se ven en la consola.
 
 Para lanzar el hito **no hace falta compilar el programa**: está desplegado. Anchor sólo hace falta para
-modificarlo (sección 7).
+modificarlo (sección 8).
 
 ## 2. Requisitos
 
@@ -73,9 +73,12 @@ export CHAIN_ADMIN_KEY=$AK
 export GAME_SERVER_WRITE_KEY=\$CHAIN_WRITE_KEY
 export GAME_SERVER_DATABASE_PATH=$D/game-server.db
 export CHAIN_DEMO_READ_TOKEN=\$CHAIN_READ_TOKEN
+export CHAIN_STUDIO_NAME="Mi estudio"
+export CHAIN_DEMO_GAME_ID=\$CHAIN_GAME_ID
+export CHAIN_DEMO_STUDIO=\$CHAIN_STUDIO_NAME
 EOF
     chmod 600 "$D/env.sh"
-    echo "Creado $D. Edita CHAIN_GAME_ID en env.sh y guarda una copia de la semilla fuera de este ordenador."
+    echo "Creado $D. Edita CHAIN_GAME_ID y CHAIN_STUDIO_NAME en env.sh y guarda una copia de la semilla fuera de este ordenador."
   fi
 fi
 ```
@@ -103,9 +106,12 @@ paso 3.4 dice que el juego existe con otra autoridad, elige otro.
 de la anterior. Las tres credenciales sí se pueden regenerar cuando se quiera: basta con reiniciar los procesos.
 
 Opcionales del backend: `CHAIN_RPC_URL` (por defecto, el nodo público de devnet), `CHAIN_HOST`, `CHAIN_PORT`,
-`CHAIN_READ_RATE_LIMIT` (120 lecturas por minuto y por IP) y `CHAIN_EXPLORER_TX_URL`. Del servidor de juego:
+`CHAIN_READ_RATE_LIMIT` (120 lecturas por minuto y por IP), `CHAIN_EXPLORER_TX_URL` y `CHAIN_EXPLORER_ADDRESS_URL`,
+`CHAIN_STUDIO_NAME` (el nombre del estudio, sólo para mostrarlo) y las de OpenBao (sección 5). Del servidor de juego:
 `GAME_SERVER_BACKEND_URL`, `GAME_SERVER_PLAYER` (por defecto `player-a`), `GAME_SERVER_HOST` y `GAME_SERVER_PORT`.
-De la demo: `CHAIN_DEMO_WRITE_URL` y `CHAIN_DEMO_READ_URL`.
+De la demo: `CHAIN_DEMO_WRITE_URL`, `CHAIN_DEMO_READ_URL`, y `CHAIN_DEMO_GAME_ID` y `CHAIN_DEMO_STUDIO`, que la demo
+muestra arriba y en el título de la ventana para saber a qué juego está conectada. Sólo se muestran: no viajan en
+ninguna petición.
 
 ### 3.3 Financiar la autoridad del juego
 
@@ -173,7 +179,7 @@ godot -e --path examples/chain-demo     # o el editor, y Play desde él
 
 `godot` es la ruta al ejecutable de Godot, salvo que lo tengas en el `PATH` o con un alias. En Windows, por ejemplo,
 `/c/ruta/Godot_v4.7.2-stable_win64.exe --path examples/chain-demo`, desde la raíz del repositorio. Con
-`alias godot='/c/ruta/Godot_v4.7.2-stable_win64.exe'` en `~/.bashrc`, los comandos de esta guía funcionan tal cual.
+`alias godot='/c/Users/Carlos/Desktop/Godot_v4.7.1-stable_win64.exe'` en `~/.bashrc`, los comandos de esta guía funcionan tal cual.
 
 Hay que lanzarla **desde esa terminal**: Godot sólo ve `CHAIN_DEMO_READ_TOKEN` si hereda su entorno. Abierta desde
 un acceso directo, arranca en modo MOCK. La segunda línea de la ventana dice en qué modo está.
@@ -210,7 +216,11 @@ Abre `http://127.0.0.1:8787/admin` y entra con la clave de administración:
 
 Ahí se crean las colecciones y los tipos, y están el catálogo, los inventarios y la lista de operaciones. Cada operación enlaza a su
 transacción en el explorador de devnet, y una transferencia muestra quién da a quién. La consola sólo responde en
-`127.0.0.1`.
+`127.0.0.1`, `localhost` o `[::1]` con su puerto.
+
+**Juego → Despliegue** dice qué despliegue es: el juego, el estudio, la cuenta `Game`, la autoridad (y si firma la
+semilla u OpenBao, con su versión) y el programa, con enlaces al explorador. El juego y el estudio también salen bajo
+el nombre de la consola y en la pestaña del navegador.
 
 ### Parar
 
@@ -223,7 +233,99 @@ netstat -ano | grep -E ":878[78] .*LISTEN"   # Windows; en Linux y macOS: lsof -
 
 Y para cerrarlo: `taskkill //PID <pid> //F` en Git Bash, o `kill <pid>`.
 
-## 5. Sin red: modo MOCK
+## 5. Un segundo estudio, con la autoridad en OpenBao
+
+Cada estudio despliega lo suyo: su juego, su semilla, sus credenciales y sus bases SQLite. Todos comparten el
+programa `chain-assets`. Para probar dos estudios en la misma máquina, el segundo va en **otra carpeta y otros
+puertos**, y aquí además con la autoridad en OpenBao: su clave firma dentro de OpenBao y nunca llega al backend.
+
+### 5.1 OpenBao persistente, una sola vez
+
+En WSL (o en Linux), con Docker. Almacenamiento `raft` en un volumen; OpenBao 2.7 ya no tiene `file`. La
+configuración, en un fichero de la carpeta del estudio, por ejemplo `~/.godot-chain-estudio-b/bao-config.json`:
+
+```json
+{"storage":{"raft":{"path":"/openbao/file","node_id":"estudio-b-1"}},
+ "listener":[{"tcp":{"address":"0.0.0.0:8200","tls_disable":true}}],
+ "api_addr":"http://127.0.0.1:8200","cluster_addr":"http://127.0.0.1:8201","disable_mlock":true,"ui":false}
+```
+
+```bash
+# En WSL. Publica el puerto sólo en 127.0.0.1, por eso basta sin TLS
+docker volume create godot-chain-bao-data
+docker run --name godot-chain-bao -p 127.0.0.1:8200:8200 -v godot-chain-bao-data:/openbao/file \
+  -v /mnt/c/Users/<usuario>/.godot-chain-estudio-b/bao-config.json:/openbao/config/bao.json:ro \
+  openbao/openbao:2.7.2 server
+```
+
+Después, desde Git Bash:
+
+1. **Inicializar** con `POST /v1/sys/init`, por ejemplo con 3 claves de desellado y umbral 2, y guardar la
+   respuesta (claves y token raíz) en la carpeta del estudio, **nunca en el repositorio**:
+   `curl -X POST http://127.0.0.1:8200/v1/sys/init -d '{"secret_shares":3,"secret_threshold":2}' > bao-init.json`.
+2. **Desellar** con dos claves (5.3).
+3. Con el token raíz: montar Transit (`POST /v1/sys/mounts/transit`), crear la clave ed25519
+   (`POST /v1/transit/keys/<nombre>` con `{"type":"ed25519"}`), las políticas `chain-backend` y `chain-operator` del
+   README («Autoridad en OpenBao») y un token con `chain-backend` para el backend (`POST /v1/auth/token/create`).
+   El backend nunca usa el token raíz.
+
+**Si se pierden las claves de desellado o el volumen, se pierde la clave de la autoridad, y con ella el juego.**
+Guarda una copia de `bao-init.json` fuera de este ordenador, como la semilla. No reinicialices OpenBao nunca.
+
+### 5.2 El despliegue del estudio
+
+Su propio `env.sh`, generado como en la 3.2 pero en otra carpeta (`D="$HOME/.godot-chain-estudio-b"`), con otro
+`CHAIN_GAME_ID` y además:
+
+```bash
+export CHAIN_PORT=8887
+export CHAIN_STUDIO_NAME="Estudio B"
+export CHAIN_AUTHORITY_SIGNER=transit
+export CHAIN_BAO_ADDR=http://127.0.0.1:8200
+export CHAIN_BAO_TOKEN=<el token con la política chain-backend>
+export CHAIN_BAO_TRANSIT_KEY=<nombre de la clave>
+export GAME_SERVER_BACKEND_URL=http://127.0.0.1:8887
+export GAME_SERVER_PORT=8888
+export CHAIN_DEMO_WRITE_URL=http://127.0.0.1:8888
+export CHAIN_DEMO_READ_URL=http://127.0.0.1:8887
+```
+
+`init-game` (3.3 y 3.4) crea el juego con la clave de OpenBao y dice qué dirección hay que financiar. La semilla
+sigue haciendo falta: de ella salen las direcciones de los jugadores.
+
+### 5.3 Cada vez que se arranca
+
+OpenBao vuelve **sellado** tras cada arranque, y mientras lo está el backend no puede firmar: las escrituras dan
+`500` sin guardar nada, y se pueden reintentar con la misma clave al desellarlo.
+
+```bash
+# 1. En WSL, en una terminal que siga abierta: WSL se apaga si no le queda ningún proceso
+docker start -a godot-chain-bao
+
+# 2. En Git Bash, desellar con dos de las claves de bao-init.json
+for i in 0 1; do
+  command node -e "process.stdout.write(JSON.stringify({key: require(process.argv[1]).keys[+process.argv[2]]}))" \
+    "$HOME/.godot-chain-estudio-b/bao-init.json" $i | curl -s -X POST http://127.0.0.1:8200/v1/sys/unseal -d @-
+done
+
+# 3. Backend, servidor de juego y demo, como en la sección 4, cargando este env.sh
+. ~/.godot-chain-estudio-b/env.sh
+```
+
+El backend escribe al arrancar quién firma: `firma la autoridad: OpenBao Transit, clave … version 1`.
+
+### 5.4 Su consola y su demo
+
+- **Consola:** `http://127.0.0.1:8887/admin`, con el `CHAIN_ADMIN_KEY` de su `env.sh`
+  (`grep CHAIN_ADMIN_KEY ~/.godot-chain-estudio-b/env.sh`). Las dos consolas pueden estar abiertas a la vez:
+  la cookie de sesión lleva el `game_id`.
+- **Demo:** `. ~/.godot-chain-estudio-b/env.sh` y `godot --path examples/chain-demo`. Arriba dice a qué juego y
+  estudio está conectada. Si lanzas desde el editor, ábrelo desde esa terminal.
+
+Los dos estudios están aislados: el mismo `player-a` tiene otro `holder_id` en cada uno, y las credenciales de
+uno no sirven en el otro. Rotar la autoridad, con el backend parado: README, «Autoridad en OpenBao».
+
+## 6. Sin red: modo MOCK
 
 Sin `CHAIN_DEMO_READ_TOKEN` en el entorno, la demo responde en memoria, sin backend ni servidor de juego, y se crea
 un tipo de prueba con 3 unidades para A:
@@ -234,11 +336,13 @@ godot --path examples/chain-demo
 
 Sólo cubre el camino feliz, y puede divergir del backend real. Sirve para ver la escena, no para validar la cadena.
 
-## 6. Problemas frecuentes
+## 7. Problemas frecuentes
 
 | Síntoma | Causa | Arreglo |
 |---|---|---|
 | La demo dice «Modo MOCK» | Godot no heredó el entorno | Lánzala desde una terminal con `env.sh` cargado |
+| La demo dice «Juego: sin indicar» | Godot se lanzó con un entorno sin `CHAIN_DEMO_GAME_ID`: una terminal o un editor abiertos antes de añadirla a `env.sh` | Cargar otra vez `env.sh` y lanzar la demo, o reabrir el editor, desde esa terminal |
+| `INTERNAL` en todas las escrituras con OpenBao | OpenBao está sellado o parado (el log del backend dice «OpenBao responde 503» o «no responde») | Arrancarlo y desellarlo (5.3) y reintentar con la misma clave |
 | `INSUFFICIENT_FUNDS` en una operación o en `init-game` | La autoridad no tiene SOL suficiente | Financiarla (3.3) |
 | `init-game` dice que el juego existe con otra autoridad | Otro despliegue ya usa ese `CHAIN_GAME_ID` | Elegir otro `CHAIN_GAME_ID` |
 | `INTERNAL: el backend no responde` | El servidor de juego no llega al backend | Arrancar el backend (terminal 1) |
@@ -250,7 +354,7 @@ Sólo cubre el camino feliz, y puede divergir del backend real. Sirve para ver l
 | Errores de clases al abrir la demo | El proyecto no se ha importado | Importarlo (3.5) |
 | El backend termina con `configuracion invalida` | Falta una variable o no cumple su formato | El mensaje dice cuál; revisar `env.sh` |
 
-## 7. Tests
+## 8. Tests
 
 Ninguno necesita red salvo los de devnet, que van a mano y fuera de la CI.
 
@@ -276,7 +380,7 @@ cd backend && CHAIN_DEVNET_KEYPAIR=<fichero de clave con fondos> npm run test:de
 La CI de GitHub ejecuta todo lo anterior salvo la prueba de devnet, más la guardia de vocabulario. Se lanza desde
 la pestaña Actions o con un push a la rama principal.
 
-## 8. Lo que no hay que hacer
+## 9. Lo que no hay que hacer
 
 - **No publicar `env.sh` ni el fichero de la semilla.** Quien tenga la semilla controla todos los activos del juego.
 - **No poner el `write_key` en el juego.** Las escrituras pasan siempre por el servidor de juego.
