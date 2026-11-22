@@ -88,6 +88,12 @@ inicial a un jugador) lo crea el estudio desde la consola `/admin`, y el servido
 rechaza la creación con un `403`. Cada pieza tiene su credencial y con ella su papel; el
 programa no define roles propios (ver `docs/vision-general/guia.md`).
 
+### Diagramas
+
+Arquitectura y flujo de datos, en Mermaid, en [`docs/diagramas.md`](docs/diagramas.md): las piezas y sus
+credenciales, una transferencia de extremo a extremo, la creación de un tipo, la lectura del inventario,
+los estados de una operación, las cuentas en la cadena y quién firma como autoridad.
+
 ### Cómo obtiene objetos un jugador
 
 **Lo previsto.** Quien decide que un jugador se ha ganado un objeto es el servidor de juego: comprueba
@@ -129,6 +135,8 @@ emisión, pero las existencias quedan limitadas a la entrega inicial.
 | `examples/game-server/` | Servidor de juego mínimo del hito: autoriza, registra y reenvía las transferencias |
 | `rust/` | Workspace de Cargo de *Nidada*: reglas, GDExtension y servidor |
 | `examples/godot-demo/` | Proyecto Godot de *Nidada*, un juego de mascotas aparte del hito |
+| `docs/diagramas.md` | Diagramas de arquitectura y de flujo de datos, en Mermaid |
+| `screenshots/` | Capturas de la consola, del explorador y de la demo |
 | `docs/especificacion/propuesta-pfm.md` | **La especificación.** Única fuente de verdad |
 | `docs/especificacion/http-contract.md` | **Contrato HTTP, congelado.** El artefacto del que cuelga todo |
 | `docs/vision-general/guia.md` | Explicación legible del proyecto: actores, roles y quién manda sobre los activos |
@@ -143,10 +151,27 @@ emisión, pero las existencias quedan limitadas a la entrega inicial.
 extremo en devnet: el estudio crea el catálogo en la consola, la demo de Godot lee los
 inventarios y pide transferencias, y cada operación pasa por `pending → applied → settled`
 (`docs/seguimiento/verificaciones.md`, V20 y V21). La CI cubre la sección 9 de la propuesta.
-Faltan los entregables del máster: diagramas, capturas y vídeo.
+De los entregables del máster faltan las capturas en devnet y el vídeo
+(`docs/seguimiento/entregables.md`).
 
 ***Nidada*:** fases J1 (cuidado) y J5 (amigos y visitas) hechas, en escritorio. Es un
 proyecto aparte, fuera del hito, y no usa `godot-chain`. Plan en `docs/juego/plan.md`.
+
+## Capturas
+
+![La demo en modo MOCK](screenshots/demo-mock.png)
+
+*La demo de Godot en modo MOCK, sin backend ni red: inventarios de A y B, el botón «Dar 1 a B» y el estado
+de cada operación.*
+
+Las capturas de la consola `/admin` y de las transacciones en el explorador, en devnet, se añaden antes de
+la entrega.
+
+## Vídeo
+
+Demostración en 5 minutos: el estudio crea un tipo en la consola, el juego da una unidad de A a B y la
+transacción se ve en el explorador de Solana. **Enlace pendiente de publicar.** Guion en
+`docs/seguimiento/guion-video.md`.
 
 ## Programa `chain-assets`
 
@@ -422,6 +447,32 @@ Aplicados por la línea de corte (propuesta, 8.1) porque el calendario no da par
   vigente y comprobar si admite las extensiones Token-2022 que usa `chain-assets`. Cambiaría el
   programa, los constructores del backend y las lecturas del inventario.
 
+## Uso de IA
+
+El proyecto se ha desarrollado con **Claude Code** (Anthropic), en el terminal y en VS Code. Casi todos los
+commits llevan la línea `Co-Authored-By` de Claude. Cómo se ha usado:
+
+- **`CLAUDE.md` en la raíz desde el primer commit**, con los invariantes en imperativo: firmante único,
+  marcar antes de llamar, cero vocabulario de cadena en `addon/`, nada fuera del hito. Es lo que impide que
+  el alcance crezca solo, y la CI comprueba con `grep` los invariantes que se pueden comprobar.
+- **Una jerarquía de documentos explícita.** La propuesta es la única fuente de verdad; lo superado se
+  archiva fuera del repositorio y no puede citarse como justificación. Así una sesión nueva no recupera una
+  decisión revertida.
+- **Una sesión por bloque del plan**, que empieza pegando el bloque y acaba con la CI en verde y un commit.
+- **Leer, no recordar.** Antes de tocar Token-2022 o Anchor, la sesión lee la documentación oficial vigente
+  o el código fuente: el orden de inicialización de las extensiones y el cálculo del espacio TLV son el tipo
+  de detalle que un modelo reconstruye de memoria a medias. Cada hecho comprobado queda con su fecha y su
+  fuente en `docs/seguimiento/verificaciones.md`.
+- **Tests antes que la implementación** en los dos sitios donde un error es caro y silencioso: los vectores
+  fijos de derivación de claves y el invariante de firmante único.
+- **Las decisiones son del autor.** El modelo propone opciones con sus costes (las preguntas P1 a P14 de las
+  verificaciones); el autor elige, y lo que no le corresponde decidir a ninguno de los dos va al tutor
+  (`docs/seguimiento/preguntas-tutor.md`).
+
+## Autor
+
+Carlos Povill.
+
 ## Licencia
 
-MIT OR Apache-2.0. Ver `LICENSE-MIT` y `LICENSE-APACHE`.
+MIT OR Apache-2.0, a elección de quien lo use: ver `LICENSE`, `LICENSE-MIT` y `LICENSE-APACHE`.
