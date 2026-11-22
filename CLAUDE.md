@@ -144,7 +144,7 @@ la propuesta; si no está en ella, no entra.
   el estudio en `/admin`, con la entrega inicial a A. El servidor de juego responde `403` a la creación. Contrato 5.5:
   `GET /v1/holders?external_id=…`, y `Chain.inventory()` acepta el identificador del juego. La demo da 1 a B por tipo.
   Ver la revisión del 16 de noviembre en la propuesta y V21.
-- **Siguiente: los entregables de 0.1** (README, diagramas, capturas, vídeo). Queda de P14 el límite del nombre de colección.
+- **Siguiente: los entregables de 0.1** (README, diagramas, capturas, vídeo). P14 cerrado el 22-nov: nombre de colección de 1 a 64 caracteres.
 - Requisitos de entrega del máster: propuesta, 0.1. Revísalos antes de planificar un bloque.
 - Ver `docs/seguimiento/verificaciones.md` para lo que hay que comprobar antes de OC1 y del
   bloque 3, y `docs/seguimiento/preguntas-tutor.md` para lo que bloquea el proyecto.

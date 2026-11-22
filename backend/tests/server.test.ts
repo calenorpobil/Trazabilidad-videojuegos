@@ -233,6 +233,13 @@ describe('POST /v1/collections', () => {
     expect(r.body['collection_id']).toMatch(/^col_/);
     expect(chain.sent).toEqual([]);
   });
+
+  it('name de 1 a 64 caracteres, contados como caracteres y no como unidades UTF-16', async () => {
+    expect((await call({ url: '/v1/collections', body: { name: '🗡'.repeat(64) } })).status).toBe(201);
+    for (const name of ['', 'x'.repeat(65), '🗡'.repeat(65)]) {
+      expect(errorOf(await call({ url: '/v1/collections', body: { name } }))).toBe('REJECTED');
+    }
+  });
 });
 
 describe('POST /v1/items', () => {

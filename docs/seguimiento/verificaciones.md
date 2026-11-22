@@ -734,7 +734,8 @@ llegó a `settled` y lo firmó OpenBao:
 P1 (V12) y P7 (V10 y V13) quedan cerrados en OC2. P3 y P10 (V14), en el bloque 3. P11 queda decidido
 el 12-nov-2026: `operations.step` y `operations.payload` (propuesta, revisión del 12 de noviembre). P13 queda
 decidido el mismo día: `operations.last_valid_block_height` (V18). P12 queda decidido y hecho el 21-nov-2026:
-opción B, la autoridad firma en OpenBao Transit (V23).
+opción B, la autoridad firma en OpenBao Transit (V23). P14 queda cerrado el 22-nov-2026: el `name` de
+`POST /v1/collections` tiene de 1 a 64 caracteres, el tope que ya tenía el formulario de la consola (contrato, 4.2).
 
 | # | Qué hay que verificar | Bloquea | Cómo |
 |---|---|---|---|
@@ -742,4 +743,3 @@ opción B, la autoridad firma en OpenBao Transit (V23).
 | P4 | Texto literal vigente de la regla de onboarding de Steam sobre blockchain, y las políticas actuales de Google Play y App Store | Último bloque (aviso del README) | Leer las políticas, citar con fecha |
 | P5 | Actualizar a la 4.7.2 el Godot de la máquina de desarrollo, que tiene la 4.7.1 | Fase A1 | Instalar y anotar |
 | P15 | Capturar logs reales de `Custom: 1` del programa de sistema y de Token-2022 para contrastar la clasificación (V18). Lo demás de `test:devnet` quedó comprobado el 14-nov-2026 | Nada | Sólo si sobra tiempo: simular a mano una transferencia por encima del saldo y una autoridad con fondos para la comisión pero no para la renta |
-| P14 | El `name` de `POST /v1/collections` no tiene límite: se exige que no esté vacío, y el tope es el del cuerpo (1 MB). El límite de tasa del `read_token` quedó hecho en W1 (V19) y `initialize_game`, en A3 (`npm run init-game`, V20) | Nada | Decidir si se fija un límite al nombre |

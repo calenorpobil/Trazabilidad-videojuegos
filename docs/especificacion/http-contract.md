@@ -111,7 +111,8 @@ valida como un identificador opaco más: si no está registrado, `404`. Toda res
 { "collection_id": "col_7Hs2..." }
 ```
 
-No produce transacción. No devuelve `operation_id`.
+No produce transacción. No devuelve `operation_id`. `name` es obligatorio, de **1 a 64 caracteres**;
+fuera de eso, `400` / `REJECTED`.
 
 ### 4.3 `POST /v1/items`
 
@@ -455,3 +456,4 @@ cerrado con la opción más simple, y quedan listados para que el cambio sea vis
 | 2026-11-08 | Sección 4.3: `POST /v1/items` rechaza con `400` / `REJECTED` un tipo que no cabe en una transacción aunque cumpla los límites. Medido en OC1: sólo ocurre con casi todos los campos al máximo. Sin cambio de forma en ningún endpoint. |
 | 2026-11-12 | Sección 4.1: `external_id` de 1 a 64 caracteres (hueco 9.6). Sin cambio de forma en ningún endpoint. |
 | 2026-11-16 | Sección 5.5: `GET /v1/holders?external_id=…`, lectura que traduce un `external_id` ya registrado a su `holder_id`, sin registrarlo. Decisión del responsable al pasar la creación de tipos a la consola (propuesta, revisión del 16 de noviembre). Sólo una lectura nueva; ninguna ruta existente cambia. Revisa el hueco 9.1. |
+| 2026-11-22 | Sección 4.2: `name` de 1 a 64 caracteres, el mismo tope que ya tenía el formulario de la consola (P14). No llega a la cadena. Sin cambio de forma en ningún endpoint. |

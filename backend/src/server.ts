@@ -128,7 +128,9 @@ const qualities = z
   .refine((q) => Object.keys(q).length <= QUALITIES_MAX, `como mucho ${QUALITIES_MAX} cualidades`)
   .refine((q) => !Object.hasOwn(q, RESERVED_QUALITY_KEY), `la clave ${RESERVED_QUALITY_KEY} esta reservada`);
 
-const collectionBody = z.strictObject({ name: z.string().min(1) });
+/** No llega a la cadena (el programa recibe el `collection_id`): es el límite de la consola (P14). */
+const COLLECTION_NAME_MAX = 64;
+const collectionBody = z.strictObject({ name: text(1, COLLECTION_NAME_MAX) });
 
 const itemBody = z.strictObject({
   collection_id: z.string().min(1),
