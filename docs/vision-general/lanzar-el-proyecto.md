@@ -239,6 +239,17 @@ Cada estudio despliega lo suyo: su juego, su semilla, sus credenciales y sus bas
 programa `chain-assets`. Para probar dos estudios en la misma máquina, el segundo va en **otra carpeta y otros
 puertos**, y aquí además con la autoridad en OpenBao: su clave firma dentro de OpenBao y nunca llega al backend.
 
+**Cómo firma con OpenBao.** Lo que sale de OpenBao son claves públicas y firmas, nunca la clave privada:
+
+1. **Elegir quién firma:** al arrancar, el backend pide a OpenBao las **claves públicas** de cada versión, que no
+   son secretas, y elige la que coincide con la autoridad guardada en la cuenta `Game`.
+2. **Pedir la firma:** en cada escritura, el backend envía a OpenBao los bytes de la transacción y OpenBao firma
+   **por dentro**, con la clave privada, y devuelve sólo la **firma**, que el backend añade a la transacción y
+   envía a Solana.
+3. **Rotar:** el operador pide a OpenBao que cree una **versión nueva** de la clave, también por dentro, y
+   `rotate-authority` usa la versión anterior para firmar en la cadena que la autoridad pasa a ser la dirección
+   de la nueva (5.5).
+
 ### 5.1 OpenBao persistente, una sola vez
 
 En WSL (o en Linux), con Docker. Almacenamiento `raft` en un volumen; OpenBao 2.7 ya no tiene `file`. La
@@ -323,7 +334,40 @@ El backend escribe al arrancar quién firma: `firma la autoridad: OpenBao Transi
   estudio está conectada. Si lanzas desde el editor, ábrelo desde esa terminal.
 
 Los dos estudios están aislados: el mismo `player-a` tiene otro `holder_id` en cada uno, y las credenciales de
-uno no sirven en el otro. Rotar la autoridad, con el backend parado: README, «Autoridad en OpenBao».
+uno no sirven en el otro.
+
+### 5.5 Rotar la autoridad
+
+Cambiar la clave que firma por una versión nueva, sin tocar los objetos de los jugadores. Se parte de que la
+autoridad es la versión 1, en OpenBao y en la cadena. Los comandos de `npm` van en `backend/`, con el `env.sh`
+del estudio cargado.
+
+| # | Paso | Cómo | OpenBao | Cadena (`Game`) | Backend |
+|---|---|---|---|---|---|
+| 1 | **Parar el backend** | `Ctrl+C` en su terminal | v1 | v1 | Parado |
+| 2 | **Rotar la clave en OpenBao**, con el **token del operador** (el del backend no puede rotar) | `curl -H "X-Vault-Token: <token del operador>" -X POST http://127.0.0.1:8200/v1/transit/keys/<nombre de la clave>/rotate` | v1 y **v2** | v1 | Parado |
+| 3 | **Ver la dirección nueva** | `npm run rotate-authority`. Si la nueva no tiene fondos, se niega y da su dirección y la orden para financiarla | v1 y v2 | v1 | Parado |
+| 4 | **Financiar la autoridad nueva**, que pagará desde ahora | `solana transfer <dirección de la v2> 0.1 --allow-unfunded-recipient` | v1 y v2 | v1 | Parado |
+| 5 | **Rotar en la cadena** | `npm run rotate-authority`. Firma la **v1** (`rotate_authority`, una sola firma), espera la confirmación y comprueba que `Game` ya dice v2 | v1 y v2 | **v2** | Parado |
+| 6 | **Arrancar el backend** | `npm start`. El log dice `firma la autoridad: OpenBao Transit, clave … version 2` | v1 y v2 | v2 | Firma con la **v2** |
+| 7 | **Comprobar** | En la consola, **Juego → Despliegue** muestra la autoridad nueva y «versión 2»; una transferencia desde la demo llega a `settled` | v1 y v2 | v2 | v2 |
+
+- **Por qué hay que parar el backend:** elige su versión al arrancar. Si sigue en marcha tras el paso 5, firma
+  con la v1, y el programa rechaza esas firmas. El servidor de juego puede seguir encendido: mientras tanto, sus
+  peticiones fallan con `INTERNAL` y se pueden reintentar.
+- **Dos tokens, dos papeles:** rotar en OpenBao (paso 2) exige el token del operador. `rotate-authority` (pasos 3
+  y 5) usa el del backend, porque sólo lee la clave y firma. El token que vive en el backend no puede rotar la
+  clave por su cuenta.
+- **Si algo falla entre el paso 2 y el 5,** no pasa nada: la cadena sigue en la v1 y el backend, al arrancar,
+  elige la v1. Se retoma desde el paso 3.
+- **La v1 no se borra.** Sigue en OpenBao con el SOL que le quede. No la recortes (`trim`) mientras tenga fondos:
+  es la única que puede moverlos, y para eso no hay herramienta en v1.
+- **El juego no nota nada:** ni la demo ni el addon cambian, ni los objetos de los jugadores. Los poderes los
+  tiene la cuenta `Game`; sólo cambia a quién obedece.
+
+Para pasar a OpenBao un juego que firmaba con la semilla, el camino es el mismo desde el paso 3: se crea la clave
+en OpenBao, se añaden a su `env.sh` las variables de OpenBao de la 5.2 y `rotate-authority` firma con la semilla
+hacia la versión 1.
 
 ## 6. Sin red: modo MOCK
 
