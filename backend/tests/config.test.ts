@@ -47,6 +47,48 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ ...base, CHAIN_EXPLORER_TX_URL: 'http://explorer.test/{signature}' })).toThrow(ConfigError);
   });
 
+  it('por defecto firma la semilla; con transit pide OpenBao entero', () => {
+    expect(loadConfig(base).authority).toEqual({ kind: 'seed' });
+    expect(() => loadConfig({ ...base, CHAIN_AUTHORITY_SIGNER: 'transit' })).toThrow(/CHAIN_BAO_ADDR/);
+    expect(() => loadConfig({ ...base, CHAIN_AUTHORITY_SIGNER: 'otro' })).toThrow(ConfigError);
+
+    const transit = {
+      ...base,
+      CHAIN_AUTHORITY_SIGNER: 'transit',
+      CHAIN_BAO_ADDR: 'http://127.0.0.1:8200/',
+      CHAIN_BAO_TOKEN: 't'.repeat(20),
+      CHAIN_BAO_TRANSIT_KEY: 'chain-authority',
+    };
+    expect(loadConfig(transit).authority).toEqual({
+      kind: 'transit',
+      transit: { addr: 'http://127.0.0.1:8200', token: 't'.repeat(20), mount: 'transit', key: 'chain-authority' },
+    });
+    expect(() => loadConfig({ ...transit, CHAIN_BAO_TOKEN: undefined })).toThrow(/CHAIN_BAO_TOKEN/);
+    // Sigue haciendo falta la semilla: de ella salen las direcciones de los jugadores.
+    expect(() => loadConfig({ ...transit, CHAIN_MASTER_SEED: undefined })).toThrow(/CHAIN_MASTER_SEED/);
+  });
+
+  it('el token de OpenBao no viaja en claro fuera de esta maquina, ni la clave cambia la ruta', () => {
+    const transit = {
+      ...base,
+      CHAIN_AUTHORITY_SIGNER: 'transit',
+      CHAIN_BAO_TOKEN: 'secreto',
+      CHAIN_BAO_TRANSIT_KEY: 'chain-authority',
+    };
+    expect(loadConfig({ ...transit, CHAIN_BAO_ADDR: 'https://bao.estudio.test' }).authority.kind).toBe('transit');
+    expect(loadConfig({ ...transit, CHAIN_BAO_ADDR: 'http://localhost:8200' }).authority.kind).toBe('transit');
+    expect(() => loadConfig({ ...transit, CHAIN_BAO_ADDR: 'http://bao.estudio.test:8200' })).toThrow(/CHAIN_BAO_ADDR/);
+    expect(() => loadConfig({ ...transit, CHAIN_BAO_ADDR: 'https://bao.estudio.test/v1' })).toThrow(/CHAIN_BAO_ADDR/);
+    expect(() => loadConfig({ ...transit, CHAIN_BAO_ADDR: 'https://bao.test', CHAIN_BAO_TRANSIT_KEY: '../sys' })).toThrow(
+      /CHAIN_BAO_TRANSIT_KEY/,
+    );
+    try {
+      loadConfig({ ...transit, CHAIN_BAO_ADDR: 'ftp://x' });
+    } catch (error) {
+      expect(String(error)).not.toContain('secreto');
+    }
+  });
+
   it('acepta otro nodo http(s) y rechaza lo que no es una URL', () => {
     expect(loadConfig({ ...base, CHAIN_RPC_URL: 'http://127.0.0.1:8899' }).rpcUrl).toBe('http://127.0.0.1:8899');
     expect(() => loadConfig({ ...base, CHAIN_RPC_URL: 'devnet' })).toThrow(ConfigError);

@@ -45,6 +45,10 @@ Son dos cosas distintas, y conviene no mezclarlas:
 | `read_token` (`CHAIN_READ_TOKEN`) | El juego: va en el binario (`addon/addons/godot_chain/chain_config.gd`) | Sólo lecturas: inventarios, catálogo y operaciones. Tiene un límite por IP, porque se considera público (`backend/src/rate-limit.ts`) | `backend/src/server.ts`, al principio de cada lectura |
 | `CHAIN_ADMIN_KEY` | El equipo del estudio | La consola `/admin`. Se cambia por una cookie de sesión | `backend/src/admin.ts`, en `POST /admin/api/session` |
 
+Si la autoridad firma en OpenBao (ver más abajo), hay una cuarta, **`CHAIN_BAO_TOKEN`**: la tiene el
+backend y le sirve para pedir firmas a OpenBao. Qué puede hacer con ella lo decide la política de
+OpenBao, no el backend (`backend/src/transit.ts`).
+
 El backend se protege de que se mezclen:
 
 - **Tienen que ser distintas.** El backend no arranca si dos coinciden (`backend/src/config.ts`): quien
@@ -67,6 +71,10 @@ semilla maestra ──"authority"──────► clave de la autoridad: fi
 
 Nunca sale del backend: ni el servidor de juego, ni el juego ni la consola la ven.
 
+**La autoridad puede no salir de la semilla.** Con `CHAIN_AUTHORITY_SIGNER=transit`, la autoridad es
+una clave ed25519 de OpenBao Transit, que firma dentro de OpenBao y nunca llega al backend. La semilla
+sigue haciendo falta, porque de ella salen las direcciones de los jugadores.
+
 ### Qué pasa si se filtra cada una
 
 | Se filtra | Consecuencia | Remedio |
@@ -74,11 +82,14 @@ Nunca sale del backend: ni el servidor de juego, ni el juego ni la consola la ve
 | `read_token` | Cualquiera lee los inventarios del juego. Se da por hecho: es público | Ninguno necesario; el límite por IP frena el abuso |
 | `write_key` | Cualquiera escribe como el servidor de juego, y con más poder: el backend acepta cualquier emisor en una transferencia y también la creación de tipos con su entrega inicial, porque el `403` lo pone el servidor de juego, no el backend | Cambiar `CHAIN_WRITE_KEY` en el backend y en el servidor de juego. La cadena no se toca |
 | `CHAIN_ADMIN_KEY` | Cualquiera crea colecciones y tipos desde la consola, y con ellos emite unidades | Cambiarla y reiniciar el backend. La cadena no se toca |
-| **Semilla maestra** | **Quien la tenga controla todos los activos del juego**: deriva la clave de la autoridad y firma lo que quiera | El procedimiento de rotación del README, que es una carrera contra quien la tiene |
+| `CHAIN_BAO_TOKEN` | Quien lo tenga pide firmas a la autoridad mientras el token valga. La clave no se puede sacar de OpenBao | Revocar el token en OpenBao y emitir otro. Si se usó, rotar la autoridad con `npm run rotate-authority` |
+| **Semilla maestra**, con la autoridad en la semilla | **Quien la tenga controla todos los activos del juego**: deriva la clave de la autoridad y firma lo que quiera | El procedimiento de rotación del README, que es una carrera contra quien la tiene |
+| **Semilla maestra**, con la autoridad en OpenBao | Deriva las claves de los jugadores, dueñas de sus cuentas: puede mover los objetos de cualquiera. No puede crear tipos, emitir ni rotar la autoridad | Mover los saldos a claves de una semilla nueva (procedimiento del README, sin el paso 2) |
 
 Por eso son de naturaleza distinta: una credencial filtrada se cambia y se olvida; la semilla filtrada
-compromete el juego entero. Es la limitación 2 del README, y lo que mejoraría guardarla en OpenBao
-(`docs/seguimiento/verificaciones.md`, P12).
+compromete el juego entero, o, con la autoridad en OpenBao, los objetos de los jugadores. Es la
+limitación 2 del README. La prueba de la autoridad en OpenBao está en
+`docs/seguimiento/verificaciones.md`, V23.
 
 ## El hueco del ejemplo: quién es el jugador
 

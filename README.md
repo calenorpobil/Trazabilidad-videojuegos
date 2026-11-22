@@ -113,6 +113,7 @@ emisión, pero las existencias quedan limitadas a la entrega inicial.
 | Consola `/admin` | HTML, CSS y JavaScript sin compilación, servidos por el backend |
 | Addon | GDScript puro para Godot 4.7.2, sin dependencias ni binarios. La red pasa por `HTTPRequest` |
 | Servidor de juego de ejemplo | TypeScript, Fastify y better-sqlite3 |
+| Custodia de la autoridad | Opcional: OpenBao 2.7.2, motor Transit. La autoridad firma dentro de OpenBao y su clave no sale de él |
 | Red | Solana devnet |
 | CI | GitHub Actions: tipos y tests del backend y del servidor de juego (y estilo y licencias en el backend), auditoría de dependencias, tests del programa, suite del addon con Godot sin pantalla, y guardias que impiden vocabulario de cadena, hilos y binarios en el addon |
 
@@ -196,6 +197,9 @@ Lo que este proyecto añade frente a un programa Anchor con wallet en el navegad
   objetos como delegado permanente. Un test lo verifica.
 - **Autoridad rotable sin tocar los activos.** Los poderes los tiene la PDA del juego, no la
   clave. Cambiar la clave es una sola instrucción, `rotate_authority`.
+- **Autoridad que firma sin salir de OpenBao.** Con OpenBao Transit, la clave de la autoridad
+  no llega nunca al backend: le pide cada firma y la comprueba antes de usarla. Rotarla es crear
+  una versión nueva de la clave y ejecutar `npm run rotate-authority`.
 - **Idempotencia de extremo a extremo.** La clave de idempotencia se registra en SQLite
   antes de tocar Solana, así que un reintento nunca acuña ni transfiere dos veces.
 - **Estados `applied` y `settled`.** El juego distingue una operación aceptada de una
@@ -220,6 +224,31 @@ Lo que este proyecto añade frente a un programa Anchor con wallet en el navegad
 Los pasos completos, con las credenciales, la creación del juego y el recorrido del hito,
 están en `docs/vision-general/lanzar-el-proyecto.md`. Sin red, la demo arranca en modo MOCK:
 basta con abrir `examples/chain-demo` en Godot y ejecutarla.
+
+### Autoridad en OpenBao (opcional)
+
+Por defecto la autoridad es la clave derivada de la semilla. Para que firme dentro de OpenBao:
+
+```bash
+# OpenBao de desarrollo: guarda todo en memoria y se pierde al pararlo. No lo uses con un juego que quieras conservar
+docker run --rm -p 127.0.0.1:8200:8200 openbao/openbao:2.7.2 server -dev -dev-root-token-id=dev-root -dev-listen-address=0.0.0.0:8200
+B=http://127.0.0.1:8200/v1; H="X-Vault-Token: dev-root"
+curl -H "$H" -X POST $B/sys/mounts/transit -d '{"type":"transit"}'
+curl -H "$H" -X POST $B/transit/keys/chain-authority -d '{"type":"ed25519"}'
+
+# Las mismas variables que npm start, y además:
+export CHAIN_AUTHORITY_SIGNER=transit CHAIN_BAO_ADDR=http://127.0.0.1:8200 CHAIN_BAO_TOKEN=dev-root CHAIN_BAO_TRANSIT_KEY=chain-authority
+npm run init-game          # un juego nuevo, ya con la clave de OpenBao
+npm run rotate-authority   # o pasar a OpenBao un juego existente; da la orden para financiar la autoridad nueva
+npm start
+```
+
+Para rotar más adelante: parar el backend, `curl -H "$H" -X POST $B/transit/keys/chain-authority/rotate`,
+financiar la dirección nueva, `npm run rotate-authority` y arrancar. En producción, el token del
+backend debería poder sólo firmar (`transit/sign/chain-authority`) y leer la clave pública
+(`transit/keys/chain-authority`), y la rotación debería ir en otra política. Las políticas no se
+han probado en este proyecto: el modo dev usa el token raíz. Prueba en devnet:
+`docs/seguimiento/verificaciones.md`, V23.
 
 ## Desarrollo
 
@@ -261,8 +290,11 @@ Son decisiones, no defectos:
    variante, que sirve si hay pocas; guardar el estado de cada ejemplar en el servidor de
    juego, que no viaja con una transferencia; o un mint por objeto (NFT), que es otro modelo
    y queda fuera del proyecto.
-2. **La semilla maestra vive en un fichero, no en un HSM.** Quien lea ese fichero
-   controla todos los activos del juego.
+2. **La semilla maestra vive en un fichero, no en un HSM.** Si la autoridad sale de la
+   semilla, quien lea ese fichero controla todos los activos del juego. Con la autoridad en
+   OpenBao Transit, la semilla ya no da la autoridad, pero sigue dando las claves de los
+   jugadores, que son dueñas de sus cuentas: quien la lea puede mover los objetos de cualquier
+   jugador, aunque no crear tipos, emitir ni quedarse con el juego.
 3. **El jugador no posee de verdad.** Las claves las custodia el backend, el delegado
    permanente permite mover sus objetos sin su consentimiento, y no hay vía de salida a
    una wallet propia.
@@ -319,7 +351,9 @@ recuperar el depósito exige la firma del jugador (limitación 11).
 
 ## Procedimiento de rotación ante compromiso de la semilla
 
-Escrito, no implementado:
+Escrito, no implementado. Si la autoridad está en OpenBao Transit, la semilla no da la
+autoridad: el paso 2 no hace falta y la carrera del final desaparece. Rotar la autoridad sí está
+implementado, con `npm run rotate-authority` (ver «Autoridad en OpenBao»).
 
 1. Generar una semilla maestra nueva y una autoridad nueva.
 2. Ejecutar `rotate_authority` con la autoridad antigua. Los activos no cambian, porque sus

@@ -637,13 +637,53 @@ unidades y las transferencias siguientes sólo pagan la comisión, 0,000005 SOL.
 jugador y crear una colección no cuestan nada en la cadena. Ese depósito no se recupera en v1: cerrar
 la cuenta exige que esté vacía y la firma del jugador, que sería una segunda firma (invariante 1).
 
+### V23 — La autoridad firma en OpenBao Transit (P12, opción B; 21 de noviembre de 2026)
+
+**Riesgo de P12, comprobado primero.** OpenBao 2.7.2 en modo dev (`openbao/openbao:2.7.2` en Docker, en WSL).
+La documentación de Transit no dice si ed25519 firma los bytes en bruto, ni la codificación de la firma o de la
+clave pública, así que se probó:
+
+- Una clave `type=ed25519` firma ed25519 **puro** sobre los bytes de `input`: mensajes aleatorios de 0, 1, 32,
+  200 y 1.232 bytes verifican con `crypto.verify(null, …)` de Node, que es PureEdDSA, como Solana.
+- La firma llega como `vault:v<versión>:<base64>`, y el base64 son 64 bytes. La clave pública está en
+  `data.keys["<versión>"].public_key`, en base64 de 32 bytes; también da `latest_version`.
+- `POST transit/keys/<nombre>/rotate` crea una versión con otra clave pública, y la anterior sigue firmando con
+  `key_version`. El motor Transit no viene montado en modo dev: `POST /v1/sys/mounts/transit`.
+
+**De extremo a extremo en devnet**, con un juego desechable, `p12-transit-1`, y la clave `chain-authority`:
+
+| Paso | Firma la autoridad | Transacción |
+|---|---|---|
+| `initialize_game` | Semilla, `9piRvyhA4XgZQxP4UGkHFkfne1CDHqtYwEPQmeFGDWvz` | `4vjnXaBXb3raG3K6cMFDZH6T6HYjVUz5ZUDY2oMc2VPJFgfNkJkFnQxNowxiGJpbteVGynU23PsWsU1iJA6dVpgW` |
+| `rotate_authority` semilla → v1 | Semilla | `nBWZMR4ZDxe7pSrcQNyyTJRFoH5W1ddNXnatXhFLjMxyJS6zefxysH6DuCDGvxKciyeJZMTXmVpaJ6Qjigcm1BQ` |
+| `create_item` + `grant` | Transit v1, `7tvjj9oLU4SUBSAhzkEhN3eMEWNthb7qx6j8VmKwMmbS` | `3ZCZco3gw8ivYkFaNptAo2eEzc2oAL5DtPBNbH7uUtvyGbCfd6DsQSoWBKzfpyEfU1sBoPJmChWWFqwRDBqxU6U7` |
+| `rotate_authority` v1 → v2 | Transit v1 | `2qhVRtB6Jf1Zy29GL1Xkt4EuPL4dzHAMzN94SdUM47G6w4YYdX7adevHycwswEDpfDdf9ovd6788nhFg6sw8nV9H` |
+| `create_item` + `grant` | Transit v2, `gfSGAe74oncXG8AuHyn6wnQcLBqyt8QCEXTn7dpPicG` | `4GReWUUuxTPwpHGBMRLPANVwhpThVNUdCiFJyhcLJbqaLXub22qF9qVHohfRpi1PS2qfoHCuZ3qY7CFADZ8KzWGY` |
+| `transfer` de A a B | Transit v2 | `5NdWb6wjpmoKbBSL5d7VtrgwcvzWkySbtEsYFoComrTj5y7HZm6H7qPbo8ucnr3RgR598BAQMa9CxPPbD2r9ePDD` |
+
+Las tres operaciones del backend llegaron a `settled`. Con `getTransaction`, cada una tiene **una sola firma**
+y su pagadora es la versión que tocaba. Antes de arrancar el backend con la v2 se rotó la clave a una v3 sin
+tocar la cadena, y el backend eligió la v2, que era la autoridad de `Game`. `rotate-authority` se ejecutó
+también sin fondos en la autoridad nueva, y se negó dando la orden `solana transfer`.
+
+- **Parar el backend antes de rotar.** Al parar la tarea en segundo plano, el proceso de Node siguió vivo y
+  escuchando, y hubo que cerrarlo por su puerto. Si sigue en marcha, firma con la versión vieja, y el
+  programa rechaza esas firmas en cuanto la autoridad cambia.
+- **El modo dev guarda todo en memoria.** Si el contenedor se para, se pierden las claves y con ellas el
+  juego. Por eso no se usó `chain-demo-2`. Un despliegue real necesita almacenamiento persistente, desellado
+  y una copia de seguridad de OpenBao.
+- **Tests:** `transit.test.ts` (clave, versión, firma, fallos) contra un Transit falso que firma de verdad;
+  `rotate_authority` en `single-signer.test.ts`; y en `server.test.ts`, que con OpenBao caído la escritura da
+  `500` sin enviar nada ni guardar la clave, y el reintento con la misma clave sale. 229 tests en verde.
+
 ---
 
 ## Pendiente
 
 P1 (V12) y P7 (V10 y V13) quedan cerrados en OC2. P3 y P10 (V14), en el bloque 3. P11 queda decidido
 el 12-nov-2026: `operations.step` y `operations.payload` (propuesta, revisión del 12 de noviembre). P13 queda
-decidido el mismo día: `operations.last_valid_block_height` (V18).
+decidido el mismo día: `operations.last_valid_block_height` (V18). P12 queda decidido y hecho el 21-nov-2026:
+opción B, la autoridad firma en OpenBao Transit (V23).
 
 | # | Qué hay que verificar | Bloquea | Cómo |
 |---|---|---|---|
@@ -652,4 +692,3 @@ decidido el mismo día: `operations.last_valid_block_height` (V18).
 | P5 | Actualizar a la 4.7.2 el Godot de la máquina de desarrollo, que tiene la 4.7.1 | Fase A1 | Instalar y anotar |
 | P15 | Capturar logs reales de `Custom: 1` del programa de sistema y de Token-2022 para contrastar la clasificación (V18). Lo demás de `test:devnet` quedó comprobado el 14-nov-2026 | Nada | Sólo si sobra tiempo: simular a mano una transferencia por encima del saldo y una autoridad con fondos para la comisión pero no para la renta |
 | P14 | El `name` de `POST /v1/collections` no tiene límite: se exige que no esté vacío, y el tope es el del cuerpo (1 MB). El límite de tasa del `read_token` quedó hecho en W1 (V19) y `initialize_game`, en A3 (`npm run init-game`, V20) | Nada | Decidir si se fija un límite al nombre |
-| P12 | **Decisión pendiente del responsable:** alcance de OpenBao, que sugiere el tutor (Q12). A: guardar sólo la semilla en su almacén KV (~1 h). B: que la autoridad firme dentro de OpenBao con Transit (ed25519) y se rote con `rotate_authority` (~4 h; cambia 4.3). C: trabajo futuro en el README. Para B, verificar antes que Transit firma ed25519 puro sobre los bytes del mensaje, sin *prehash*. Leído el 12-nov-2026 en su documentación (2.7.x): Transit admite ed25519 para firmar y rotar, e importar claves; licencia MPL-2.0 y modo `server -dev` | Nada hasta que se decida; si es B, antes del último bloque | Decidir; si B, plazo de 4 h y vuelta a A si tras 2 h no hay una firma válida en devnet |

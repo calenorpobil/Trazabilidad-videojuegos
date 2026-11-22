@@ -6,22 +6,22 @@
  *
  * La consola queda en http://127.0.0.1:8787/admin (W1).
  *
- * La autoridad sale de la semilla maestra (`keys.ts`) y debe tener fondos y su juego creado con
- * `initialize_game` antes de la primera escritura.
+ * La autoridad sale de la semilla maestra (`keys.ts`) o de OpenBao Transit (`authority.ts`), y debe
+ * tener fondos y su juego creado con `initialize_game` antes de la primera escritura.
  */
 import { createSolanaRpc } from '@solana/kit';
 import { loopbackHosts } from './admin.js';
+import { loadAuthority } from './authority.js';
 import { loadConfig } from './config.js';
 import { openDatabase } from './db.js';
-import { deriveAuthority } from './keys.js';
 import { buildServer } from './server.js';
 import { startTracker } from './tracker.js';
-import { authoritySigner } from './transactions.js';
 
 const config = loadConfig();
 const db = openDatabase(config.databasePath);
-const authority = await authoritySigner(deriveAuthority(config.masterSeed, config.gameId));
 const rpc = createSolanaRpc(config.rpcUrl);
+const loaded = await loadAuthority(config, rpc);
+const authority = loaded.signer;
 const allowedHosts = loopbackHosts(config.host, config.port);
 const app = await buildServer({
   db,
@@ -47,4 +47,5 @@ const stopTracker = startTracker({
   log: (message, detail) => app.log.warn(detail ?? {}, message),
 });
 app.addHook('onClose', async () => stopTracker());
+app.log.info({ authority: authority.address }, `firma la autoridad: ${loaded.description}`);
 await app.listen({ host: config.host, port: config.port });

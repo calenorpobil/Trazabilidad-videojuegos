@@ -106,7 +106,7 @@ endpoints de los bloques 3 y 4.
 
 El tutor sugiere además **gestionar las claves en el servidor con rotaciones** y mirar **OpenBao**
 (bifurcación de HashiCorp Vault, MPL-2.0). **Decisión aplazada por el responsable** (`verificaciones.md`,
-P12). Hasta que se tome, la semilla sigue en un fichero o en una variable de entorno (4.3, limitación 12.2).
+P12), y tomada el 21 de noviembre: la autoridad firma dentro de OpenBao (revisión del 21 de noviembre).
 Hay tres alcances posibles: sólo guardar la semilla en OpenBao; que la autoridad firme dentro de OpenBao
 (motor Transit, ed25519) y se rote con `rotate_authority`, lo que cambia 4.3; o dejarlo como trabajo futuro.
 
@@ -148,6 +148,27 @@ cliente, sin comprobar nada. Cambian las secciones 3, 5, 6, 7 y 8.1, y la limita
 El tutor responde a la Q4 y a la Q11: «la entrega es actualizar el repo y hacer un vídeo de 5 minutos».
 **No hay memoria escrita, ni defensa, ni avances intermedios.** Lo que esta propuesta mandaba anotar «en la
 memoria» va al README o a `docs/seguimiento/verificaciones.md`. Cambian las secciones 8, 9, 10, 12, 13 y 14.
+
+### Revisión del 21 de noviembre de 2026: la autoridad en OpenBao (P12)
+
+El responsable elige la opción B de P12, la que sugería el tutor en la Q12: **la autoridad firma dentro de
+OpenBao**, con una clave ed25519 del motor Transit, y se rota con `rotate_authority`. Antes se comprobó el
+riesgo que P12 ponía como condición: Transit 2.7.2 firma ed25519 puro sobre los bytes del mensaje, sin
+*prehash*, que es lo que valida Solana (verificaciones, V23).
+
+1. **Dos firmantes posibles para la autoridad**, a elegir con `CHAIN_AUTHORITY_SIGNER`: `seed`, por defecto,
+   la clave derivada de la semilla (como hasta ahora); o `transit`, una clave de OpenBao cuya parte privada
+   no sale nunca de él. El backend le manda los bytes del mensaje y comprueba la firma antes de usarla.
+2. **La semilla no desaparece.** De ella salen las direcciones de los jugadores, y los vectores fijos no
+   cambian. La limitación 12.2 se reescribe: lo que protege Transit es la autoridad, no a los jugadores.
+3. **La rotación de la autoridad se implementa:** `npm run rotate-authority` firma `rotate_authority` con la
+   autoridad actual (la semilla o una versión anterior de la clave) hacia la versión más reciente. Al
+   arrancar, el backend firma con la versión que coincide con la autoridad guardada en `Game`.
+4. **El invariante 1 no cambia:** una sola firma por transacción, la de la autoridad, y lo comprueban los
+   tests con las dos formas de firmar.
+5. **No cambian el contrato HTTP ni el programa.** Cambian 4.3 y la limitación 12.2. El procedimiento de
+   rotación ante compromiso de la semilla sigue escrito y sin implementar, porque mover los saldos de los
+   jugadores es otra cosa.
 
 ### 0.1 Requisitos de entrega del máster
 
@@ -425,6 +446,7 @@ contiene más de una firma requerida.
 | Inmutabilidad | Requisito del integrador. Si cambia, el jugador pierde sus objetos |
 | Claves de jugador | Derivadas de una semilla maestra **por juego** |
 | Custodia de la semilla | Fichero fuera del repositorio, permisos `0600`, o variable de entorno |
+| Firma de la autoridad | La clave derivada de la semilla (`seed`, por defecto) o una clave ed25519 de OpenBao Transit, que no sale de OpenBao (`transit`; revisión del 21 de noviembre) |
 | Salida a wallet propia (`claim`) | **No existe** |
 
 **Esquema de derivación** (concreto, no lo reinventes):
@@ -457,6 +479,11 @@ se escribe en el bloque 2, antes de la implementación.
 
 Es una carrera: quien tenga la semilla comprometida también puede ejecutar `rotate_authority`. Si lo
 hace primero, el estudio pierde el juego (12.2).
+
+**Con la autoridad en OpenBao Transit** (revisión del 21 de noviembre), la semilla ya no da la autoridad y
+esa carrera desaparece. Rotar la autoridad sí está implementado: se crea una versión nueva de la clave en
+OpenBao, se financia su dirección y `npm run rotate-authority` ejecuta `rotate_authority` firmado por la
+versión anterior. El backend se para antes y se arranca después, porque elige su versión al arrancar.
 
 ### 4.4 Persistencia y seguridad
 
@@ -924,8 +951,12 @@ que nadie —empezando por el tribunal— las descubra por sorpresa.
 
 1. **La cadena certifica catálogo y propiedad, no estado individual.** Al ser los activos fungibles,
    las unidades son indistinguibles on-chain y nada sobrevive a la transferencia salvo la cantidad.
-2. **La semilla maestra vive en un fichero, no en un HSM.** Quien lea ese fichero controla todos los
-   activos del juego. La derivación es la misma que usaría un HSM; sólo cambia la custodia.
+2. **La semilla maestra vive en un fichero, no en un HSM.** Con la autoridad en la semilla (`seed`), quien
+   lea ese fichero controla todos los activos del juego. Con la autoridad en OpenBao Transit (revisión del 21
+   de noviembre), la semilla ya no da la autoridad, pero sigue dando las claves de los jugadores, que son las
+   dueñas de sus cuentas de tenencia: quien la lea puede mover los objetos de cualquier jugador, aunque no
+   crear tipos, emitir ni quedarse con el juego. La derivación es la misma que usaría un HSM; sólo cambia la
+   custodia.
 3. **El jugador no posee de verdad.** Las claves las custodia el backend, el permanent delegate
    permite mover sus objetos sin su consentimiento, y no hay vía de salida a una wallet propia.
 4. **`NonTransferable` no está activado y no puede añadirse después.** Todo objeto creado en v1 es

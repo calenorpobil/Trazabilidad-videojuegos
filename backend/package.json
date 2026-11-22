@@ -16,6 +16,7 @@
     "codegen": "node scripts/codegen.mjs",
     "test:devnet": "tsx scripts/devnet.ts",
     "init-game": "tsx scripts/init-game.ts",
+    "rotate-authority": "tsx scripts/rotate-authority.ts",
     "start": "tsx src/main.ts"
   },
   "dependencies": {

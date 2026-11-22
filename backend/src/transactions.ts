@@ -41,6 +41,7 @@ import {
   getCreateItemInstruction,
   getGrantInstruction,
   getInitializeGameInstruction,
+  getRotateAuthorityInstruction,
   getTransferInstruction,
 } from './generated/index.js';
 import type { AuthorityKey } from './keys.js';
@@ -133,6 +134,20 @@ export async function buildInitializeGame(
 ): Promise<TransactionDraft> {
   const game = await findGameAddress(gameId);
   return draft(authority, [getInitializeGameInstruction({ authority, game, gameId })], lifetime);
+}
+
+/**
+ * `rotate_authority` (4.7): la autoridad actual firma y paga, y `Game` pasa a obedecer a la nueva.
+ * La nueva no firma: es un argumento, no una cuenta firmante.
+ */
+export async function buildRotateAuthority(
+  authority: TransactionSigner,
+  gameId: string,
+  newAuthority: Address,
+  lifetime: Lifetime,
+): Promise<TransactionDraft> {
+  const game = await findGameAddress(gameId);
+  return draft(authority, [getRotateAuthorityInstruction({ authority, game, newAuthority })], lifetime);
 }
 
 export async function buildCreateItem(

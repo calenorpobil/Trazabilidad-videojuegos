@@ -101,8 +101,12 @@ la propuesta; si no está en ella, no entra.
   delegado permanente; 30 tests con LiteSVM. Actualizado en devnet en el mismo id (V12). P1 y P7
   cerrados: cuenta asociada de 170 bytes y 0,00151 SOL; `create_item` + `grant` caben juntos hasta
   unos 746 bytes de campos (V13). **Hecho.**
-- **Q12 resuelta** (12-nov-2026): el tutor acepta el modelo custodial y sugiere OpenBao. Su alcance es una
-  **decisión pendiente** (verificaciones, P12). P11 decidido: `operations.step` y `operations.payload`.
+- **Q12 resuelta** (12-nov-2026): el tutor acepta el modelo custodial y sugiere OpenBao. P11 decidido:
+  `operations.step` y `operations.payload`.
+- **P12 hecho** (21-nov-2026, opción B): la autoridad puede firmar en OpenBao Transit (`CHAIN_AUTHORITY_SIGNER=transit`,
+  `src/transit.ts`, `src/authority.ts`); por defecto sigue la semilla. `npm run rotate-authority` rota a la versión más
+  reciente de la clave. Contrato y programa sin cambios. Probado en devnet con `p12-transit-1` (V23). La semilla sigue
+  dando las claves de los jugadores: lo que protege Transit es la autoridad (limitación 12.2).
 - Bloques 3 y 4 (rama `cierre-q12`, sobre `bloque-4`, 12-nov-2026): **hechos.** Hecho antes, sin la Q12:
   cliente de Codama y kit 8.6.0 (V14); test de firmante único; derivación de `Game`, `item_seed`, mint y
   cuenta asociada con vectores; constructores; `planItemCreation` (V15); `parseItemMint`,
@@ -156,6 +160,7 @@ npm test              # vitest run
 npm run codegen       # cliente de chain-assets desde backend/idl/ (copia del IDL de WSL)
 CHAIN_DEVNET_KEYPAIR=<clave con fondos> npm run test:devnet   # devnet, FUERA de la CI
 npm run init-game     # initialize_game del despliegue, una vez; mismas variables que npm start
+npm run rotate-authority  # rotate_authority a la última versión de la clave de OpenBao; con el backend parado (V23)
 npm start             # servidor HTTP y consola en /admin; CHAIN_GAME_ID, semilla, CHAIN_WRITE_KEY, CHAIN_READ_TOKEN, CHAIN_ADMIN_KEY
 
 # Programa: en WSL (Debian), desde la raíz. Anchor no funciona nativo en Windows (V5).

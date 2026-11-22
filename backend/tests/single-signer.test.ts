@@ -9,9 +9,9 @@
  * La PDA `Game` y el mint (tambien PDA) firman por CPI dentro del programa; eso no es una firma
  * de la transaccion y no aparece aqui.
  *
- * Cubre las cinco formas que construye el backend del hito: `initialize_game`, `create_item`,
+ * Cubre las formas que construye el backend: `initialize_game`, `rotate_authority` (P12), `create_item`,
  * `grant`, `create_item` + `grant` juntos y `transfer`, tambien el que sale de `planTransfer`
- * (bloque 4).
+ * (bloque 4). Con la autoridad en OpenBao Transit, lo mismo lo comprueba `transit.test.ts`.
  */
 import {
   blockhash,
@@ -30,6 +30,7 @@ import {
   buildCreateItemAndGrant,
   buildGrant,
   buildInitializeGame,
+  buildRotateAuthority,
   buildTransfer,
   planTransfer,
   type ItemDefinition,
@@ -84,6 +85,10 @@ async function expectSingleSigner(draft: TransactionDraft): Promise<void> {
 describe('invariante de firmante unico', () => {
   it('initialize_game', async () => {
     await expectSingleSigner(await buildInitializeGame(authority, GAME_ID, LIFETIME));
+  });
+
+  it('rotate_authority: la autoridad nueva no firma', async () => {
+    await expectSingleSigner(await buildRotateAuthority(authority, GAME_ID, BOB, LIFETIME));
   });
 
   it('create_item', async () => {

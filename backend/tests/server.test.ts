@@ -21,7 +21,9 @@ import { deriveAuthority, derivePlayer } from '../src/keys.js';
 import { transitionOperation } from '../src/operations.js';
 import { buildServer, type ChainRpc } from '../src/server.js';
 import { authoritySigner } from '../src/transactions.js';
+import { readTransitKey, transitSigner, type FetchLike } from '../src/transit.js';
 import { chainRpc, fakeChain, type FakeChain } from './fake-rpc.js';
+import { fakeTransit, TRANSIT } from './fake-transit.js';
 import { SYSTEM_PROGRAM_ADDRESS } from '../src/submission.js';
 import { TOKEN_2022_PROGRAM_ADDRESS } from '@solana-program/token-2022';
 
@@ -163,6 +165,43 @@ describe('idempotencia (contrato, 3)', () => {
     expect((await call({ url: '/v1/items', body, key: 'k1' })).status).toBe(404);
     const collection = await newCollection();
     expect((await call({ url: '/v1/items', body: { ...body, collection_id: collection }, key: 'k1' })).status).toBe(202);
+  });
+});
+
+describe('autoridad en OpenBao Transit (P12)', () => {
+  it('si OpenBao no firma es 500, sin enviar ni guardar la clave; el reintento con la misma clave sale', async () => {
+    const bao = fakeTransit();
+    let down = false;
+    const fetchImpl: FetchLike = (input, init) =>
+      down ? Promise.reject(new Error('ECONNREFUSED')) : bao.fetch(input, init);
+    const [version] = await readTransitKey(TRANSIT, fetchImpl);
+    if (version === undefined) throw new Error('sin versiones');
+    app = await buildServer({
+      db,
+      gameId: GAME_ID,
+      masterSeed: SEED,
+      writeKey: WRITE,
+      readToken: READ,
+      authority: transitSigner(TRANSIT, version, fetchImpl),
+      rpc: chainRpc(chain) as ChainRpc,
+    });
+
+    const collection = await newCollection();
+    const body = { collection_id: collection, ...SWORD, initial_grant: { holder: { external_id: 'player-42' }, amount: 1 } };
+    down = true;
+    const failed = await call({ url: '/v1/items', body, key: 'con-openbao-caido' });
+    expect(failed.status).toBe(500);
+    expect(errorOf(failed)).toBe('INTERNAL');
+    expect(JSON.stringify(failed.body)).not.toContain(TRANSIT.token);
+    expect(chain.sent).toEqual([]);
+    expect(db.prepare('SELECT count(*) AS n FROM operations').get()).toEqual({ n: 0 });
+    expect(db.prepare("SELECT count(*) AS n FROM idempotency WHERE key = 'con-openbao-caido'").get()).toEqual({ n: 0 });
+
+    down = false;
+    const retried = await call({ url: '/v1/items', body, key: 'con-openbao-caido' });
+    expect(retried.status).toBe(202);
+    expect(chain.sent).toHaveLength(1);
+    expect(signersOf(chain.sent[0] as string)).toEqual({ count: 1, first: version.address });
   });
 });
 

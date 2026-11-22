@@ -1,6 +1,7 @@
 /**
- * Crea el juego de un despliegue en la cadena: `initialize_game` con la autoridad derivada de la
- * semilla maestra (P14). Se ejecuta una vez, antes de la primera escritura, con las mismas variables
+ * Crea el juego de un despliegue en la cadena: `initialize_game` con la autoridad de la
+ * configuracion (P14): la derivada de la semilla maestra o, con `CHAIN_AUTHORITY_SIGNER=transit`, la
+ * version mas reciente de la clave de OpenBao Transit. Se ejecuta una vez, antes de la primera escritura, con las mismas variables
  * de entorno que `npm start`:
  *
  *   CHAIN_GAME_ID=... CHAIN_MASTER_SEED_FILE=... (y las demas de config.ts) npm run init-game
@@ -13,11 +14,11 @@
  */
 import { createSolanaRpc, getSignatureFromTransaction, signTransactionMessageWithSigners } from '@solana/kit';
 import { findGameAddress } from '../src/addresses.js';
+import { loadAuthority } from '../src/authority.js';
 import { loadConfig } from '../src/config.js';
 import { fetchMaybeGame } from '../src/generated/index.js';
-import { deriveAuthority } from '../src/keys.js';
 import { send, simulate } from '../src/submission.js';
-import { authoritySigner, buildInitializeGame } from '../src/transactions.js';
+import { buildInitializeGame } from '../src/transactions.js';
 
 const LAMPORTS_PER_SOL = 1_000_000_000;
 
@@ -25,12 +26,13 @@ const LAMPORTS_PER_SOL = 1_000_000_000;
 async function main(): Promise<number> {
   const config = loadConfig();
   const rpc = createSolanaRpc(config.rpcUrl);
-  const authority = await authoritySigner(deriveAuthority(config.masterSeed, config.gameId));
+  const loaded = await loadAuthority(config, rpc);
+  const authority = loaded.signer;
   const game = await findGameAddress(config.gameId);
   const { value: balance } = await rpc.getBalance(authority.address, { commitment: 'confirmed' }).send();
 
   console.warn(`juego ${config.gameId}`);
-  console.warn(`autoridad ${authority.address}, saldo ${Number(balance) / LAMPORTS_PER_SOL} SOL`);
+  console.warn(`autoridad ${authority.address} (${loaded.description}), saldo ${Number(balance) / LAMPORTS_PER_SOL} SOL`);
 
   const existing = await fetchMaybeGame(rpc, game, { commitment: 'confirmed' });
   if (existing.exists) {

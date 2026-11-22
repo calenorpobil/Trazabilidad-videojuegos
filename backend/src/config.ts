@@ -20,10 +20,21 @@
  * `CHAIN_READ_RATE_LIMIT`: lecturas por minuto y por IP con el `read_token` (P14). Por defecto 120:
  * el addon sondea una operacion con un intervalo fijo (8.1, recorte 4), y una pantalla con varias
  * operaciones en curso y su inventario cabe holgada.
+ *
+ * Quien firma como autoridad (P12; propuesta, revision del 21 de noviembre de 2026),
+ * `CHAIN_AUTHORITY_SIGNER`:
+ * - `seed`, por defecto: la clave derivada de la semilla maestra (4.3).
+ * - `transit`: una clave ed25519 de OpenBao, que firma dentro de OpenBao (`transit.ts`). Pide
+ *   `CHAIN_BAO_ADDR` (https, o http solo hacia esta maquina), `CHAIN_BAO_TOKEN`, `CHAIN_BAO_TRANSIT_KEY`
+ *   y, si el motor no esta en `transit`, `CHAIN_BAO_TRANSIT_MOUNT`. La semilla sigue haciendo falta:
+ *   de ella salen las direcciones de los jugadores.
  */
 import { readFileSync, statSync } from 'node:fs';
 import { z } from 'zod';
 import { GAME_ID_PATTERN, MASTER_SEED_BYTES } from './keys.js';
+import { TRANSIT_NAME_PATTERN, type TransitConfig } from './transit.js';
+
+export type AuthorityConfig = { readonly kind: 'seed' } | { readonly kind: 'transit'; readonly transit: TransitConfig };
 
 export interface Config {
   readonly gameId: string;
@@ -37,6 +48,7 @@ export interface Config {
   readonly adminKey: string;
   readonly readRateLimit: number;
   readonly explorerTxUrl: string;
+  readonly authority: AuthorityConfig;
 }
 
 export class ConfigError extends Error {
@@ -52,6 +64,20 @@ export const MIN_CREDENTIAL_LENGTH = 32;
 
 /** Solo se comprueba la longitud, no la entropia (limitacion documentada): de ahi la receta en el error. */
 const CREDENTIAL_HINT = `minimo ${MIN_CREDENTIAL_LENGTH} caracteres; genera una con: openssl rand -hex 32`;
+
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
+
+/** El token de OpenBao no viaja en claro salvo dentro de esta maquina. */
+export function baoAddrAllowed(addr: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(addr);
+  } catch {
+    return false;
+  }
+  if (url.pathname !== '/' || url.search !== '' || url.hash !== '') return false;
+  return url.protocol === 'https:' || (url.protocol === 'http:' && LOOPBACK_HOSTS.has(url.hostname));
+}
 
 const SEED_HEX = new RegExp(`^[0-9a-fA-F]{${MASTER_SEED_BYTES * 2}}$`);
 
@@ -72,6 +98,14 @@ const schema = z
       .string()
       .refine((u) => u.startsWith('https://') && u.includes('{signature}'), 'https:// y con {signature}')
       .default(DEVNET_EXPLORER_TX_URL),
+    CHAIN_AUTHORITY_SIGNER: z.enum(['seed', 'transit']).default('seed'),
+    CHAIN_BAO_ADDR: z
+      .string()
+      .refine(baoAddrAllowed, 'https://, o http:// hacia 127.0.0.1 o localhost; sin ruta')
+      .optional(),
+    CHAIN_BAO_TOKEN: z.string().min(1).optional(),
+    CHAIN_BAO_TRANSIT_KEY: z.string().regex(TRANSIT_NAME_PATTERN, 'letras, cifras, _ . -').optional(),
+    CHAIN_BAO_TRANSIT_MOUNT: z.string().regex(TRANSIT_NAME_PATTERN, 'letras, cifras, _ . -').default('transit'),
   })
   .refine((e) => (e.CHAIN_MASTER_SEED === undefined) !== (e.CHAIN_MASTER_SEED_FILE === undefined), {
     message: 'define exactamente una: CHAIN_MASTER_SEED o CHAIN_MASTER_SEED_FILE',
@@ -86,7 +120,16 @@ const schema = z
     // Una credencial propia (propuesta, 3): quien tiene el read_token del binario no entra en la consola.
     message: 'CHAIN_ADMIN_KEY debe ser distinta de CHAIN_WRITE_KEY y de CHAIN_READ_TOKEN',
     path: ['CHAIN_ADMIN_KEY'],
-  });
+  })
+  .refine(
+    (e) =>
+      e.CHAIN_AUTHORITY_SIGNER === 'seed' ||
+      (e.CHAIN_BAO_ADDR !== undefined && e.CHAIN_BAO_TOKEN !== undefined && e.CHAIN_BAO_TRANSIT_KEY !== undefined),
+    {
+      message: 'con CHAIN_AUTHORITY_SIGNER=transit hacen falta CHAIN_BAO_ADDR, CHAIN_BAO_TOKEN y CHAIN_BAO_TRANSIT_KEY',
+      path: ['CHAIN_AUTHORITY_SIGNER'],
+    },
+  );
 
 /**
  * En sistemas POSIX, el fichero de la semilla no puede ser legible por el grupo ni por otros.
@@ -147,5 +190,17 @@ export function loadConfig(
     adminKey: e.CHAIN_ADMIN_KEY,
     readRateLimit: e.CHAIN_READ_RATE_LIMIT,
     explorerTxUrl: e.CHAIN_EXPLORER_TX_URL,
+    authority:
+      e.CHAIN_AUTHORITY_SIGNER === 'seed'
+        ? { kind: 'seed' }
+        : {
+            kind: 'transit',
+            transit: {
+              addr: (e.CHAIN_BAO_ADDR as string).replace(/\/+$/, ''),
+              token: e.CHAIN_BAO_TOKEN as string,
+              mount: e.CHAIN_BAO_TRANSIT_MOUNT,
+              key: e.CHAIN_BAO_TRANSIT_KEY as string,
+            },
+          },
   };
 }
