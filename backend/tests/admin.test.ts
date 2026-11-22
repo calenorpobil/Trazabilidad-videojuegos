@@ -2,13 +2,17 @@
  * Consola `/admin` (bloque W1): sesion, cabeceras de seguridad, y que sus rutas usan los mismos
  * manejadores que la API. SQLite en memoria, RPC falso y reloj falso para la caducidad.
  */
+import { AccountState, getTokenEncoder } from '@solana-program/token-2022';
+import type { Address } from '@solana/kit';
 import type { FastifyInstance } from 'fastify';
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { loopbackHosts, sessionCookie } from '../src/admin.js';
 import { openDatabase, type Db } from '../src/db.js';
 import { findGameAddress } from '../src/addresses.js';
 import { CHAIN_ASSETS_PROGRAM_ADDRESS } from '../src/generated/index.js';
-import { deriveAuthority } from '../src/keys.js';
+import { resolveHolder } from '../src/holders.js';
+import { deriveAuthority, derivePlayer } from '../src/keys.js';
 import { transitionOperation } from '../src/operations.js';
 import { buildServer, type ChainRpc } from '../src/server.js';
 import { authoritySigner } from '../src/transactions.js';
@@ -370,7 +374,74 @@ describe('datos: los mismos manejadores que la API', () => {
     for (const ref of ['player-42', holderId]) {
       const r = await admin(cookie, 'GET', `/admin/api/holders/${ref}/items`);
       expect(r.status).toBe(200);
-      expect(r.body).toEqual({ holder_id: holderId, external_id: 'player-42', items: [] });
+      const address = derivePlayer(SEED, GAME_ID, 'player-42').address;
+      expect(r.body).toEqual({
+        holder_id: holderId,
+        external_id: 'player-42',
+        account: { address, explorer_url: `https://explorer.test/address/${address}?cluster=devnet` },
+        items: [],
+      });
     }
+  });
+
+  it('el inventario lleva el mint de cada tipo con su enlace, para verificarlo en el explorador', async () => {
+    // Juego y tipo de la fixture de devnet, para que la autoridad del mint sea la PDA de este juego.
+    const fixture = JSON.parse(readFileSync(new URL('./fixtures/devnet-item-mint.json', import.meta.url), 'utf8')) as {
+      address: Address;
+      gameId: string;
+      itemId: string;
+      data: string;
+    };
+    const chain = fakeChain();
+    db = openDatabase(':memory:');
+    app = await buildServer({
+      db,
+      gameId: fixture.gameId,
+      masterSeed: SEED,
+      writeKey: WRITE,
+      readToken: READ,
+      authority: await authoritySigner(deriveAuthority(SEED, fixture.gameId)),
+      rpc: chainRpc(chain) as ChainRpc,
+      admin: { key: ADMIN, explorerTxUrl: 'https://explorer.test/tx/{signature}', explorerAddressUrl: 'https://explorer.test/address/{address}' },
+    });
+    db.prepare("INSERT INTO collections VALUES ('col_xR2SNQ2Am7QiZC1a', ?, 'Armeria', 't')").run(fixture.gameId);
+    db.prepare(
+      "INSERT INTO operations (operation_id, kind, state, created_at, updated_at) VALUES ('opr_1', 'create_item', 'settled', 't', 't')",
+    ).run();
+    db.prepare(
+      `INSERT INTO items (item_id, collection_id, mint, name, symbol, uri, qualities, operation_id, created_at)
+       VALUES (?, 'col_xR2SNQ2Am7QiZC1a', ?, 'Espada', 'SWORD', '', '{}', 'opr_1', 't')`,
+    ).run(fixture.itemId, fixture.address);
+    const holder = resolveHolder(db, { masterSeed: SEED, gameId: fixture.gameId }, { external_id: 'player-42' });
+    if (holder === null) throw new Error('player-42 sin registrar');
+    chain.mints[fixture.address] = Uint8Array.from(Buffer.from(fixture.data, 'base64'));
+    chain.tokenAccounts = [
+      Uint8Array.from(
+        getTokenEncoder().encode({
+          mint: fixture.address,
+          owner: holder.address,
+          amount: 3n,
+          delegate: null,
+          state: AccountState.Initialized,
+          isNative: null,
+          delegatedAmount: 0,
+          closeAuthority: null,
+          extensions: null,
+        }),
+      ),
+    ];
+
+    const r = await admin(await session(), 'GET', '/admin/api/holders/player-42/items');
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({
+      account: { address: holder.address, explorer_url: `https://explorer.test/address/${holder.address}` },
+      items: [
+        {
+          item_id: fixture.itemId,
+          amount: 3,
+          mint: { address: fixture.address, explorer_url: `https://explorer.test/address/${fixture.address}` },
+        },
+      ],
+    });
   });
 });

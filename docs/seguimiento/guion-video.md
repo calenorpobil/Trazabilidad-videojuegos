@@ -93,7 +93,11 @@ habla de la cadena, y los objetos son tokens Token-2022 reales.»
      como delegado permanente.»
    - La instrucción `transfer` de `chain-assets` y, dentro, la transferencia de Token-2022 por CPI.
    - Los cambios de saldo de los dos tenedores.
-5. **Inventario** en la consola, `player-b`: 1 arco, leído de la cadena.
+5. **Inventario** en la consola, `player-b`: 1 arco, leído de la cadena. **Verificación**, sin fiarse
+   del backend: abrir el enlace del mint del arco. «La autoridad del mint es la cuenta `Game` de este
+   juego, la misma que da la vista Despliegue: sólo `chain-assets` puede emitir un arco que pase por
+   bueno.» Si sobra tiempo, el enlace de la cuenta de `player-b`, pestaña Tokens: el mismo mint con
+   saldo 1. Los metadatos ya se vieron en el bloque 3: aquí basta la autoridad (unos 15 s).
 
 ### 5. Seguridad y fiabilidad (3:15 – 3:55)
 
@@ -125,7 +129,7 @@ habla de la cadena, y los objetos son tokens Token-2022 reales.»
 ## Después de grabar
 
 - [ ] Duración **menor de 5:00** en el fichero final, no en el montaje.
-- [ ] Revisar a 720p que se leen los estados y la firma del explorador.
+- [ ] Revisar a 720p que se leen los estados y la firma y la autoridad del mint en el explorador.
 - [ ] Subir con enlace público (YouTube «oculto» sirve si cualquiera con el enlace puede verlo) y probar
       el enlace en una ventana privada.
 - [ ] Poner el enlace en el README, sección «Vídeo».

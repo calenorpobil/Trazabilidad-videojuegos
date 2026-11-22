@@ -13,7 +13,8 @@
  *   GET    /admin/api/operations           las 50 ultimas, con enlace a su transaccion, su tipo y, en
  *                                          un transfer, entre quien
  *   GET    /admin/api/operations/{id}      una, con enlace a su transaccion
- *   GET    /admin/api/holders/{ref}/items  inventario por holder_id o por external_id ya registrado
+ *   GET    /admin/api/holders/{ref}/items  inventario por holder_id o por external_id ya registrado, con
+ *                                          la cuenta del tenedor y el mint de cada tipo en el explorador
  *   GET    /admin/api/deployment           que despliegue es: juego, estudio, cuenta `Game`, autoridad,
  *                                          quien firma y programa, con sus enlaces al explorador
  *
@@ -362,9 +363,15 @@ export function registerAdmin(app: FastifyInstance, options: AdminOptions, deps:
     },
   );
 
+  const mintOf = db.prepare<[string], { mint: string }>('SELECT mint FROM items WHERE item_id = ?');
+
   /**
    * Por `holder_id` o por un `external_id` ya registrado. A diferencia de la API, aqui no se registra
    * un tenedor nuevo: consultar no debe crear filas.
+   *
+   * Lleva la cuenta del tenedor y el mint de cada tipo, con sus enlaces al explorador: con ellos se
+   * comprueba en la cadena, sin fiarse de este backend, que el saldo es el que se ve y que el mint lo
+   * emitio la cuenta `Game` de este juego. La API (contrato, 5.2) no da direcciones; la consola, si.
    */
   app.get<{ Params: { ref: string } }>(
     '/admin/api/holders/:ref/items',
@@ -379,7 +386,16 @@ export function registerAdmin(app: FastifyInstance, options: AdminOptions, deps:
         .get(ref, ref, ref) as { holder_id: string; external_id: string; address: Holder['address'] } | undefined;
       if (row === undefined) return fail(reply, 404, 'NOT_FOUND', 'tenedor inexistente');
       const items = await deps.inventory({ holderId: row.holder_id, address: row.address });
-      return { holder_id: row.holder_id, external_id: row.external_id, items };
+      return {
+        holder_id: row.holder_id,
+        external_id: row.external_id,
+        account: { address: row.address, explorer_url: addressUrl(row.address) },
+        items: items.map((item) => {
+          // El inventario sale de los mints de la cadena, asi que el tipo esta en `items`.
+          const mint = mintOf.get(item.item_id)?.mint ?? null;
+          return { ...item, mint: mint === null ? null : { address: mint, explorer_url: addressUrl(mint) } };
+        }),
+      };
     },
   );
 }

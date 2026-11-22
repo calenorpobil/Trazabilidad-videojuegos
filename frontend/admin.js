@@ -276,6 +276,14 @@ function steps(op) {
     return `<span class="${cls}">${s}</span>`;
   }).join("")}${op.state === "failed" ? `<span class="bad">failed</span>` : ""}</div>`;
 }
+/* Una cuenta de la cadena, enlazada al explorador si el backend da la URL. `short` la recorta para una tabla. */
+function addressLink(a, short = false) {
+  const text = short ? `${a.address.slice(0, 6)}…${a.address.slice(-4)}` : a.address;
+  return a.explorer_url
+    ? `<a href="${esc(a.explorer_url)}" target="_blank" rel="noopener noreferrer" class="mono" title="${esc(a.address)}">${esc(text)}</a>`
+    : `<span class="mono" title="${esc(a.address)}">${esc(text)}</span>`;
+}
+
 function explorer(op) {
   if (!op.explorer_url) return `<span class="muted">—</span>`;
   return `<a href="${esc(op.explorer_url)}" target="_blank" rel="noopener noreferrer" class="mono">${esc(op.signature.slice(0, 12))}…</a>`;
@@ -301,9 +309,11 @@ views.inventory = {
       out.innerHTML = `<p class="muted spaced">Consultando…</p>`;
       try {
         const { body } = await api("GET", `/holders/${encodeURIComponent(ref)}/items`);
-        out.innerHTML = `<h2>${esc(body.external_id)} <span class="mono muted">${esc(body.holder_id)}</span></h2>` + (body.items.length
-          ? `<table><tr><th>Ítem</th><th>Cualidades</th><th class="num">Cantidad</th></tr>${body.items.map(r =>
-            `<tr><td>${esc(r.name)} <span class="muted">(${esc(r.symbol)})</span><div class="mono muted">${esc(r.item_id)}</div></td><td>${qualitiesHtml(r.qualities)}</td><td class="num">${r.amount}</td></tr>`).join("")}</table>`
+        out.innerHTML = `<h2>${esc(body.external_id)} <span class="mono muted">${esc(body.holder_id)}</span></h2>
+          <p class="small">Cuenta en la cadena: ${addressLink(body.account)}</p>` + (body.items.length
+          ? `<table><tr><th>Ítem</th><th>Cualidades</th><th>Mint</th><th class="num">Cantidad</th></tr>${body.items.map(r =>
+            `<tr><td>${esc(r.name)} <span class="muted">(${esc(r.symbol)})</span><div class="mono muted">${esc(r.item_id)}</div></td><td>${qualitiesHtml(r.qualities)}</td><td>${r.mint ? addressLink(r.mint, true) : `<span class="muted">—</span>`}</td><td class="num">${r.amount}</td></tr>`).join("")}</table>
+            <p class="muted small">Para verificarlo sin fiarse de este backend: en el explorador, la cuenta del jugador tiene cada mint con esa cantidad, y la autoridad del mint es la cuenta Game de la vista Despliegue.</p>`
           : `<p class="muted">Inventario vacío.</p>`);
       } catch (err) {
         out.innerHTML = `<p class="error spaced">${esc(err.message)}</p>`;
@@ -319,9 +329,7 @@ views.deployment = {
     <p class="muted small">El juego lo identifica su <span class="mono">game_id</span>, del que sale la cuenta Game. El nombre del estudio sólo se muestra: no va a la cadena.</p>`,
   async mount() {
     const d = await loadDeployment();
-    const account = (label, a, extra = "") => `<tr><th>${esc(label)}</th><td>${a.explorer_url
-      ? `<a href="${esc(a.explorer_url)}" target="_blank" rel="noopener noreferrer" class="mono">${esc(a.address)}</a>`
-      : `<span class="mono">${esc(a.address)}</span>`}${extra}</td></tr>`;
+    const account = (label, a, extra = "") => `<tr><th>${esc(label)}</th><td>${addressLink(a)}${extra}</td></tr>`;
     setHtml($("#dep"), `<table>
       <tr><th>Juego</th><td class="mono">${esc(d.game_id)}</td></tr>
       <tr><th>Estudio</th><td>${d.studio_name ? esc(d.studio_name) : `<span class="muted">sin nombre (CHAIN_STUDIO_NAME)</span>`}</td></tr>

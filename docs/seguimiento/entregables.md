@@ -27,10 +27,16 @@ verificación), y de la demo. Nombres con número para que se ordenen solas.
 | `02-consola-crear-tipo.png` | El formulario de un tipo, relleno: cualidades y entrega inicial | Consola, `#items` |
 | `03-consola-operaciones.png` | Operaciones con su estado y el enlace a la transacción | Consola, `#operations` |
 | `04-explorador-transferencia.png` | La transacción de una transferencia: una firma, `chain-assets` y Token-2022 | Explorer de Solana, devnet |
-| `05-explorador-mint.png` | El mint de un tipo con sus metadatos y extensiones | Explorer de Solana, devnet |
-| `06-consola-inventario.png` | Inventario de `player-b`, leído de la cadena | Consola, `#inventory` |
+| `05-verificacion-consola.png` | **Verificación, 1/2.** Inventario de `player-b` con su cuenta en la cadena y el mint de cada tipo enlazados | Consola, `#inventory` |
+| `06-verificacion-explorador.png` | **Verificación, 2/2.** El mint de ese tipo en el explorador: autoridad = la cuenta `Game` de la vista Despliegue, metadatos y delegado permanente; o la pestaña Tokens de la cuenta del jugador, con el mismo saldo | Explorer de Solana, devnet, desde los enlaces de la 05 |
 | `07-demo-live.png` | La demo con los inventarios de A y B tras una transferencia | Godot, `--write-movie` |
 | `demo-mock.png` | La demo en modo MOCK, sin red | **Hecha** |
+
+**Qué es aquí la «verificación exitosa de certificado/trazabilidad».** El «certificado» es el ítem del
+jugador. Verificarlo es comprobar en la cadena, sin fiarse del backend, que la cuenta del jugador tiene
+ese mint con la cantidad que da la consola, y que la autoridad del mint es la PDA `Game` del juego
+(`mint::authority = game`): nadie fuera de `chain-assets` puede emitir un ítem que pase por bueno. Las
+capturas 05 y 06 son las dos mitades de esa comprobación.
 
 Las capturas de la consola y del explorador se sacan con Playwright contra el backend en marcha; las de Godot,
 con `--write-movie`, que guarda los fotogramas sin capturar la pantalla. Al añadirlas, se enlazan en la sección
