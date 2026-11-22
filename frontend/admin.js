@@ -36,6 +36,20 @@ function actionHtml(o) {
   return html;
 }
 
+/*
+ * Longitud máxima de los campos (data-max). No se usa maxlength porque cuenta unidades UTF-16 y el
+ * backend (server.ts, text()) y el programa (chars()) cuentan puntos de código: un emoji gastaba dos.
+ * Se cuenta sobre el valor recortado, que es lo que se envía. Un solo listener cubre también las
+ * filas de cualidades que se añaden después.
+ */
+const codePoints = s => [...s].length;
+document.addEventListener("input", e => {
+  const el = e.target;
+  if (!(el instanceof HTMLInputElement) || !el.dataset.max) return;
+  const max = Number(el.dataset.max);
+  el.setCustomValidity(codePoints(el.value.trim()) > max ? `Máximo ${max} caracteres.` : "");
+});
+
 /** Clave de idempotencia de la consola: SHA-256 en hexadecimal de «operación:call_id». */
 async function idempotencyKey(op, callId) {
   if (!crypto.subtle) throw new Error("El navegador no permite calcular la clave: abre la consola por HTTPS o en 127.0.0.1.");
@@ -70,7 +84,7 @@ async function api(method, path, body, idemKey) {
 /* ---------- Formularios con identificador de llamada ---------- */
 function callIdField(prefix) {
   return `<div class="field"><label for="callid">Identificador de llamada <span class="hint">(call_id: misma acción reintentada, mismo identificador)</span></label>
-    <div class="row"><input type="text" id="callid" value="${prefix}_${randomSuffix()}" maxlength="64" autocomplete="off">
+    <div class="row"><input type="text" id="callid" value="${prefix}_${randomSuffix()}" data-max="64" autocomplete="off">
     <button class="btn secondary fixed" type="button" id="callid-new">Nuevo</button></div>
     <div class="key" id="callid-key" aria-live="polite"></div></div>`;
 }
@@ -83,7 +97,11 @@ function bindCallId(op, prefix) {
     catch (e) { out.innerHTML = `<span class="error">${esc(e.message)}</span>`; }
   };
   input.addEventListener("input", upd);
-  $("#callid-new").addEventListener("click", () => { input.value = `${prefix}_${randomSuffix()}`; upd(); });
+  // Con el evento, y no con upd() a secas, también se retira la marca de data-max si la había.
+  $("#callid-new").addEventListener("click", () => {
+    input.value = `${prefix}_${randomSuffix()}`;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
   upd();
 }
 function showResult(el, ok, body, extra = "") {
@@ -109,7 +127,7 @@ const views = {};
 views.collections = {
   title: "Colecciones", sub: "Agrupaciones lógicas del catálogo. No generan ninguna operación.",
   render: () => `<div class="card"><form id="f">
-      <div class="field"><label for="name">Nombre</label><input type="text" id="name" maxlength="64" placeholder="Armería" autocomplete="off" required></div>
+      <div class="field"><label for="name">Nombre</label><input type="text" id="name" data-max="64" placeholder="Armería" autocomplete="off" required></div>
       ${callIdField("col")}
       <button class="btn" type="submit">Crear colección</button></form><div id="result"></div></div>
     <div class="card"><h2>Colecciones</h2><div id="list"></div></div>`,
@@ -135,16 +153,16 @@ views.items = {
   render: () => `<div class="card"><form id="f">
     <div class="grid2">
       <div class="field"><label for="col">Colección</label><select id="col" required></select></div>
-      <div class="field"><label for="name">Nombre <span class="hint">(1..32)</span></label><input type="text" id="name" maxlength="32" autocomplete="off" required></div>
-      <div class="field"><label for="symbol">Símbolo <span class="hint">(1..10)</span></label><input type="text" id="symbol" maxlength="10" autocomplete="off" required></div>
-      <div class="field"><label for="uri">URI <span class="hint">(opcional, máx. 200)</span></label><input type="text" id="uri" maxlength="200" autocomplete="off"></div>
+      <div class="field"><label for="name">Nombre <span class="hint">(1..32)</span></label><input type="text" id="name" data-max="32" autocomplete="off" required></div>
+      <div class="field"><label for="symbol">Símbolo <span class="hint">(1..10)</span></label><input type="text" id="symbol" data-max="10" autocomplete="off" required></div>
+      <div class="field"><label for="uri">URI <span class="hint">(opcional, máx. 200)</span></label><input type="text" id="uri" data-max="200" autocomplete="off"></div>
     </div>
     <div class="field pairs"><label>Cualidades <span class="hint">— atributos del <em>tipo</em>, no del ejemplar. Máximo 8 pares.</span></label>
       <div id="pairs"></div>
       <button class="btn secondary small" type="button" id="addpair">Añadir cualidad</button> <span class="muted" id="pcount"></span></div>
     <h2>Existencias iniciales</h2>
     <div class="grid2">
-      <div class="field"><label for="holder">Tenedor que las recibe <span class="hint">(identificador del jugador en el juego)</span></label><input type="text" id="holder" value="game-reserve" maxlength="64" autocomplete="off" required></div>
+      <div class="field"><label for="holder">Tenedor que las recibe <span class="hint">(identificador del jugador en el juego)</span></label><input type="text" id="holder" value="game-reserve" data-max="64" autocomplete="off" required></div>
       <div class="field"><label for="amount">Cantidad <span class="hint">(entero ≥ 1)</span></label><input type="number" id="amount" min="1" step="1" value="1" required></div>
     </div>
     ${callIdField("item")}
@@ -155,7 +173,7 @@ views.items = {
     const count = () => { const n = pairs.children.length; $("#pcount").textContent = `${n} de 8`; $("#addpair").disabled = n >= 8; };
     const add = (k = "", v = "") => {
       const d = document.createElement("div"); d.className = "pair";
-      d.innerHTML = `<input type="text" placeholder="clave" maxlength="32" value="${esc(k)}" aria-label="Clave"><input type="text" placeholder="valor" maxlength="64" value="${esc(v)}" aria-label="Valor"><button class="btn secondary small" type="button" aria-label="Quitar">✕</button>`;
+      d.innerHTML = `<input type="text" placeholder="clave" data-max="32" value="${esc(k)}" aria-label="Clave"><input type="text" placeholder="valor" data-max="64" value="${esc(v)}" aria-label="Valor"><button class="btn secondary small" type="button" aria-label="Quitar">✕</button>`;
       d.lastChild.addEventListener("click", () => { d.remove(); count(); });
       pairs.append(d); count();
     };
